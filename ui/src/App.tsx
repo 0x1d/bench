@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
+import { FileViewProvider } from '@/contexts/file-view-context';
+import { FileViewer } from '@/components/file-viewer';
 import { SidebarLeft } from '@/components/sidebar-left';
-import { SidebarRight } from '@/components/sidebar-right';
 import { SiteHeader } from '@/components/site-header';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import { ResourcesPage } from '@/pages/resources-page';
@@ -20,15 +21,16 @@ export function App() {
   }, []);
 
   return (
-    <div className="[--header-height:calc(--spacing(14))]">
-      <SidebarProvider className="flex flex-col">
+    <FileViewProvider>
+      <div className="[--header-height:calc(--spacing(14))] h-svh overflow-hidden flex flex-col">
+        <SidebarProvider className="flex flex-col min-h-0 flex-1 overflow-hidden">
         <SiteHeader />
-        <div className="flex flex-1">
+        <div className="flex flex-1 min-h-0 overflow-hidden">
           <SidebarLeft
             currentHash={hash}
             className="top-[var(--header-height)] h-[calc(100svh-var(--header-height))]"
           />
-          <SidebarInset>
+          <SidebarInset className="min-h-0 overflow-auto">
             <section
               id="status"
               className="flex flex-1 items-start justify-center p-4 md:min-h-min"
@@ -36,12 +38,10 @@ export function App() {
               {hash === 'resources' ? <ResourcesPage /> : <StatusPage />}
             </section>
           </SidebarInset>
-          <SidebarRight
-            side="right"
-            className="top-[var(--header-height)] h-[calc(100svh-var(--header-height))]"
-          />
+          <FileViewer />
         </div>
       </SidebarProvider>
     </div>
+    </FileViewProvider>
   );
 }

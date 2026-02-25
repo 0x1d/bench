@@ -17,6 +17,8 @@ import {
   useResourceMutations,
   triggerDownload,
 } from '@/hooks/use-resources';
+import { useFileView } from '@/contexts/file-view-context';
+import { getViewableType } from '@/lib/viewable-types';
 import { cn } from '@/lib/utils';
 
 interface FileBrowserProps {
@@ -52,6 +54,7 @@ export function FileBrowser({
 
   const { data, error, isLoading } = useResourceList(root, path);
   const mutations = useResourceMutations(root, path);
+  const { setViewedFile } = useFileView();
 
   const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -88,6 +91,13 @@ export function FileBrowser({
   const openRenameDialog = (entry: { path: string; name: string }) => {
     setRenameTarget(entry);
     setRenameValue(entry.name);
+  };
+
+  const handleFileClick = (entry: { path: string; name: string }) => {
+    const type = getViewableType(entry.name);
+    if (type) {
+      setViewedFile({ root, path: entry.path, name: entry.name, type });
+    }
   };
 
   if (isLoading) {
@@ -223,9 +233,15 @@ export function FileBrowser({
                 key={entry.path}
                 className={cn(
                   'border-b border-border/50 last:border-0 hover:bg-accent/30',
-                  entry.isDir && 'cursor-pointer'
+                  (entry.isDir || getViewableType(entry.name)) && 'cursor-pointer'
                 )}
-                onClick={() => entry.isDir && onNavigate(entry.path)}
+                onClick={() => {
+                  if (entry.isDir) {
+                    onNavigate(entry.path);
+                  } else {
+                    handleFileClick(entry);
+                  }
+                }}
               >
                 <td className="px-4 py-2 flex items-center gap-2">
                   {entry.isDir ? (

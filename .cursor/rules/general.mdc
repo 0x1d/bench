@@ -1,0 +1,66 @@
+---
+description: General project guidelines for the bench monorepo
+globs:
+alwaysApply: true
+---
+
+# Bench — General Project Guidelines
+
+## Project Overview
+
+Bench is a tool for managing and running ComfyUI workflows. It is a monorepo with:
+
+- `ui/` — React/TypeScript frontend (Vite)
+- `api/` — Go backend API
+
+## Git Conventions
+
+### Branch Naming
+
+- `main` — stable, production-ready code
+- `feat/<short-description>` — new features
+- `fix/<short-description>` — bug fixes
+- `chore/<short-description>` — maintenance, refactoring, tooling
+
+### Commit Messages
+
+Follow [Conventional Commits](https://www.conventionalcommits.org/):
+
+```
+<type>(<scope>): <short summary>
+```
+
+- **type**: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`, `ci`
+- **scope**: `ui`, `api`, or omit for repo-wide changes
+- **summary**: imperative mood, lowercase, no period, max 72 chars
+
+Examples:
+- `feat(ui): add workflow list page`
+- `fix(api): handle nil pointer in health check`
+- `chore: update dependencies`
+
+### Commit Practices
+
+- Commit small, logical units of work — one concern per commit.
+- Never commit generated files, build artifacts, or secrets.
+- Keep the main branch always deployable.
+
+## Code Quality
+
+- All code must pass linting and type-checking before commit.
+- Write tests for business logic and critical paths.
+- Prefer explicit over implicit — avoid magic values and hidden side effects.
+- Keep functions short and focused on a single responsibility.
+- Use meaningful names for variables, functions, types, and packages.
+
+## Documentation
+
+- Add doc comments to all exported functions, types, and packages.
+- Update README when adding significant features or changing setup steps.
+- Do not add redundant or narrating comments — only document non-obvious intent.
+
+## Dependencies
+
+- Pin dependency versions. Use lockfiles (`pnpm-lock.yaml`, `go.sum`).
+- Audit new dependencies before adding — prefer well-maintained, minimal packages.
+- Keep dependencies up to date with periodic reviews.

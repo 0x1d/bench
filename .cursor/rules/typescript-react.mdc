@@ -1,0 +1,90 @@
+---
+description: TypeScript and React coding guidelines for the ui/ project
+globs: ui/**
+alwaysApply: false
+---
+
+# TypeScript / React Guidelines
+
+## TypeScript
+
+### General
+
+- Use strict TypeScript (`"strict": true` in tsconfig).
+- Prefer `interface` over `type` for object shapes; use `type` for unions, intersections, and utility types.
+- Never use `any` — use `unknown` and narrow with type guards when the type is truly unknown.
+- Use `const` by default; use `let` only when reassignment is needed; never use `var`.
+- Prefer named exports over default exports for better refactoring and IDE support.
+- Use template literals over string concatenation.
+
+### Naming
+
+- **Files**: `kebab-case.ts` / `kebab-case.tsx`
+- **Components**: `PascalCase` (match filename: `status-page.tsx` exports `StatusPage`)
+- **Functions/variables**: `camelCase`
+- **Constants**: `UPPER_SNAKE_CASE` for true compile-time constants
+- **Types/Interfaces**: `PascalCase` — do not prefix interfaces with `I`
+- **Enums**: `PascalCase` for name, `PascalCase` for members
+
+### Error Handling
+
+- Always handle promise rejections — no fire-and-forget async calls.
+- Use try/catch at API boundaries; propagate typed errors inward.
+- Display user-friendly error messages in the UI; log details to console.
+
+## React
+
+### Components
+
+- Use function components exclusively — no class components.
+- One component per file; colocate styles, tests, and utilities alongside.
+- Keep components small (<100 lines). Extract hooks and helpers when growing.
+- Use named function declarations: `function StatusPage() {}` over arrow-assigned.
+
+### State & Effects
+
+- Minimize `useState` — derive values from existing state when possible.
+- Keep `useEffect` usage minimal; prefer event handlers for user-driven actions.
+- Custom hooks should start with `use` and encapsulate one concern.
+- Avoid deeply nested state; prefer flat objects or multiple atoms.
+
+### Props
+
+- Destructure props in the function signature.
+- Use `children` over render props when possible.
+- Colocate prop types with the component in the same file.
+
+### Styling
+
+- Use CSS Modules or Tailwind CSS for styling — no inline style objects for layout.
+- Keep class names semantic and descriptive.
+
+### Data Fetching
+
+- Centralize API calls in a dedicated `api/` or `services/` directory inside `ui/src/`.
+- Use a data-fetching library (e.g. TanStack Query) for server state.
+- Separate server state from UI state.
+
+### Testing
+
+- Use Vitest as the test runner.
+- Test behavior, not implementation details.
+- Name test files `*.test.ts` / `*.test.tsx`, colocated with source.
+
+### Project Structure
+
+```
+ui/
+├── src/
+│   ├── components/     # Shared/reusable components
+│   ├── pages/          # Route-level page components
+│   ├── services/       # API client and service functions
+│   ├── hooks/          # Custom React hooks
+│   ├── types/          # Shared TypeScript types
+│   ├── App.tsx
+│   └── main.tsx
+├── index.html
+├── vite.config.ts
+├── tsconfig.json
+└── package.json
+```

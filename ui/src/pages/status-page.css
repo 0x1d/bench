@@ -1,0 +1,102 @@
+.status-page {
+  max-width: 480px;
+  margin: 4rem auto;
+  padding: 0 1.5rem;
+  font-family: system-ui, -apple-system, sans-serif;
+  color: #e0e0e0;
+}
+
+.status-page h1 {
+  font-size: 2rem;
+  margin: 0;
+}
+
+.subtitle {
+  color: #888;
+  margin: 0.25rem 0 2rem;
+}
+
+.status-card {
+  background: #1a1a2e;
+  border: 1px solid #2a2a4a;
+  border-radius: 12px;
+  padding: 1.5rem;
+}
+
+.status-card h2 {
+  margin: 0 0 1rem;
+  font-size: 1.1rem;
+  font-weight: 500;
+}
+
+.status-indicator {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 0.5rem;
+  vertical-align: middle;
+}
+
+.status-up {
+  background: #4ade80;
+  box-shadow: 0 0 6px #4ade8066;
+}
+
+.status-down {
+  background: #f87171;
+  box-shadow: 0 0 6px #f8717166;
+}
+
+.status-ok,
+.status-error {
+  font-size: 1rem;
+  margin-bottom: 1rem;
+}
+
+.status-loading {
+  color: #888;
+}
+
+.error-detail {
+  color: #f87171;
+  font-size: 0.85rem;
+  margin: 0.5rem 0 0;
+}
+
+.status-details {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.25rem 1rem;
+  margin: 1rem 0 0;
+  font-size: 0.9rem;
+}
+
+.status-details dt {
+  color: #888;
+}
+
+.status-details dd {
+  margin: 0;
+}
+
+.refresh-btn {
+  margin-top: 1rem;
+  padding: 0.5rem 1.25rem;
+  background: #2a2a4a;
+  color: #e0e0e0;
+  border: 1px solid #3a3a5a;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background 0.15s;
+}
+
+.refresh-btn:hover:not(:disabled) {
+  background: #3a3a5a;
+}
+
+.refresh-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

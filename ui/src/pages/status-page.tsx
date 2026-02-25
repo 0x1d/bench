@@ -1,43 +1,47 @@
-import { useHealth } from '../hooks/use-health';
-import './status-page.css';
+import { Button } from '@/components/ui/button';
+import { useHealth } from '@/hooks/use-health';
 
 export function StatusPage() {
   const { data, error, loading, refetch } = useHealth();
 
   return (
-    <div className="status-page">
-      <h1>bench</h1>
-      <p className="subtitle">ComfyUI Workflow Manager</p>
+    <div className="w-full">
+      <div className="bg-background/90 text-card-foreground border rounded-xl p-6 max-w-xl">
+        <h2 className="text-lg font-medium tracking-tight">API Status</h2>
+        <p className="text-muted-foreground mt-1 text-sm">
+          Current backend availability and version metadata.
+        </p>
 
-      <div className="status-card">
-        <h2>API Status</h2>
-
-        {loading && <p className="status-loading">Checking...</p>}
+        {loading && <p className="text-muted-foreground mt-3">Checking...</p>}
 
         {error && (
-          <div className="status-error">
-            <span className="status-indicator status-down" />
-            <span>Offline</span>
-            <p className="error-detail">{error}</p>
+          <div className="mt-3 space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="h-2.5 w-2.5 rounded-full bg-red-500 shadow-[0_0_6px_rgba(248,113,113,0.5)]" />
+              <span>Offline</span>
+            </div>
+            <p className="text-sm text-red-500">{error}</p>
           </div>
         )}
 
         {data && (
-          <div className="status-ok">
-            <span className="status-indicator status-up" />
-            <span>Online</span>
-            <dl className="status-details">
-              <dt>Status</dt>
+          <div className="mt-3">
+            <div className="flex items-center gap-2">
+              <span className="h-2.5 w-2.5 rounded-full bg-green-500 shadow-[0_0_6px_rgba(74,222,128,0.5)]" />
+              <span>Online</span>
+            </div>
+            <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+              <dt className="text-muted-foreground">Status</dt>
               <dd>{data.status}</dd>
-              <dt>Version</dt>
+              <dt className="text-muted-foreground">Version</dt>
               <dd>{data.version}</dd>
             </dl>
           </div>
         )}
 
-        <button className="refresh-btn" onClick={refetch} disabled={loading}>
+        <Button className="mt-5" onClick={refetch} disabled={loading}>
           {loading ? 'Checking...' : 'Refresh'}
-        </button>
+        </Button>
       </div>
     </div>
   );

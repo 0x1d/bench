@@ -22,7 +22,14 @@ const VIDEO_EXTENSIONS = new Set([
   'mp4', 'webm', 'ogg', 'ogv', 'mov', 'avi', 'mkv', 'm4v',
 ]);
 
-export type ViewableType = 'text' | 'image' | 'video';
+/**
+ * File extensions for audio.
+ */
+const AUDIO_EXTENSIONS = new Set([
+  'mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac', 'opus', 'weba',
+]);
+
+export type ViewableType = 'text' | 'image' | 'video' | 'audio';
 
 export function getViewableType(filename: string): ViewableType | null {
   const ext = filename.split('.').pop()?.toLowerCase();
@@ -30,6 +37,7 @@ export function getViewableType(filename: string): ViewableType | null {
   if (TEXT_EXTENSIONS.has(ext)) return 'text';
   if (IMAGE_EXTENSIONS.has(ext)) return 'image';
   if (VIDEO_EXTENSIONS.has(ext)) return 'video';
+  if (AUDIO_EXTENSIONS.has(ext)) return 'audio';
   return null;
 }
 

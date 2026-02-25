@@ -78,6 +78,7 @@ export function FileViewer() {
             });
           });
         }
+        /* video and audio: use object URL for playback */
         const url = URL.createObjectURL(blob);
         setObjectUrl((prev) => {
           if (prev) URL.revokeObjectURL(prev);
@@ -191,6 +192,13 @@ export function FileViewer() {
                 src={objectUrl}
                 controls
                 className="max-h-full max-w-full"
+              />
+            )}
+            {viewedFile.type === 'audio' && objectUrl && (
+              <audio
+                src={objectUrl}
+                controls
+                className="w-full"
               />
             )}
           </>

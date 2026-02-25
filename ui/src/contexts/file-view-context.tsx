@@ -5,7 +5,7 @@ export interface ViewedFile {
   root: string;
   path: string;
   name: string;
-  type: 'text' | 'image' | 'video';
+  type: 'text' | 'image' | 'video' | 'audio';
 }
 
 interface FileViewContextValue {

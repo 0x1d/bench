@@ -10,16 +10,18 @@ import { prettyPrint } from '@/lib/text-format';
 import { cn } from '@/lib/utils';
 
 const STORAGE_KEY = 'bench-file-viewer-width';
-const DEFAULT_WIDTH = 320;
 const MIN_WIDTH = 240;
 const MAX_WIDTH = 800;
 
-function getStoredWidth(): number {
-  if (typeof window === 'undefined') return DEFAULT_WIDTH;
+function getInitialWidth(): number {
+  if (typeof window === 'undefined') return 320;
   const stored = localStorage.getItem(STORAGE_KEY);
-  if (!stored) return DEFAULT_WIDTH;
-  const n = parseInt(stored, 10);
-  return Number.isFinite(n) ? Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, n)) : DEFAULT_WIDTH;
+  if (stored) {
+    const n = parseInt(stored, 10);
+    if (Number.isFinite(n)) return Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, n));
+  }
+  const quarterWidth = Math.round(window.innerWidth / 4);
+  return Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, quarterWidth));
 }
 
 export function FileViewer() {
@@ -28,7 +30,7 @@ export function FileViewer() {
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [width, setWidth] = useState(getStoredWidth);
+  const [width, setWidth] = useState(getInitialWidth);
   const startXRef = useRef(0);
   const startWidthRef = useRef(0);
 

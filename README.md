@@ -8,6 +8,8 @@ A tool for managing and running [ComfyUI](https://github.com/comfyanonymous/Comf
 bench/
 ├── api/       # Go backend API
 ├── ui/        # React/TypeScript frontend (Vite)
+├── dev.sh     # Run API and UI together for local development
+├── example.env
 └── .cursor/   # Cursor IDE rules and guidelines
 ```
 
@@ -19,7 +21,18 @@ bench/
 
 ## Getting Started
 
-### API
+### Run both (local development)
+
+From the repository root:
+
+```bash
+cp example.env .env   # edit .env with your API_TOKEN, paths, etc.
+./dev.sh
+```
+
+This starts the API and UI together. Environment variables are loaded from `.env` if present. Use Ctrl+C to stop both.
+
+### API (standalone)
 
 ```bash
 cd api
@@ -29,7 +42,7 @@ go run ./cmd/server
 The API server starts on `http://localhost:8080`.
 Set `API_TOKEN` before starting the API. Requests must include this value in the `X-API-Token` header.
 
-### UI
+### UI (standalone)
 
 ```bash
 cd ui

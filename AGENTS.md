@@ -13,6 +13,12 @@
 
 ### Running the services
 
+**Both (local dev)** — from repository root:
+```bash
+./dev.sh
+```
+Starts API and UI together. Loads `.env` if present. Use Ctrl+C to stop both.
+
 **API** — from repository root:
 ```bash
 cd api && go run ./cmd/server

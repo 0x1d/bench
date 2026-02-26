@@ -13,6 +13,25 @@ alwaysApply: false
 - Run `go vet` and `golangci-lint` as part of the development workflow.
 - Target the latest stable Go version.
 
+## Best Practices
+- **Concurrency:** When using goroutines, ensure proper synchronization to avoid race conditions. Use channels for communication between goroutines.
+- **Interfaces:** Use interfaces to define behavior and decouple components.
+- **Packages:** Structure your code into logical packages. Avoid circular dependencies.
+- **Security:** Be mindful of security best practices. Sanitize inputs, avoid SQL injection, and handle credentials securely.
+
+## Code Quality and Style
+- **Formatting:** All Go code MUST be formatted with `gofmt` before committing.
+- **Linting:** Use `golangci-lint` to enforce code quality and style.
+- **Simplicity:** Write simple, clear, and concise code. Avoid unnecessary complexity.
+- **Error Handling:** Handle all errors explicitly. Never ignore an error. Check for errors and return them from functions.
+- **Naming:** Use meaningful and descriptive names for variables, functions, and packages. Follow Go's naming conventions (e.g., `camelCase` for private, `PascalCase` for public).
+- **Comments:** Write comments to explain the *why* behind complex or non-obvious code, not the *what*. Document all public functions and packages.
+- **Testing:**
+    - Write unit tests for all new code. Aim for high test coverage.
+    - Use table-driven tests for testing multiple scenarios.
+    - Mocks and interfaces should be used to isolate dependencies for testing.
+- **Dependencies:** Use Go modules (`go mod`) to manage project dependencies. Keep the `go.mod` and `go.sum` files up-to-date.
+
 ## Naming
 
 - **Packages**: short, lowercase, single-word when possible (e.g. `handler`, `model`, `service`).
@@ -71,3 +90,4 @@ api/
 - Prefer the standard library when it suffices.
 - Minimize third-party dependencies — vet each addition.
 - Use Go modules for dependency management.
+

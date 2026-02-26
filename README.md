@@ -37,6 +37,7 @@ pnpm dev
 ```
 
 The dev server starts on `http://localhost:5173` and proxies API requests to the backend.
+Set `VITE_PROXY_TARGET` to override the default proxy target (`http://localhost:8080`).
 
 ## Development
 

@@ -23,7 +23,7 @@ Listens on `:8080`. Override with `PORT` env var.
 ```bash
 cd ui && pnpm install && pnpm dev
 ```
-Starts Vite dev server on `:5173`. The Vite config proxies `/api/*` requests to `http://localhost:8080`, so the API must be running for the UI to function fully.
+Starts Vite dev server on `:5173`. The Vite config proxies `/api/*` requests to `http://localhost:8080` by default (override with `VITE_PROXY_TARGET`), so the API must be running for the UI to function fully.
 
 ### Lint / Test / Build
 
@@ -37,6 +37,6 @@ Starts Vite dev server on `:5173`. The Vite config proxies `/api/*` requests to 
 ### Non-obvious caveats
 
 - **esbuild build scripts**: The `ui/package.json` includes `pnpm.onlyBuiltDependencies: ["esbuild"]` to allow esbuild's postinstall script non-interactively. Do not run `pnpm approve-builds` (interactive).
-- **Vite proxy**: The UI dev server proxies `/api/*` to `localhost:8080`. Both services must be running for the health status page to show "Online".
+- **Vite proxy**: The UI dev server proxies `/api/*` to `localhost:8080` by default; set `VITE_PROXY_TARGET` to change the target. Both services must be running for the health status page to show "Online".
 - **Go module path**: The API module is `github.com/0x1d/bench/api`. When adding new packages, import from this path.
 - **Coding guidelines**: See `.cursor/rules/` for TypeScript/React and Go coding standards. Follow Conventional Commits for git messages (see `.cursor/rules/general.mdc`).

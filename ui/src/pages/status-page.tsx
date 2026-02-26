@@ -3,7 +3,12 @@ import { useHealth } from '@/hooks/use-health';
 
 export function StatusPage() {
   const { data, error, loading, refetch } = useHealth();
-  const proxyTarget = import.meta.env.VITE_PROXY_TARGET || 'http://localhost:8080';
+  const envApiBase = (import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\/+$/, '');
+  const apiBaseUrl = envApiBase
+    ? envApiBase.endsWith('/api')
+      ? envApiBase
+      : `${envApiBase}/api`
+    : '/api';
 
   return (
     <div className="w-full">
@@ -41,8 +46,8 @@ export function StatusPage() {
         )}
 
         <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
-          <dt className="text-muted-foreground">Proxy target</dt>
-          <dd className="break-all">{proxyTarget}</dd>
+          <dt className="text-muted-foreground">API base URL</dt>
+          <dd className="break-all">{apiBaseUrl}</dd>
         </dl>
 
         <Button className="mt-5" onClick={refetch} disabled={loading}>

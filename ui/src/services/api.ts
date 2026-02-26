@@ -34,6 +34,41 @@ export async function fetchStatus(): Promise<StatusResponse> {
   return response.json();
 }
 
+export async function uploadConfig(file: File): Promise<void> {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await fetch(`${API_BASE}/config`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Upload failed: ${response.status}`);
+  }
+}
+
+export async function fetchConfigExample(): Promise<string> {
+  const response = await fetch(`${API_BASE}/config/example`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch example: ${response.status}`);
+  }
+  return response.text();
+}
+
+export async function saveConfig(content: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/config/save`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/yaml; charset=utf-8' },
+    body: content,
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Save failed: ${response.status}`);
+  }
+}
+
 // Resource types
 export interface ResourceRoot {
   id: string;

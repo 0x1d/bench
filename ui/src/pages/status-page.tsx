@@ -1,7 +1,10 @@
-import { RefreshCw } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { FilePlus, RefreshCw, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { ConfigEditorSheet } from '@/components/config-editor-sheet';
 import { useHealth } from '@/hooks/use-health';
 import { useStatus } from '@/hooks/use-status';
+import { uploadConfig } from '@/services/api';
 
 export function StatusPage() {
   const { data, error, loading, refetch } = useHealth();
@@ -12,6 +15,27 @@ export function StatusPage() {
     refetch: refetchStatus,
   } = useStatus();
   const apiBaseUrl = '/api';
+
+  const configInputRef = useRef<HTMLInputElement>(null);
+  const [configUploading, setConfigUploading] = useState(false);
+  const [configUploadError, setConfigUploadError] = useState<string | null>(null);
+  const [configEditorOpen, setConfigEditorOpen] = useState(false);
+
+  const handleConfigUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    setConfigUploadError(null);
+    setConfigUploading(true);
+    try {
+      await uploadConfig(file);
+      await refetchStatus();
+    } catch (err) {
+      setConfigUploadError(err instanceof Error ? err.message : 'Upload failed');
+    } finally {
+      setConfigUploading(false);
+    }
+  };
 
   return (
     <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl">
@@ -116,7 +140,7 @@ export function StatusPage() {
                 {statusData.filesystem.configured ? 'Configured' : 'Not configured'}
               </span>
             </div>
-            {statusData.filesystem.configured && (
+            {statusData.filesystem.configured ? (
               <ul className="mt-3 space-y-2 text-sm">
                 {statusData.filesystem.paths.map((p) => (
                   <li key={p.id} className="flex flex-col gap-0.5">
@@ -133,10 +157,53 @@ export function StatusPage() {
                   </li>
                 ))}
               </ul>
+            ) : (
+              <div className="mt-3 space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Upload a config.yaml or create one from the example template.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setConfigEditorOpen(true)}
+                    className="gap-2"
+                  >
+                    <FilePlus className="size-4" />
+                    Create config.yaml
+                  </Button>
+                  <input
+                    ref={configInputRef}
+                    type="file"
+                    accept=".yaml,.yml"
+                    className="hidden"
+                    onChange={handleConfigUpload}
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => configInputRef.current?.click()}
+                    disabled={configUploading}
+                    className="gap-2"
+                  >
+                    <Upload className="size-4" />
+                    {configUploading ? 'Uploading...' : 'Upload config.yaml'}
+                  </Button>
+                </div>
+                {configUploadError && (
+                  <p className="text-sm text-red-500">{configUploadError}</p>
+                )}
+              </div>
             )}
           </div>
         )}
       </div>
+
+      <ConfigEditorSheet
+        open={configEditorOpen}
+        onOpenChange={setConfigEditorOpen}
+        onSaved={refetchStatus}
+      />
     </div>
   );
 }

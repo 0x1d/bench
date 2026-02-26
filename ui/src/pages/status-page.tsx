@@ -3,12 +3,7 @@ import { useHealth } from '@/hooks/use-health';
 
 export function StatusPage() {
   const { data, error, loading, refetch } = useHealth();
-  const envApiBase = (import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\/+$/, '');
-  const apiBaseUrl = envApiBase
-    ? envApiBase.endsWith('/api')
-      ? envApiBase
-      : `${envApiBase}/api`
-    : 'http://localhost:8080/api';
+  const apiBaseUrl = '/api';
 
   return (
     <div className="w-full">

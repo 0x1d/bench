@@ -1,11 +1,79 @@
-import { createContext, useCallback, useContext, useMemo, useState } from 'react';
-import { ChevronDown, ChevronRight, Plus, Trash2 } from 'lucide-react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { ChevronDown, ChevronRight, Plus, Search, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Toggle } from '@/components/ui/toggle';
 import { cn } from '@/lib/utils';
+
+/** Fuzzy match: query chars appear in str in order, case insensitive. */
+function fuzzyMatch(query: string, str: string): boolean {
+  if (!query) return true;
+  const q = query.toLowerCase();
+  const s = String(str).toLowerCase();
+  let j = 0;
+  for (let i = 0; i < s.length && j < q.length; i++) {
+    if (s[i] === q[j]) j++;
+  }
+  return j === q.length;
+}
+
+function findMatchingPaths(data: unknown, query: string, prefix: string): string[] {
+  if (!query.trim()) return [];
+  const paths: string[] = [];
+  if (Array.isArray(data)) {
+    data.forEach((item, i) => {
+      const childPath = `${prefix}[${i}]`;
+      const label = `[${i}]`;
+      if (fuzzyMatch(query, label)) paths.push(childPath);
+      const childMatches = findMatchingPaths(item, query, childPath);
+      paths.push(...childMatches);
+    });
+  } else if (typeof data === 'object' && data !== null) {
+    const obj = data as Record<string, unknown>;
+    for (const [key, val] of Object.entries(obj)) {
+      const childPath = prefix ? `${prefix}.${key}` : `.${key}`;
+      if (fuzzyMatch(query, key)) paths.push(childPath);
+      if (typeof val === 'string' && fuzzyMatch(query, val)) paths.push(childPath);
+      if (typeof val === 'number' && fuzzyMatch(query, String(val))) paths.push(childPath);
+      if (typeof val === 'boolean' && fuzzyMatch(query, String(val))) paths.push(childPath);
+      const childMatches = findMatchingPaths(val, query, childPath);
+      paths.push(...childMatches);
+    }
+  }
+  return paths;
+}
+
+function parentPath(path: string): string {
+  if (!path) return '';
+  return path.replace(/\.?[^.[\]]+$|\[\d+\]$/, '') || '';
+}
+
+function getAncestorsAndSelf(paths: string[]): Set<string> {
+  const result = new Set<string>();
+  for (const p of paths) {
+    result.add(p);
+    let curr = p;
+    while (curr) {
+      curr = parentPath(curr);
+      if (curr !== p) result.add(curr);
+    }
+  }
+  return result;
+}
+
+function getPathsToExpand(matchingPaths: string[]): Set<string> {
+  const result = new Set<string>();
+  for (const p of matchingPaths) {
+    let curr = parentPath(p);
+    while (curr) {
+      result.add(curr);
+      curr = parentPath(curr);
+    }
+  }
+  return result;
+}
 
 function collectCollapsiblePaths(data: unknown, prefix: string): string[] {
   const paths: string[] = [];
@@ -30,6 +98,9 @@ type ExpandContextValue = {
   togglePath: (path: string) => void;
   expandAll: () => void;
   collapseAll: () => void;
+  searchQuery: string;
+  visiblePaths: Set<string>;
+  expandPathsWhenFiltered: Set<string>;
 };
 
 const ExpandContext = createContext<ExpandContextValue | null>(null);
@@ -43,6 +114,34 @@ interface StructuredFormProps {
 export function StructuredForm({ data, onChange, className }: StructuredFormProps) {
   const allPaths = useMemo(() => collectCollapsiblePaths(data, ''), [data]);
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(() => new Set());
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const { visiblePaths, expandPathsWhenFiltered } = useMemo(() => {
+    const q = searchQuery.trim();
+    if (!q) {
+      return {
+        visiblePaths: new Set<string>(),
+        expandPathsWhenFiltered: new Set<string>(),
+      };
+    }
+    const matching = findMatchingPaths(data, q, '');
+    const visible = getAncestorsAndSelf(matching);
+    const toExpand = getPathsToExpand(matching);
+    return {
+      visiblePaths: visible,
+      expandPathsWhenFiltered: toExpand,
+    };
+  }, [data, searchQuery]);
+
+  useEffect(() => {
+    if (searchQuery.trim()) {
+      setExpandedPaths((prev) => {
+        const next = new Set(prev);
+        for (const p of expandPathsWhenFiltered) next.add(p);
+        return next;
+      });
+    }
+  }, [searchQuery, expandPathsWhenFiltered]);
 
   const togglePath = useCallback((path: string) => {
     setExpandedPaths((prev) => {
@@ -54,19 +153,45 @@ export function StructuredForm({ data, onChange, className }: StructuredFormProp
   }, []);
 
   const expandAll = useCallback(() => {
-    setExpandedPaths(new Set(allPaths));
-  }, [allPaths]);
+    if (searchQuery.trim()) {
+      setExpandedPaths(new Set(expandPathsWhenFiltered));
+    } else {
+      setExpandedPaths(new Set(allPaths));
+    }
+  }, [allPaths, searchQuery, expandPathsWhenFiltered]);
 
   const collapseAll = useCallback(() => {
     setExpandedPaths(new Set());
   }, []);
 
-  const value = useMemo<ExpandContextValue>(
-    () => ({ expandedPaths, togglePath, expandAll, collapseAll }),
-    [expandedPaths, togglePath, expandAll, collapseAll]
-  );
+  const isFiltered = searchQuery.trim().length > 0;
+  const pathsToConsider = isFiltered
+    ? expandPathsWhenFiltered
+    : new Set(allPaths);
+  const allExpanded =
+    pathsToConsider.size > 0 &&
+    [...pathsToConsider].every((p) => expandedPaths.has(p));
 
-  const allExpanded = allPaths.length > 0 && expandedPaths.size === allPaths.length;
+  const value = useMemo<ExpandContextValue>(
+    () => ({
+      expandedPaths,
+      togglePath,
+      expandAll,
+      collapseAll,
+      searchQuery,
+      visiblePaths,
+      expandPathsWhenFiltered,
+    }),
+    [
+      expandedPaths,
+      togglePath,
+      expandAll,
+      collapseAll,
+      searchQuery,
+      visiblePaths,
+      expandPathsWhenFiltered,
+    ]
+  );
 
   return (
     <ExpandContext.Provider value={value}>
@@ -76,29 +201,39 @@ export function StructuredForm({ data, onChange, className }: StructuredFormProp
             role="toolbar"
             className="sticky top-0 z-10 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 shadow-sm"
           >
+            <div className="relative flex-1 min-w-[120px] max-w-[200px]">
+              <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+              <Input
+                type="search"
+                placeholder="Search..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-8 h-8"
+                aria-label="Filter form data"
+              />
+            </div>
             <Toggle
               variant="outline"
               size="sm"
               pressed={allExpanded}
               onPressedChange={(pressed) => (pressed ? expandAll() : collapseAll())}
               aria-label={allExpanded ? 'Collapse' : 'Expand'}
-              className="gap-1.5"
             >
               {allExpanded ? (
-                <>
-                  <ChevronDown className="size-4" />
-                  Collapse
-                </>
+                <ChevronDown className="size-4" />
               ) : (
-                <>
-                  <ChevronRight className="size-4" />
-                  Expand
-                </>
+                <ChevronRight className="size-4" />
               )}
             </Toggle>
           </div>
         )}
-        <FormField value={data} onChange={onChange} path="" />
+        {isFiltered && visiblePaths.size === 0 ? (
+          <p className="py-4 text-center text-sm text-muted-foreground">
+            No matches for &quot;{searchQuery.trim()}&quot;
+          </p>
+        ) : (
+          <FormField value={data} onChange={onChange} path="" />
+        )}
       </div>
     </ExpandContext.Provider>
   );
@@ -215,14 +350,22 @@ function FormField({
   }
 
   if (Array.isArray(value)) {
+    const ctx = useContext(ExpandContext);
+    const isFiltered = ctx && ctx.searchQuery.trim().length > 0;
+    const filteredIndices = isFiltered
+      ? value
+          .map((_, i) => i)
+          .filter((i) => ctx!.visiblePaths.has(`${path}[${i}]`))
+      : value.map((_, i) => i);
+
     const typeHint = `[${value.length} item${value.length !== 1 ? 's' : ''}]`;
     const content = (
       <div className="space-y-2 pl-2 border-l-2 border-border">
-        {value.map((item, i) => (
+        {filteredIndices.map((i) => (
           <div key={i} className="flex items-start gap-2">
             <div className="flex-1 min-w-0">
               <FormField
-                value={item}
+                value={value[i]}
                 onChange={(v) => {
                   const next = [...value];
                   next[i] = v;
@@ -269,8 +412,17 @@ function FormField({
   }
 
   if (typeof value === 'object' && value !== null) {
+    const ctx = useContext(ExpandContext);
     const obj = value as Record<string, unknown>;
-    const keys = Object.keys(obj);
+    const allKeys = Object.keys(obj);
+    const isFiltered = ctx && ctx.searchQuery.trim().length > 0;
+    const keys = isFiltered
+      ? allKeys.filter((key) => {
+          const childPath = path ? `${path}.${key}` : `.${key}`;
+          return ctx!.visiblePaths.has(childPath);
+        })
+      : allKeys;
+
     const typeHint = `{${keys.length} key${keys.length !== 1 ? 's' : ''}}`;
     const content = (
       <div className="space-y-4 pl-2 border-l-2 border-border">

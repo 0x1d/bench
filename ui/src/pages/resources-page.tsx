@@ -51,33 +51,17 @@ export function ResourcesPage() {
 
   return (
     <div className="w-full p-6">
-      <div className="mb-4 flex flex-wrap items-center gap-3">
-        <label htmlFor="root-select" className="text-sm font-medium">
-          Root
-        </label>
-        <select
-          id="root-select"
-          value={displayRoot ?? ''}
-          onChange={(e) => {
-            setSelectedRoot(e.target.value);
-            setPath('.');
-          }}
-          className="rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-        >
-          {roots.map((r) => (
-            <option key={r.id} value={r.id}>
-              {r.label}
-            </option>
-          ))}
-        </select>
-      </div>
-
       {displayRoot && (
         <FileBrowser
           root={displayRoot}
           path={path}
           onNavigate={setPath}
           rootLabel={currentRootLabel}
+          roots={roots}
+          onRootChange={(value) => {
+            setSelectedRoot(value);
+            setPath('.');
+          }}
         />
       )}
     </div>

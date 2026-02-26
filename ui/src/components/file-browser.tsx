@@ -1,7 +1,21 @@
 import { useRef, useState } from 'react';
-import { Folder, File, Download, Upload, FolderPlus, Pencil, Trash2 } from 'lucide-react';
+import { Folder, File, Download, Upload, FolderPlus, Pencil, Trash2, HardDrive } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Separator } from '@/components/ui/separator';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,11 +35,18 @@ import { useFileView } from '@/contexts/file-view-context';
 import { getViewableType } from '@/lib/viewable-types';
 import { cn } from '@/lib/utils';
 
+interface RootOption {
+  id: string;
+  label: string;
+}
+
 interface FileBrowserProps {
   root: string;
   path: string;
   onNavigate: (path: string) => void;
   rootLabel?: string;
+  roots?: RootOption[];
+  onRootChange?: (rootId: string) => void;
 }
 
 function formatSize(bytes: number): string {
@@ -44,6 +65,8 @@ export function FileBrowser({
   path,
   onNavigate,
   rootLabel,
+  roots = [],
+  onRootChange,
 }: FileBrowserProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [newFolderName, setNewFolderName] = useState('');
@@ -126,68 +149,110 @@ export function FileBrowser({
   return (
     <div className="space-y-4">
       {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-2">
-        <input
-          ref={fileInputRef}
-          type="file"
-          className="hidden"
-          onChange={handleUpload}
-          aria-hidden
-        />
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={mutations.upload.isPending}
-        >
-          <Upload className="size-4" />
-          Upload
-        </Button>
-        {showNewFolder ? (
-          <div className="flex items-center gap-2">
-            <Input
-              placeholder="Folder name"
-              value={newFolderName}
-              onChange={(e) => setNewFolderName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleCreateFolder();
-                if (e.key === 'Escape') {
-                  setShowNewFolder(false);
-                  setNewFolderName('');
-                }
-              }}
-              className="h-8 w-48"
-              autoFocus
-            />
-            <Button
-              size="sm"
-              onClick={handleCreateFolder}
-              disabled={!newFolderName.trim() || mutations.createFolder.isPending}
-            >
-              Create
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setShowNewFolder(false);
-                setNewFolderName('');
-              }}
-            >
-              Cancel
-            </Button>
+      <TooltipProvider>
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 shadow-sm">
+          {roots.length > 0 && onRootChange && (
+            <>
+              <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                <HardDrive className="size-4" />
+                Root
+              </div>
+              <Separator orientation="vertical" className="h-5" />
+              <Select value={root} onValueChange={onRootChange}>
+                <SelectTrigger size="sm" className="w-[220px]">
+                  <SelectValue placeholder="Select resource root" />
+                </SelectTrigger>
+                <SelectContent>
+                  {roots.map((r) => (
+                    <SelectItem key={r.id} value={r.id}>
+                      {r.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Separator orientation="vertical" className="h-5" />
+            </>
+          )}
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="hidden"
+            onChange={handleUpload}
+            aria-hidden
+          />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={mutations.upload.isPending}
+              >
+                <Upload className="size-4" />
+                Upload
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Upload a file to this folder</TooltipContent>
+          </Tooltip>
+          {showNewFolder ? (
+            <>
+              <Separator orientation="vertical" className="h-6" />
+              <div className="flex items-center gap-2">
+                <Input
+                  placeholder="Folder name"
+                  value={newFolderName}
+                  onChange={(e) => setNewFolderName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleCreateFolder();
+                    if (e.key === 'Escape') {
+                      setShowNewFolder(false);
+                      setNewFolderName('');
+                    }
+                  }}
+                  className="h-8 w-48"
+                  autoFocus
+                />
+                <Button
+                  size="sm"
+                  onClick={handleCreateFolder}
+                  disabled={!newFolderName.trim() || mutations.createFolder.isPending}
+                >
+                  Create
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setShowNewFolder(false);
+                    setNewFolderName('');
+                  }}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </>
+          ) : (
+            <>
+              <Separator orientation="vertical" className="h-6" />
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowNewFolder(true)}
+                  >
+                    <FolderPlus className="size-4" />
+                    New folder
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Create a new subfolder</TooltipContent>
+              </Tooltip>
+            </>
+          )}
           </div>
-        ) : (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowNewFolder(true)}
-          >
-            <FolderPlus className="size-4" />
-            New folder
-          </Button>
-        )}
-      </div>
+        </div>
+      </TooltipProvider>
 
       {/* Breadcrumbs */}
       <nav className="flex flex-wrap items-center gap-1 text-sm">

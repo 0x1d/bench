@@ -8,13 +8,17 @@ function getApiBaseUrl() {
 function buildUpstreamUrl(req) {
   const base = getApiBaseUrl();
   const incoming = new URL(req.url || '/', 'http://localhost');
-  // When rewritten from /api/:path*, path is in query
-  const pathFromQuery = incoming.searchParams.get('path');
-  const suffix = typeof pathFromQuery === 'string'
-    ? (pathFromQuery.startsWith('/') ? pathFromQuery : `/${pathFromQuery}`)
+  // Rewrite uses :apiPath* to avoid clashing with API's "path" query param
+  const apiPath = incoming.searchParams.get('apiPath');
+  const suffix = typeof apiPath === 'string'
+    ? (apiPath.startsWith('/') ? apiPath : `/${apiPath}`)
     : incoming.pathname.replace(/^\/api\/?/, '') || '';
   const pathPart = suffix.startsWith('/') ? suffix : `/${suffix}`;
-  return `${base}${pathPart}${incoming.search}`;
+  // Strip apiPath from query so it doesn't reach the upstream API
+  const query = new URLSearchParams(incoming.searchParams);
+  query.delete('apiPath');
+  const search = query.toString() ? `?${query.toString()}` : '';
+  return `${base}${pathPart}${search}`;
 }
 
 function getForwardHeaders(req) {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { FileViewProvider } from '@/contexts/file-view-context';
+import { FileViewProvider, useFileView } from '@/contexts/file-view-context';
 import { FileViewer } from '@/components/file-viewer';
 import { SidebarLeft } from '@/components/sidebar-left';
 import { SiteHeader } from '@/components/site-header';
@@ -9,6 +9,16 @@ import { StatusPage } from '@/pages/status-page';
 
 function getHash() {
   return window.location.hash.slice(1) || 'status';
+}
+
+function ClearFileViewOnNavigate({ hash }: { hash: string }) {
+  const { setViewedFile } = useFileView();
+  useEffect(() => {
+    if (hash !== 'resources') {
+      setViewedFile(null);
+    }
+  }, [hash, setViewedFile]);
+  return null;
 }
 
 export function App() {
@@ -22,6 +32,7 @@ export function App() {
 
   return (
     <FileViewProvider>
+      <ClearFileViewOnNavigate hash={hash} />
       <div className="[--header-height:calc(--spacing(14))] h-svh overflow-hidden flex flex-col">
         <SidebarProvider className="flex flex-col min-h-0 flex-1 overflow-hidden">
         <SiteHeader />

@@ -27,9 +27,9 @@ type Config struct {
 	Resources ResourcesConfig `yaml:"resources"`
 }
 
-// findConfigPath returns the path to config.yaml.
+// FindConfigPath returns the path to config.yaml, or empty if none exists.
 // Resolution order: BENCH_CONFIG (absolute path) → ./config.yaml → ../config.yaml.
-func findConfigPath() string {
+func FindConfigPath() string {
 	if p := os.Getenv(envConfigPath); p != "" {
 		if filepath.IsAbs(p) {
 			return p
@@ -58,7 +58,7 @@ func findConfigPath() string {
 // Roots returns all configured roots for resource browsing from config.yaml.
 // Returns empty slice if config is missing or has no filesystem entries.
 func Roots() []model.Root {
-	path := findConfigPath()
+	path := FindConfigPath()
 	if path == "" {
 		return nil
 	}
@@ -96,4 +96,64 @@ func Roots() []model.Root {
 	}
 
 	return roots
+}
+
+// RootStatus represents a filesystem root for status display (includes path).
+type RootStatus struct {
+	ID    string `json:"id"`
+	Label string `json:"label"`
+	Path  string `json:"path"`
+}
+
+const envConfigWritePath = "BENCH_CONFIG_WRITE"
+
+// ConfigWritePath returns the path where config.yaml should be written when none exists.
+// Uses BENCH_CONFIG_WRITE if set, else: parent/config.yaml when running from api/, else cwd/config.yaml.
+func ConfigWritePath() string {
+	if p := os.Getenv(envConfigWritePath); p != "" {
+		return p
+	}
+	wd, _ := os.Getwd()
+	// When running from api/, save to repo root (parent)
+	if filepath.Base(wd) == "api" {
+		return filepath.Join(filepath.Dir(wd), "config.yaml")
+	}
+	return filepath.Join(wd, "config.yaml")
+}
+
+// SaveConfig validates and writes config YAML. Uses existing config path if found, else default write path.
+func SaveConfig(data []byte) error {
+	var cfg Config
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return err
+	}
+	path := FindConfigPath()
+	if path == "" {
+		path = ConfigWritePath()
+	}
+	return os.WriteFile(path, data, 0644)
+}
+
+// ExampleConfigPath returns the path to config.example.yaml (same dir as config or write path).
+func ExampleConfigPath() string {
+	path := FindConfigPath()
+	if path == "" {
+		path = ConfigWritePath()
+	}
+	return filepath.Join(filepath.Dir(path), "config.example.yaml")
+}
+
+// ReadExampleConfig returns the content of config.example.yaml.
+func ReadExampleConfig() ([]byte, error) {
+	return os.ReadFile(ExampleConfigPath())
+}
+
+// RootsStatus returns configured roots with paths for status display.
+func RootsStatus() []RootStatus {
+	roots := Roots()
+	out := make([]RootStatus, 0, len(roots))
+	for _, r := range roots {
+		out = append(out, RootStatus{ID: r.ID, Label: r.Label, Path: r.Path})
+	}
+	return out
 }

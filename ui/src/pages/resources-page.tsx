@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useRoots } from '@/hooks/use-resources';
+import { useFileBrowserHistory } from '@/hooks/use-file-browser-history';
 import { FileBrowser } from '@/components/file-browser';
 
 export function ResourcesPage() {
@@ -14,6 +15,14 @@ export function ResourcesPage() {
         ? selectedRoot!
         : roots[0].id
       : null;
+
+  const { handleNavigate, handleRootChange } = useFileBrowserHistory(
+    path,
+    setPath,
+    displayRoot,
+    setSelectedRoot,
+    !!displayRoot
+  );
 
   if (rootsLoading) {
     return (
@@ -54,13 +63,10 @@ export function ResourcesPage() {
         <FileBrowser
           root={displayRoot}
           path={path}
-          onNavigate={setPath}
+          onNavigate={handleNavigate}
           rootLabel={currentRootLabel}
           roots={roots}
-          onRootChange={(value) => {
-            setSelectedRoot(value);
-            setPath('.');
-          }}
+          onRootChange={handleRootChange}
         />
       )}
     </div>

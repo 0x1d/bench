@@ -6,24 +6,27 @@ function getApiBaseUrl() {
 }
 
 function buildUpstreamUrl(req) {
-  const incoming = new URL(req.url, 'http://localhost');
-  const suffix = incoming.pathname.replace(/^\/api/, '');
   const base = getApiBaseUrl();
-  return `${base}${suffix}${incoming.search}`;
+  const incoming = new URL(req.url || '/', 'http://localhost');
+  // When rewritten from /api/:path*, path is in query
+  const pathFromQuery = incoming.searchParams.get('path');
+  const suffix = typeof pathFromQuery === 'string'
+    ? (pathFromQuery.startsWith('/') ? pathFromQuery : `/${pathFromQuery}`)
+    : incoming.pathname.replace(/^\/api\/?/, '') || '';
+  const pathPart = suffix.startsWith('/') ? suffix : `/${suffix}`;
+  return `${base}${pathPart}${incoming.search}`;
 }
 
 function getForwardHeaders(req) {
   const headers = new Headers();
 
   for (const [key, value] of Object.entries(req.headers)) {
-    if (value === undefined) {
-      continue;
-    }
+    if (value === undefined) continue;
     if (Array.isArray(value)) {
       headers.set(key, value.join(','));
-      continue;
+    } else {
+      headers.set(key, value);
     }
-    headers.set(key, value);
   }
 
   headers.delete('host');
@@ -52,9 +55,7 @@ export default async function handler(req, res) {
   res.statusCode = upstreamResponse.status;
   const skipHeaders = ['transfer-encoding', 'content-encoding', 'content-length'];
   upstreamResponse.headers.forEach((value, key) => {
-    if (skipHeaders.includes(key.toLowerCase())) {
-      return;
-    }
+    if (skipHeaders.includes(key.toLowerCase())) return;
     res.setHeader(key, value);
   });
 

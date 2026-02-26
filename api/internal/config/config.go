@@ -1,12 +1,16 @@
 package config
 
 import (
+	_ "embed"
 	"os"
 	"path/filepath"
 
 	"github.com/0x1d/bench/api/internal/model"
 	"gopkg.in/yaml.v3"
 )
+
+//go:embed config.example.yaml
+var embeddedExampleConfig []byte
 
 const envConfigPath = "BENCH_CONFIG"
 
@@ -144,8 +148,13 @@ func ExampleConfigPath() string {
 }
 
 // ReadExampleConfig returns the content of config.example.yaml.
+// Uses embedded copy when the file is not found on disk (e.g. in deployed builds).
 func ReadExampleConfig() ([]byte, error) {
-	return os.ReadFile(ExampleConfigPath())
+	data, err := os.ReadFile(ExampleConfigPath())
+	if err == nil {
+		return data, nil
+	}
+	return embeddedExampleConfig, nil
 }
 
 // RootsStatus returns configured roots with paths for status display.

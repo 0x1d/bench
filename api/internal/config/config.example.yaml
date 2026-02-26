@@ -1,0 +1,11 @@
+# Resource roots for file browsing.
+# Keep in sync with repo root config.example.yaml (embedded for deployed builds).
+# Copy to config.yaml and adjust paths for your environment.
+resources:
+  filesystem:
+    - id: default
+      label: My Data
+      path: /path/to/your/data
+    - id: workflows
+      label: Workflows
+      path: /path/to/workflows

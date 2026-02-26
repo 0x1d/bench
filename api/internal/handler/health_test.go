@@ -35,3 +35,28 @@ func TestHandleHealth(t *testing.T) {
 		t.Error("expected non-empty version")
 	}
 }
+
+func TestHandleStatus(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/status", nil)
+	rec := httptest.NewRecorder()
+
+	HandleStatus(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	contentType := rec.Header().Get("Content-Type")
+	if contentType != "application/json" {
+		t.Errorf("expected Content-Type application/json, got %s", contentType)
+	}
+
+	var resp StatusResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if resp.Filesystem.Paths == nil {
+		t.Error("expected filesystem.paths to be non-nil slice")
+	}
+}

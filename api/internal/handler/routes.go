@@ -5,6 +5,7 @@ import "net/http"
 // RegisterRoutes attaches all API route handlers to the given mux.
 func RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/health", HandleHealth)
+	mux.HandleFunc("GET /api/status", HandleStatus)
 	// Resource routes: more specific paths first
 	mux.HandleFunc("GET /api/resources/roots", HandleResourceRoots)
 	mux.HandleFunc("GET /api/resources/download", HandleResourceDownload)

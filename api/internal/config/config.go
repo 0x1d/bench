@@ -97,3 +97,20 @@ func Roots() []model.Root {
 
 	return roots
 }
+
+// RootStatus represents a filesystem root for status display (includes path).
+type RootStatus struct {
+	ID    string `json:"id"`
+	Label string `json:"label"`
+	Path  string `json:"path"`
+}
+
+// RootsStatus returns configured roots with paths for status display.
+func RootsStatus() []RootStatus {
+	roots := Roots()
+	out := make([]RootStatus, 0, len(roots))
+	for _, r := range roots {
+		out = append(out, RootStatus{ID: r.ID, Label: r.Label, Path: r.Path})
+	}
+	return out
+}

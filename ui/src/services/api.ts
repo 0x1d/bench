@@ -5,10 +5,31 @@ export interface HealthStatus {
   version: string;
 }
 
+export interface FilesystemPath {
+  id: string;
+  label: string;
+  path: string;
+}
+
+export interface StatusResponse {
+  filesystem: {
+    configured: boolean;
+    paths: FilesystemPath[];
+  };
+}
+
 export async function fetchHealth(): Promise<HealthStatus> {
   const response = await fetch(`${API_BASE}/health`);
   if (!response.ok) {
     throw new Error(`Health check failed: ${response.status} ${response.statusText}`);
+  }
+  return response.json();
+}
+
+export async function fetchStatus(): Promise<StatusResponse> {
+  const response = await fetch(`${API_BASE}/status`);
+  if (!response.ok) {
+    throw new Error(`Status check failed: ${response.status} ${response.statusText}`);
   }
   return response.json();
 }

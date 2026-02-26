@@ -125,6 +125,12 @@ body {
   body {
     @apply bg-background text-foreground;
   }
+  button:not(:disabled),
+  a[href],
+  [role="button"]:not([aria-disabled="true"]),
+  [role="combobox"]:not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
 }
 
 /* Scrollbar styling - matches color scheme */

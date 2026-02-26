@@ -1,9 +1,4 @@
-const envApiBase = (import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\/+$/, '');
-const API_BASE = envApiBase
-  ? envApiBase.endsWith('/api')
-    ? envApiBase
-    : `${envApiBase}/api`
-  : 'http://localhost:8080/api';
+const API_BASE = '/api';
 
 export interface HealthStatus {
   status: string;

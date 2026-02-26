@@ -17,13 +17,13 @@
 ```bash
 cd api && go run ./cmd/server
 ```
-Listens on `:8080`. Override with `PORT` env var.
+Listens on `:8080`. Override with `PORT` env var. `API_TOKEN` is required and is validated from the `X-API-Token` request header.
 
 **UI** — from repository root:
 ```bash
 cd ui && pnpm install && pnpm dev
 ```
-Starts Vite dev server on `:5173`. Set `VITE_API_BASE_URL` to point the UI and Vite proxy at your API host (host-only or full `/api` URL). If unset, it defaults to `http://localhost:8080/api`.
+Starts Vite dev server on `:5173`. The browser always calls `/api`; Vite proxies requests to `API_BASE_URL` and injects `API_TOKEN` as `X-API-Token`. `API_BASE_URL` accepts a host-only value or full `/api` URL and defaults to `http://localhost:8080/api`.
 
 ### Lint / Test / Build
 
@@ -37,6 +37,7 @@ Starts Vite dev server on `:5173`. Set `VITE_API_BASE_URL` to point the UI and V
 ### Non-obvious caveats
 
 - **esbuild build scripts**: The `ui/package.json` includes `pnpm.onlyBuiltDependencies: ["esbuild"]` to allow esbuild's postinstall script non-interactively. Do not run `pnpm approve-builds` (interactive).
-- **Vite proxy**: The UI uses `VITE_API_BASE_URL` for both frontend API calls and dev proxy routing. If unset, the default is `http://localhost:8080/api`.
+- **Vite proxy**: The browser always uses `/api`; Vite forwards to `API_BASE_URL` (default `http://localhost:8080/api`) and preserves the `/api/*` path.
+- **API auth**: API requests must include `X-API-Token` matching `API_TOKEN`. UI proxy layers (Vite and Vercel function) inject this header server-side.
 - **Go module path**: The API module is `github.com/0x1d/bench/api`. When adding new packages, import from this path.
 - **Coding guidelines**: See `.cursor/rules/` for TypeScript/React and Go coding standards. Follow Conventional Commits for git messages (see `.cursor/rules/general.mdc`).

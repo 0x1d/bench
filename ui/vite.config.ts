@@ -5,13 +5,13 @@ import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
-  const envApiBase = (env.VITE_API_BASE_URL || '').trim().replace(/\/+$/, '');
-  const apiBaseUrl = envApiBase
-    ? envApiBase.endsWith('/api')
-      ? envApiBase
-      : `${envApiBase}/api`
-    : 'http://localhost:8080/api';
-  const proxyTarget = apiBaseUrl.replace(/\/api$/, '');
+  const rawApiBase = (env.API_BASE_URL || 'http://localhost:8080/api').trim().replace(/\/+$/, '');
+  const apiBaseUrl = rawApiBase.endsWith('/api') ? rawApiBase : `${rawApiBase}/api`;
+  const apiToken = (env.API_TOKEN || '').trim();
+
+  const parsedApiBase = new URL(apiBaseUrl);
+  const proxyTarget = `${parsedApiBase.protocol}//${parsedApiBase.host}`;
+  const proxyBasePath = parsedApiBase.pathname.replace(/\/+$/, '') || '/api';
 
   return {
     plugins: [react(), tailwindcss()],
@@ -26,6 +26,8 @@ export default defineConfig(({ mode }) => {
           target: proxyTarget,
           secure: true,
           changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api/, proxyBasePath),
+          ...(apiToken ? { headers: { 'X-API-Token': apiToken } } : {}),
         },
       },
     },

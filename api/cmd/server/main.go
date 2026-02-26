@@ -14,11 +14,15 @@ func main() {
 	if port == "" {
 		port = "8080"
 	}
+	apiToken := os.Getenv("API_TOKEN")
+	if apiToken == "" {
+		log.Fatal("API_TOKEN is required")
+	}
 
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
-	h := middleware.CORS(middleware.Logger(mux))
+	h := middleware.CORS(middleware.Logger(middleware.RequireAPIToken(apiToken, mux)))
 
 	log.Printf("bench api listening on :%s", port)
 	if err := http.ListenAndServe(":"+port, h); err != nil {

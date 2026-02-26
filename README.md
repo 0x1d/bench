@@ -27,6 +27,7 @@ go run ./cmd/server
 ```
 
 The API server starts on `http://localhost:8080`.
+Set `API_TOKEN` before starting the API. Requests must include this value in the `X-API-Token` header.
 
 ### UI
 
@@ -37,9 +38,11 @@ pnpm dev
 ```
 
 The dev server starts on `http://localhost:5173`.
-Set `VITE_API_BASE_URL` to point the UI and dev proxy at your API host.
+The browser always calls `/api`; requests are proxied server-side.
+Set `API_BASE_URL` to point the UI proxy at your API host.
 You can provide either a host (for example, `https://your-api.example.com`) or a full `/api` URL.
 If unset, it defaults to `http://localhost:8080/api`.
+Set `API_TOKEN` in the UI runtime environment so the proxy can send `X-API-Token` to the API.
 
 ## Development
 

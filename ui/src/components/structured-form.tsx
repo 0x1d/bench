@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight, Plus, Search, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -134,15 +134,12 @@ export function StructuredForm({ data, onChange, className }: StructuredFormProp
     };
   }, [data, searchQuery]);
 
-  useEffect(() => {
-    if (searchQuery.trim()) {
-      setExpandedPaths((prev) => {
-        const next = new Set(prev);
-        for (const p of expandPathsWhenFiltered) next.add(p);
-        return next;
-      });
-    }
-  }, [searchQuery, expandPathsWhenFiltered]);
+  const effectiveExpandedPaths = useMemo(() => {
+    if (!searchQuery.trim()) return expandedPaths;
+    const next = new Set(expandedPaths);
+    for (const p of expandPathsWhenFiltered) next.add(p);
+    return next;
+  }, [expandedPaths, searchQuery, expandPathsWhenFiltered]);
 
   const togglePath = useCallback((path: string) => {
     setExpandedPaths((prev) => {
@@ -171,11 +168,11 @@ export function StructuredForm({ data, onChange, className }: StructuredFormProp
     : new Set(allPaths);
   const allExpanded =
     pathsToConsider.size > 0 &&
-    [...pathsToConsider].every((p) => expandedPaths.has(p));
+    [...pathsToConsider].every((p) => effectiveExpandedPaths.has(p));
 
   const value = useMemo<ExpandContextValue>(
     () => ({
-      expandedPaths,
+      expandedPaths: effectiveExpandedPaths,
       togglePath,
       expandAll,
       collapseAll,
@@ -184,7 +181,7 @@ export function StructuredForm({ data, onChange, className }: StructuredFormProp
       expandPathsWhenFiltered,
     }),
     [
-      expandedPaths,
+      effectiveExpandedPaths,
       togglePath,
       expandAll,
       collapseAll,
@@ -289,6 +286,8 @@ function FormField({
   path: string;
   label?: string;
 }) {
+  const ctx = useContext(ExpandContext);
+
   if (value === null || value === undefined) {
     return (
       <div className="space-y-2">
@@ -350,7 +349,6 @@ function FormField({
   }
 
   if (Array.isArray(value)) {
-    const ctx = useContext(ExpandContext);
     const isFiltered = ctx && ctx.searchQuery.trim().length > 0;
     const filteredIndices = isFiltered
       ? value
@@ -412,7 +410,6 @@ function FormField({
   }
 
   if (typeof value === 'object' && value !== null) {
-    const ctx = useContext(ExpandContext);
     const obj = value as Record<string, unknown>;
     const allKeys = Object.keys(obj);
     const isFiltered = ctx && ctx.searchQuery.trim().length > 0;

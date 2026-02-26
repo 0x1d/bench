@@ -3,6 +3,7 @@ import { useHealth } from '@/hooks/use-health';
 
 export function StatusPage() {
   const { data, error, loading, refetch } = useHealth();
+  const proxyTarget = import.meta.env.VITE_PROXY_TARGET || 'http://localhost:8080';
 
   return (
     <div className="w-full">
@@ -38,6 +39,11 @@ export function StatusPage() {
             </dl>
           </div>
         )}
+
+        <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+          <dt className="text-muted-foreground">Proxy target</dt>
+          <dd className="break-all">{proxyTarget}</dd>
+        </dl>
 
         <Button className="mt-5" onClick={refetch} disabled={loading}>
           {loading ? 'Checking...' : 'Refresh'}

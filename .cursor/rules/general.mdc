@@ -8,7 +8,7 @@ alwaysApply: true
 
 ## Project Overview
 
-Bench is a tool for managing and running ComfyUI workflows. It is a monorepo with:
+Bench is a tool for workflow and resource management. It is a monorepo with:
 
 - `ui/` — React/TypeScript frontend (Vite)
 - `api/` — Go backend API

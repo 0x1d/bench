@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**bench** is a tool for managing and running ComfyUI workflows. It is a monorepo with two services:
+**bench** is a tool for workflow and resource management. It is a monorepo with two services:
 
 | Service | Directory | Tech | Default Port |
 |---------|-----------|------|-------------|
@@ -15,9 +15,9 @@
 
 **Both (local dev)** — from repository root:
 ```bash
-./dev.sh
+./dev.sh [config.yaml]
 ```
-Starts API and UI together. Loads `.env` if present. Use Ctrl+C to stop both.
+Starts API and UI together. Loads `.env` if present. Optional first argument: path to config file (sets `BENCH_CONFIG`). Use Ctrl+C to stop both.
 
 **API** — from repository root:
 ```bash

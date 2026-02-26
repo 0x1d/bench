@@ -39,8 +39,7 @@ export function ResourcesPage() {
         <div className="rounded-xl border border-border bg-card p-6">
           <h2 className="text-lg font-medium tracking-tight">Resources</h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            No resource roots configured. Set <code className="rounded bg-muted px-1">BENCH_RESOURCES_ROOT</code> or{' '}
-            <code className="rounded bg-muted px-1">COMFYUI_PATH</code> environment variables to enable file browsing.
+            No resource roots configured. Add filesystem entries to <code className="rounded bg-muted px-1">config.yaml</code> to enable file browsing.
           </p>
         </div>
       </div>

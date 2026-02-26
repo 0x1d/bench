@@ -1,0 +1,10 @@
+# Resource roots for file browsing.
+# Copy to config.yaml and adjust paths for your environment.
+resources:
+  filesystem:
+    - id: default
+      label: My Data
+      path: /path/to/your/data
+    - id: workflows
+      label: Workflows
+      path: /path/to/workflows

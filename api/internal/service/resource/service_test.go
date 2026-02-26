@@ -2,14 +2,27 @@ package resource
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 )
 
+func writeTestConfig(t *testing.T, configDir, rootPath string) string {
+	t.Helper()
+	cfgPath := filepath.Join(configDir, "config.yaml")
+	body := fmt.Sprintf("resources:\n  filesystem:\n    - id: default\n      label: Resources\n      path: %s\n", rootPath)
+	if err := os.WriteFile(cfgPath, []byte(body), 0644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	abs, _ := filepath.Abs(cfgPath)
+	return abs
+}
+
 func TestService_List(t *testing.T) {
 	tmp := t.TempDir()
-	t.Setenv("BENCH_RESOURCES_ROOT", tmp)
+	cfgPath := writeTestConfig(t, tmp, tmp)
+	t.Setenv("BENCH_CONFIG", cfgPath)
 
 	// Create test structure
 	if err := os.MkdirAll(filepath.Join(tmp, "subdir"), 0755); err != nil {
@@ -77,7 +90,8 @@ func TestService_List(t *testing.T) {
 
 func TestService_Download(t *testing.T) {
 	tmp := t.TempDir()
-	t.Setenv("BENCH_RESOURCES_ROOT", tmp)
+	cfgPath := writeTestConfig(t, tmp, tmp)
+	t.Setenv("BENCH_CONFIG", cfgPath)
 
 	content := []byte("test content")
 	if err := os.WriteFile(filepath.Join(tmp, "download.txt"), content, 0644); err != nil {
@@ -115,7 +129,8 @@ func TestService_Download(t *testing.T) {
 
 func TestService_Upload(t *testing.T) {
 	tmp := t.TempDir()
-	t.Setenv("BENCH_RESOURCES_ROOT", tmp)
+	cfgPath := writeTestConfig(t, tmp, tmp)
+	t.Setenv("BENCH_CONFIG", cfgPath)
 
 	svc := NewService()
 	content := []byte("uploaded")
@@ -142,7 +157,8 @@ func TestService_Upload(t *testing.T) {
 
 func TestService_CreateDir(t *testing.T) {
 	tmp := t.TempDir()
-	t.Setenv("BENCH_RESOURCES_ROOT", tmp)
+	cfgPath := writeTestConfig(t, tmp, tmp)
+	t.Setenv("BENCH_CONFIG", cfgPath)
 
 	svc := NewService()
 
@@ -167,7 +183,8 @@ func TestService_CreateDir(t *testing.T) {
 
 func TestService_Rename(t *testing.T) {
 	tmp := t.TempDir()
-	t.Setenv("BENCH_RESOURCES_ROOT", tmp)
+	cfgPath := writeTestConfig(t, tmp, tmp)
+	t.Setenv("BENCH_CONFIG", cfgPath)
 
 	if err := os.WriteFile(filepath.Join(tmp, "old.txt"), []byte("x"), 0644); err != nil {
 		t.Fatalf("setup: %v", err)
@@ -195,7 +212,8 @@ func TestService_Rename(t *testing.T) {
 
 func TestService_Delete(t *testing.T) {
 	tmp := t.TempDir()
-	t.Setenv("BENCH_RESOURCES_ROOT", tmp)
+	cfgPath := writeTestConfig(t, tmp, tmp)
+	t.Setenv("BENCH_CONFIG", cfgPath)
 
 	filePath := filepath.Join(tmp, "todelete.txt")
 	if err := os.WriteFile(filePath, []byte("x"), 0644); err != nil {

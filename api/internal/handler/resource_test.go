@@ -3,6 +3,7 @@ package handler
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -11,9 +12,21 @@ import (
 	"testing"
 )
 
+func writeTestConfig(t *testing.T, configDir, rootPath string) string {
+	t.Helper()
+	cfgPath := filepath.Join(configDir, "config.yaml")
+	body := fmt.Sprintf("resources:\n  filesystem:\n    - id: default\n      label: Resources\n      path: %s\n", rootPath)
+	if err := os.WriteFile(cfgPath, []byte(body), 0644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	abs, _ := filepath.Abs(cfgPath)
+	return abs
+}
+
 func TestHandleResourceRoots(t *testing.T) {
 	tmp := t.TempDir()
-	t.Setenv("BENCH_RESOURCES_ROOT", tmp)
+	cfgPath := writeTestConfig(t, tmp, tmp)
+	t.Setenv("BENCH_CONFIG", cfgPath)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/resources/roots", nil)
 	rec := httptest.NewRecorder()
@@ -43,7 +56,8 @@ func TestHandleResourceRoots(t *testing.T) {
 
 func TestHandleResourceList(t *testing.T) {
 	tmp := t.TempDir()
-	t.Setenv("BENCH_RESOURCES_ROOT", tmp)
+	cfgPath := writeTestConfig(t, tmp, tmp)
+	t.Setenv("BENCH_CONFIG", cfgPath)
 	if err := os.MkdirAll(filepath.Join(tmp, "sub"), 0755); err != nil {
 		t.Fatalf("setup: %v", err)
 	}
@@ -80,7 +94,8 @@ func TestHandleResourceList(t *testing.T) {
 
 func TestHandleResourceList_RootNotFound(t *testing.T) {
 	tmp := t.TempDir()
-	t.Setenv("BENCH_RESOURCES_ROOT", tmp)
+	cfgPath := writeTestConfig(t, tmp, tmp)
+	t.Setenv("BENCH_CONFIG", cfgPath)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/resources?root=nonexistent&path=.", nil)
 	rec := httptest.NewRecorder()
@@ -94,7 +109,8 @@ func TestHandleResourceList_RootNotFound(t *testing.T) {
 
 func TestHandleResourceDownload(t *testing.T) {
 	tmp := t.TempDir()
-	t.Setenv("BENCH_RESOURCES_ROOT", tmp)
+	cfgPath := writeTestConfig(t, tmp, tmp)
+	t.Setenv("BENCH_CONFIG", cfgPath)
 	content := []byte("download content")
 	if err := os.WriteFile(filepath.Join(tmp, "file.txt"), content, 0644); err != nil {
 		t.Fatalf("setup: %v", err)
@@ -118,7 +134,8 @@ func TestHandleResourceDownload(t *testing.T) {
 
 func TestHandleResourcePost_Upload(t *testing.T) {
 	tmp := t.TempDir()
-	t.Setenv("BENCH_RESOURCES_ROOT", tmp)
+	cfgPath := writeTestConfig(t, tmp, tmp)
+	t.Setenv("BENCH_CONFIG", cfgPath)
 
 	var buf bytes.Buffer
 	w := multipart.NewWriter(&buf)
@@ -146,7 +163,8 @@ func TestHandleResourcePost_Upload(t *testing.T) {
 
 func TestHandleResourcePost_CreateDir(t *testing.T) {
 	tmp := t.TempDir()
-	t.Setenv("BENCH_RESOURCES_ROOT", tmp)
+	cfgPath := writeTestConfig(t, tmp, tmp)
+	t.Setenv("BENCH_CONFIG", cfgPath)
 
 	body := []byte(`{"action":"mkdir","name":"newfolder"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/resources?root=default&path=.", bytes.NewReader(body))
@@ -169,7 +187,8 @@ func TestHandleResourcePost_CreateDir(t *testing.T) {
 
 func TestHandleResourcePatch(t *testing.T) {
 	tmp := t.TempDir()
-	t.Setenv("BENCH_RESOURCES_ROOT", tmp)
+	cfgPath := writeTestConfig(t, tmp, tmp)
+	t.Setenv("BENCH_CONFIG", cfgPath)
 	if err := os.WriteFile(filepath.Join(tmp, "oldname.txt"), []byte("x"), 0644); err != nil {
 		t.Fatalf("setup: %v", err)
 	}
@@ -194,7 +213,8 @@ func TestHandleResourcePatch(t *testing.T) {
 
 func TestHandleResourceDelete(t *testing.T) {
 	tmp := t.TempDir()
-	t.Setenv("BENCH_RESOURCES_ROOT", tmp)
+	cfgPath := writeTestConfig(t, tmp, tmp)
+	t.Setenv("BENCH_CONFIG", cfgPath)
 	filePath := filepath.Join(tmp, "todelete.txt")
 	if err := os.WriteFile(filePath, []byte("x"), 0644); err != nil {
 		t.Fatalf("setup: %v", err)

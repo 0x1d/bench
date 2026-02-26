@@ -84,6 +84,19 @@ export async function uploadFile(
   }
 }
 
+/** Save text content to an existing file. Overwrites the file. */
+export async function saveFile(
+  root: string,
+  path: string,
+  content: string
+): Promise<void> {
+  const parts = path.split('/').filter(Boolean);
+  const name = parts.pop() ?? path;
+  const dirPath = parts.length > 0 ? parts.join('/') : '.';
+  const file = new File([content], name, { type: 'text/plain' });
+  return uploadFile(root, dirPath, file);
+}
+
 export async function createFolder(
   root: string,
   path: string,

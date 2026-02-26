@@ -4,6 +4,7 @@ import {
   fetchResourceList,
   downloadFile,
   uploadFile,
+  saveFile,
   createFolder,
   renameResource,
   deleteResource,
@@ -34,6 +35,21 @@ export async function triggerDownload(root: string, path: string) {
   a.download = path.split('/').pop() ?? 'download';
   a.click();
   URL.revokeObjectURL(url);
+}
+
+export function useSaveFile(root: string | null) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ path, content }: { path: string; content: string }) =>
+      saveFile(root!, path, content),
+    onSuccess: (_, { path }) => {
+      const parts = path.split('/').filter(Boolean);
+      parts.pop();
+      const dirPath = parts.length > 0 ? parts.join('/') : '.';
+      queryClient.invalidateQueries({ queryKey: ['resources', 'list', root, dirPath] });
+    },
+  });
 }
 
 export function useResourceMutations(root: string | null, path: string) {

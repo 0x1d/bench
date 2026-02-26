@@ -52,3 +52,36 @@ export function getSyntaxLanguage(filename: string): string {
   const ext = filename.split('.').pop()?.toLowerCase();
   return ext ? EXT_TO_LANGUAGE[ext] ?? 'plaintext' : 'plaintext';
 }
+
+/** Map Prism language to CodeMirror loadLanguage identifier. */
+const PRISM_TO_CODEMIRROR: Record<string, string> = {
+  javascript: 'js',
+  typescript: 'ts',
+  json: 'json',
+  yaml: 'yaml',
+  html: 'html',
+  css: 'css',
+  scss: 'scss',
+  less: 'less',
+  xml: 'xml',
+  markdown: 'markdown',
+  python: 'py',
+  go: 'go',
+  rust: 'rs',
+  ruby: 'rb',
+  java: 'java',
+  kotlin: 'kt',
+  c: 'c',
+  cpp: 'cpp',
+  sql: 'sql',
+  bash: 'bash',
+  powershell: 'ps1',
+  batch: 'text',
+  ini: 'ini',
+  plaintext: 'text',
+};
+
+export function getCodeMirrorLanguage(filename: string): string {
+  const prism = getSyntaxLanguage(filename);
+  return PRISM_TO_CODEMIRROR[prism] ?? 'text';
+}

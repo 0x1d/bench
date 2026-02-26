@@ -44,3 +44,10 @@ export function getViewableType(filename: string): ViewableType | null {
 export function isViewable(filename: string): boolean {
   return getViewableType(filename) != null;
 }
+
+const FORM_EXTENSIONS = new Set(['json', 'yml', 'yaml']);
+
+export function supportsFormMode(filename: string): boolean {
+  const ext = filename.split('.').pop()?.toLowerCase();
+  return ext != null && FORM_EXTENSIONS.has(ext);
+}

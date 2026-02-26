@@ -1,13 +1,88 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { X } from 'lucide-react';
+import { useMemo } from 'react';
+import CodeMirror, { EditorView } from '@uiw/react-codemirror';
+import { tokyoNight } from '@uiw/codemirror-themes-all';
+import { loadLanguage } from '@uiw/codemirror-extensions-langs';
+import { X, Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { useFileView } from '@/contexts/file-view-context';
 import { downloadFile } from '@/services/api';
-import { getSyntaxLanguage } from '@/lib/syntax-language';
+import { useSaveFile } from '@/hooks/use-resources';
+import { getCodeMirrorLanguage } from '@/lib/syntax-language';
 import { prettyPrint } from '@/lib/text-format';
+import {
+  detectFormat,
+  tryParseStructured,
+  serializeStructured,
+  type StructuredFormat,
+} from '@/lib/parse-structured';
+import { supportsFormMode } from '@/lib/viewable-types';
 import { cn } from '@/lib/utils';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { StructuredForm } from '@/components/structured-form';
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+
+/** Editor styling: transparent bg, 0.75rem font, monospace, 0.75rem padding. */
+const editorViewTheme = EditorView.theme({
+  '&': {
+    backgroundColor: 'transparent',
+    fontSize: '0.75rem',
+    fontFamily: 'ui-monospace, monospace',
+  },
+  '.cm-scroller': {
+    padding: '0.75rem',
+  },
+  '.cm-gutters': {
+    backgroundColor: 'transparent',
+    border: 'none',
+  },
+});
+
+function CodeEditor({
+  value,
+  onChange,
+  filename,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  filename: string;
+}) {
+  const extensions = useMemo(() => {
+    const lang = loadLanguage(getCodeMirrorLanguage(filename) as Parameters<typeof loadLanguage>[0]);
+    const exts = lang ? [lang] : [];
+    return [tokyoNight, ...exts, editorViewTheme];
+  }, [filename]);
+
+  return (
+    <CodeMirror
+      value={value}
+      onChange={onChange}
+      extensions={extensions}
+      theme="none"
+      basicSetup={{ lineNumbers: true, foldGutter: true }}
+      className="[&_.cm-editor]:min-h-[200px] [&_.cm-scroller]:min-h-[200px] [&_.cm-editor]:rounded-md [&_.cm-editor]:border [&_.cm-editor]:border-input"
+    />
+  );
+}
 
 const STORAGE_KEY = 'bench-file-viewer-width';
 const MIN_WIDTH = 240;
@@ -24,17 +99,37 @@ function getInitialWidth(): number {
   return Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, quarterWidth));
 }
 
+type TextMode = 'content' | 'data';
+
 export function FileViewer() {
   const { viewedFile, setViewedFile } = useFileView();
   const [content, setContent] = useState<string | null>(null);
+  const [editContent, setEditContent] = useState<string | null>(null);
+  const [formData, setFormData] = useState<unknown>(null);
+  const [formParseError, setFormParseError] = useState<string | null>(null);
+  const [textMode, setTextMode] = useState<TextMode>('content');
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
+  const [imageLightboxOpen, setImageLightboxOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [width, setWidth] = useState(getInitialWidth);
   const startXRef = useRef(0);
   const startWidthRef = useRef(0);
 
+  const saveMutation = useSaveFile(viewedFile?.root ?? null);
   const isExpanded = viewedFile != null;
+  const isTextFile = viewedFile?.type === 'text';
+  const showFormTab = isTextFile && viewedFile && supportsFormMode(viewedFile.name);
+  const format: StructuredFormat =
+    viewedFile && supportsFormMode(viewedFile.name) ? detectFormat(viewedFile.name) : 'json';
+  const hasUnsavedChanges =
+    isTextFile &&
+    content != null &&
+    (textMode === 'content'
+      ? editContent != null && content !== editContent
+      : textMode === 'data' &&
+        formData != null &&
+        content !== serializeStructured(formData, format));
 
   const handleResizeStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -74,6 +169,20 @@ export function FileViewer() {
             if (cancelled) return;
             const formatted = prettyPrint(text, viewedFile.name);
             setContent(formatted);
+            setEditContent(formatted);
+            const fmt = detectFormat(viewedFile.name);
+            if (supportsFormMode(viewedFile.name)) {
+              const result = tryParseStructured(formatted, fmt);
+              if (result.success) {
+                setFormData(result.data);
+                setFormParseError(null);
+                setTextMode('data');
+              } else {
+                setTextMode('content');
+              }
+            } else {
+              setTextMode('content');
+            }
             setObjectUrl((prev) => {
               if (prev) URL.revokeObjectURL(prev);
               return null;
@@ -104,6 +213,10 @@ export function FileViewer() {
     return () => {
       cancelled = true;
       setContent(null);
+      setEditContent(null);
+      setFormData(null);
+      setFormParseError(null);
+      setImageLightboxOpen(false);
       setError(null);
       setObjectUrl((prev) => {
         if (prev) URL.revokeObjectURL(prev);
@@ -114,11 +227,42 @@ export function FileViewer() {
 
   const handleClose = () => {
     setViewedFile(null);
+    setImageLightboxOpen(false);
     if (objectUrl) {
       URL.revokeObjectURL(objectUrl);
       setObjectUrl(null);
     }
   };
+
+  const contentToSave =
+    textMode === 'data' && formData != null
+      ? serializeStructured(formData, format)
+      : editContent;
+
+  const handleSave = useCallback(() => {
+    if (!viewedFile || !contentToSave || viewedFile.type !== 'text') return;
+    saveMutation.mutate(
+      { path: viewedFile.path, content: contentToSave },
+      {
+        onSuccess: () => {
+          setContent(contentToSave);
+          setEditContent(contentToSave);
+        },
+      }
+    );
+  }, [viewedFile, contentToSave, saveMutation]);
+
+  useEffect(() => {
+    if (!isTextFile || !hasUnsavedChanges) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        handleSave();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isTextFile, hasUnsavedChanges, handleSave]);
 
   return (
     <div
@@ -143,18 +287,44 @@ export function FileViewer() {
           title="Drag to resize"
         />
       )}
-      <div className="flex h-14 shrink-0 items-center justify-between border-b border-sidebar-border px-4">
+      <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-sidebar-border px-4">
         <span className="truncate text-sm font-medium" title={viewedFile?.name ?? ''}>
           {viewedFile?.name ?? 'Preview'}
+          {hasUnsavedChanges && (
+            <span className="ml-1 text-muted-foreground" aria-hidden>
+              (unsaved)
+            </span>
+          )}
         </span>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          onClick={handleClose}
-          aria-label="Close viewer"
-        >
-          <X className="size-4" />
-        </Button>
+        <div className="flex items-center gap-2">
+          {isTextFile && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={hasUnsavedChanges ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={handleSave}
+                    disabled={!hasUnsavedChanges || saveMutation.isPending}
+                    aria-label="Save file"
+                  >
+                    <Save className="size-4" />
+                    Save
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Save file (Ctrl+S)</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            onClick={handleClose}
+            aria-label="Close viewer"
+          >
+            <X className="size-4" />
+          </Button>
+        </div>
       </div>
       <div className="flex min-h-0 flex-1 flex-col overflow-auto p-4">
         {loading && (
@@ -166,28 +336,76 @@ export function FileViewer() {
         {!loading && !error && viewedFile && (
           <>
             {viewedFile.type === 'text' && content != null && (
-              <SyntaxHighlighter
-                language={getSyntaxLanguage(viewedFile.name)}
-                style={oneDark}
-                showLineNumbers
-                wrapLongLines
-                customStyle={{
-                  margin: 0,
-                  padding: '0.75rem',
-                  fontSize: '0.75rem',
-                  background: 'transparent',
+              <Tabs
+                value={textMode}
+                onValueChange={(v) => {
+                  const mode = v as TextMode;
+                  if (mode === 'data' && editContent != null) {
+                    const result = tryParseStructured(editContent, format);
+                    if (result.success) {
+                      setFormData(result.data);
+                      setFormParseError(null);
+                      setTextMode('data');
+                    } else {
+                      setFormParseError(result.error);
+                    }
+                  } else {
+                    setTextMode(mode);
+                  }
                 }}
-                codeTagProps={{ style: { fontFamily: 'ui-monospace, monospace' } }}
+                className="flex h-full flex-col"
               >
-                {content}
-              </SyntaxHighlighter>
+                <TabsList variant="line" className="mb-2 shrink-0">
+                  {showFormTab && <TabsTrigger value="data">Data</TabsTrigger>}
+                  <TabsTrigger value="content">Content</TabsTrigger>
+                </TabsList>
+                {showFormTab && (
+                  <TabsContent value="data" className="mt-0 flex-1 overflow-auto">
+                    {formData != null ? (
+                      <StructuredForm
+                        data={formData}
+                        onChange={setFormData}
+                      />
+                    ) : (
+                      <p className="text-muted-foreground text-sm">Loading form...</p>
+                    )}
+                  </TabsContent>
+                )}
+                <TabsContent value="content" className="mt-0 flex-1 overflow-auto">
+                  <CodeEditor
+                    value={editContent ?? ''}
+                    onChange={setEditContent}
+                    filename={viewedFile.name}
+                  />
+                </TabsContent>
+              </Tabs>
             )}
             {viewedFile.type === 'image' && objectUrl && (
-              <img
-                src={objectUrl}
-                alt={viewedFile.name}
-                className="max-h-full max-w-full object-contain"
-              />
+              <>
+                <img
+                  src={objectUrl}
+                  alt={viewedFile.name}
+                  className="max-h-full max-w-full cursor-pointer object-contain"
+                  onClick={() => setImageLightboxOpen(true)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => e.key === 'Enter' && setImageLightboxOpen(true)}
+                  aria-label="Click to view full size"
+                />
+                <Dialog open={imageLightboxOpen} onOpenChange={setImageLightboxOpen}>
+                  <DialogContent
+                    className="!max-w-[95vw] !max-h-[95vh] !w-fit p-2 overflow-auto flex items-center justify-center bg-black/90"
+                    showCloseButton
+                  >
+                    <DialogTitle className="sr-only">{viewedFile.name}</DialogTitle>
+                    <img
+                      src={objectUrl}
+                      alt={viewedFile.name}
+                      className="max-h-[90vh] max-w-[90vw] w-auto h-auto object-contain"
+                    />
+                  </DialogContent>
+                </Dialog>
+              </>
             )}
             {viewedFile.type === 'video' && objectUrl && (
               <video
@@ -206,6 +424,22 @@ export function FileViewer() {
           </>
         )}
       </div>
+
+      <AlertDialog open={!!formParseError} onOpenChange={(open) => !open && setFormParseError(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Parse error</AlertDialogTitle>
+            <AlertDialogDescription>
+              Cannot parse file as {format.toUpperCase()}. {formParseError}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel asChild>
+              <Button variant="outline">OK</Button>
+            </AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

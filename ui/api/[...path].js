@@ -50,8 +50,9 @@ export default async function handler(req, res) {
   });
 
   res.statusCode = upstreamResponse.status;
+  const skipHeaders = ['transfer-encoding', 'content-encoding', 'content-length'];
   upstreamResponse.headers.forEach((value, key) => {
-    if (key.toLowerCase() === 'transfer-encoding') {
+    if (skipHeaders.includes(key.toLowerCase())) {
       return;
     }
     res.setHeader(key, value);

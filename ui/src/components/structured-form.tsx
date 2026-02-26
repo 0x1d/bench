@@ -3,6 +3,7 @@ import { ChevronDown, ChevronRight, Plus, Search, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
+import { NumberInput } from '@/components/ui/number-input';
 import { Label } from '@/components/ui/label';
 import { Toggle } from '@/components/ui/toggle';
 import { cn } from '@/lib/utils';
@@ -326,10 +327,9 @@ function FormField({
     return (
       <div className="space-y-2">
         {label && <Label className="text-muted-foreground">{label}</Label>}
-        <Input
-          type="number"
+        <NumberInput
           value={value}
-          onChange={(e) => onChange(Number(e.target.value) || 0)}
+          onChange={onChange}
           className="font-mono"
         />
       </div>

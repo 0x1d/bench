@@ -5,7 +5,13 @@ import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
-  const proxyTarget = env.VITE_PROXY_TARGET || 'http://localhost:8080';
+  const envApiBase = (env.VITE_API_BASE_URL || '').trim().replace(/\/+$/, '');
+  const apiBaseUrl = envApiBase
+    ? envApiBase.endsWith('/api')
+      ? envApiBase
+      : `${envApiBase}/api`
+    : 'http://localhost:8080/api';
+  const proxyTarget = apiBaseUrl.replace(/\/api$/, '');
 
   return {
     plugins: [react(), tailwindcss()],

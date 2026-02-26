@@ -8,7 +8,7 @@ export function StatusPage() {
     ? envApiBase.endsWith('/api')
       ? envApiBase
       : `${envApiBase}/api`
-    : '/api';
+    : 'http://localhost:8080/api';
 
   return (
     <div className="w-full">

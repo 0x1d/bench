@@ -36,10 +36,10 @@ pnpm install
 pnpm dev
 ```
 
-The dev server starts on `http://localhost:5173` and proxies API requests to the backend.
-Set `VITE_PROXY_TARGET` to override the default proxy target (`http://localhost:8080`).
-Set `VITE_API_BASE_URL` for production deployments to point the UI at your API host.
+The dev server starts on `http://localhost:5173`.
+Set `VITE_API_BASE_URL` to point the UI and dev proxy at your API host.
 You can provide either a host (for example, `https://your-api.example.com`) or a full `/api` URL.
+If unset, it defaults to `http://localhost:8080/api`.
 
 ## Development
 

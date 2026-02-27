@@ -184,7 +184,7 @@ function AddObjectField({
         variant="outline"
         size="sm"
         onClick={() => setIsAdding(true)}
-        className="w-full sm:w-auto"
+        className="w-full justify-start border-dashed text-muted-foreground hover:text-foreground sm:w-auto"
       >
         <Plus className="size-4" />
         Add field
@@ -193,7 +193,7 @@ function AddObjectField({
   }
 
   return (
-    <div className="rounded-md border border-dashed border-border p-2 space-y-2">
+    <div className="rounded-md border border-dashed border-border bg-muted/20 p-2 space-y-2">
       <div className="flex flex-wrap items-end gap-2">
         <div className="min-w-0 flex-1 basis-[220px] space-y-1">
           <Label className="text-muted-foreground">Field name</Label>
@@ -226,7 +226,7 @@ function AddObjectField({
         </div>
         <div className="flex w-full flex-wrap gap-2 sm:w-auto">
           <Button
-            variant="outline"
+            variant="default"
             size="sm"
             onClick={addField}
             disabled={!normalizedKey || keyExists}
@@ -568,7 +568,7 @@ function FormField({
             const template = value.length > 0 ? cloneStructure(value[value.length - 1]) : {};
             onChange([...value, template]);
           }}
-          className="gap-1"
+          className="w-full justify-start gap-1 border-dashed text-muted-foreground hover:text-foreground sm:w-auto"
         >
           <Plus className="size-4" />
           Add item

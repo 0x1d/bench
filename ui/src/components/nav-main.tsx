@@ -4,6 +4,7 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  useSidebar,
 } from "@/components/ui/sidebar"
 
 export function NavMain({
@@ -16,12 +17,21 @@ export function NavMain({
     isActive?: boolean
   }[]
 }) {
+  const { isMobile, setOpenMobile } = useSidebar()
+
   return (
     <SidebarMenu>
       {items.map((item) => (
         <SidebarMenuItem key={item.title}>
           <SidebarMenuButton asChild isActive={item.isActive}>
-            <a href={item.url}>
+            <a
+              href={item.url}
+              onClick={() => {
+                if (isMobile) {
+                  setOpenMobile(false)
+                }
+              }}
+            >
               <item.icon />
               <span>{item.title}</span>
             </a>

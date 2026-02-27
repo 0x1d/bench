@@ -57,7 +57,12 @@ function formatSize(bytes: number): string {
 
 function formatMtime(ts: number): string {
   const d = new Date(ts * 1000);
-  return d.toLocaleString();
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  const hours = String(d.getHours()).padStart(2, '0');
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  return `${day}-${month}-${year} ${hours}:${minutes}`;
 }
 
 export function FileBrowser({
@@ -282,14 +287,14 @@ export function FileBrowser({
 
       {/* Table */}
       <div className="rounded-lg border border-border bg-card overflow-hidden">
-        <table className="w-full text-sm">
+        <table className="w-full table-fixed text-sm">
           <thead>
             <tr className="border-b border-border bg-muted/30">
-              <th className="px-4 py-3 text-left font-medium">Name</th>
-              <th className="px-4 py-3 text-left font-medium">Type</th>
-              <th className="px-4 py-3 text-right font-medium">Size</th>
-              <th className="px-4 py-3 text-left font-medium">Modified</th>
-              <th className="w-28" />
+              <th className="w-[46%] px-4 py-3 text-left font-medium sm:w-[42%]">Name</th>
+              <th className="hidden px-4 py-3 text-left font-medium sm:table-cell">Type</th>
+              <th className="hidden px-4 py-3 text-right font-medium md:table-cell">Size</th>
+              <th className="w-[34%] px-4 py-3 text-left font-medium sm:w-[28%]">Modified</th>
+              <th className="hidden w-28 sm:table-cell" />
             </tr>
           </thead>
           <tbody>
@@ -308,24 +313,56 @@ export function FileBrowser({
                   }
                 }}
               >
-                <td className="px-4 py-2 flex items-center gap-2">
+                <td className="px-4 py-2">
+                  <div className="flex items-center gap-2">
                   {entry.isDir ? (
                     <Folder className="size-4 text-primary shrink-0" />
                   ) : (
                     <File className="size-4 text-muted-foreground shrink-0" />
                   )}
-                  <span>{entry.name}</span>
+                  <span className="truncate">{entry.name}</span>
+                  </div>
+                  <div className="mt-1 flex flex-wrap items-center gap-1 sm:hidden" onClick={(e) => e.stopPropagation()}>
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      onClick={() => openRenameDialog(entry)}
+                      aria-label={`Rename ${entry.name}`}
+                    >
+                      <Pencil className="size-3" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      onClick={() => setDeleteTarget({ path: entry.path, name: entry.name })}
+                      aria-label={`Delete ${entry.name}`}
+                      className="text-destructive hover:text-destructive"
+                    >
+                      <Trash2 className="size-3" />
+                    </Button>
+                    {!entry.isDir && (
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        onClick={() => triggerDownload(root, entry.path)}
+                        aria-label={`Download ${entry.name}`}
+                      >
+                        <Download className="size-3" />
+                      </Button>
+                    )}
+                  </div>
                 </td>
-                <td className="px-4 py-2 text-muted-foreground">
+                <td className="hidden px-4 py-2 text-muted-foreground sm:table-cell">
                   {entry.isDir ? 'Folder' : 'File'}
                 </td>
-                <td className="px-4 py-2 text-right text-muted-foreground tabular-nums">
+                <td className="hidden px-4 py-2 text-right text-muted-foreground tabular-nums md:table-cell">
                   {entry.isDir ? '—' : formatSize(entry.size ?? 0)}
                 </td>
                 <td className="px-4 py-2 text-muted-foreground">
                   {entry.mtime != null ? formatMtime(entry.mtime) : '—'}
                 </td>
-                <td className="px-2 py-2 flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                <td className="hidden px-2 py-2 sm:table-cell" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center gap-1">
                   <Button
                     variant="ghost"
                     size="icon-xs"
@@ -353,6 +390,7 @@ export function FileBrowser({
                       <Download className="size-3" />
                     </Button>
                   )}
+                  </div>
                 </td>
               </tr>
             ))}

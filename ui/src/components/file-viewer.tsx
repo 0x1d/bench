@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { X, Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -192,7 +192,7 @@ export function FileViewer() {
       ? serializeStructured(formData, format)
       : editContent;
 
-  const handleSave = useCallback(() => {
+  const handleSave = () => {
     if (!viewedFile || !contentToSave || viewedFile.type !== 'text') return;
     saveMutation.mutate(
       { path: viewedFile.path, content: contentToSave },
@@ -203,33 +203,37 @@ export function FileViewer() {
         },
       }
     );
-  }, [viewedFile, contentToSave, saveMutation]);
+  };
 
   useEffect(() => {
     if (!isTextFile || !hasUnsavedChanges) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
-        handleSave();
+        if (!viewedFile || viewedFile.type !== 'text') return;
+        const nextContent =
+          textMode === 'data' && formData != null
+            ? serializeStructured(formData, format)
+            : editContent;
+        if (!nextContent) return;
+        saveMutation.mutate(
+          { path: viewedFile.path, content: nextContent },
+          {
+            onSuccess: () => {
+              setContent(nextContent);
+              setEditContent(nextContent);
+            },
+          }
+        );
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [isTextFile, hasUnsavedChanges, handleSave]);
+  }, [isTextFile, hasUnsavedChanges, viewedFile, textMode, formData, format, editContent, saveMutation]);
 
-  return (
-    <div
-      className={cn(
-        'bg-sidebar text-sidebar-foreground relative hidden flex-col border-l overflow-hidden lg:flex min-h-0',
-        isExpanded ? 'shrink-0' : 'w-0 min-w-0 shrink-0'
-      )}
-      style={
-        isExpanded
-          ? ({ width: `${width}px`, minWidth: `${width}px` } as React.CSSProperties)
-          : undefined
-      }
-    >
-      {isExpanded && (
+  const viewerPanel = (showResizeHandle: boolean) => (
+    <>
+      {showResizeHandle && isExpanded && (
         <div
           role="separator"
           aria-orientation="vertical"
@@ -377,7 +381,32 @@ export function FileViewer() {
           </>
         )}
       </div>
+    </>
+  );
 
+  return (
+    <>
+      <div
+        className={cn(
+          'bg-sidebar text-sidebar-foreground fixed inset-0 z-30 flex min-h-0 flex-col overflow-hidden border-l lg:hidden',
+          isExpanded ? 'translate-x-0' : 'hidden'
+        )}
+      >
+        {viewerPanel(false)}
+      </div>
+      <div
+        className={cn(
+          'bg-sidebar text-sidebar-foreground relative hidden min-h-0 flex-col overflow-hidden border-l lg:flex',
+          isExpanded ? 'shrink-0' : 'w-0 min-w-0 shrink-0'
+        )}
+        style={
+          isExpanded
+            ? ({ width: `${width}px`, minWidth: `${width}px` } as React.CSSProperties)
+            : undefined
+        }
+      >
+        {viewerPanel(true)}
+      </div>
       <AlertDialog open={!!formParseError} onOpenChange={(open) => !open && setFormParseError(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -393,6 +422,6 @@ export function FileViewer() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </>
   );
 }

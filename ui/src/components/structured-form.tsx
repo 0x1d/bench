@@ -169,8 +169,8 @@ function AddObjectField({
 
   return (
     <div className="rounded-md border border-dashed border-border p-2 space-y-2">
-      <div className="grid gap-2 sm:grid-cols-[1fr_160px_auto] sm:items-end">
-        <div className="space-y-1">
+      <div className="flex flex-wrap items-end gap-2">
+        <div className="min-w-0 flex-1 basis-[220px] space-y-1">
           <Label className="text-muted-foreground">Field name</Label>
           <Input
             value={newKey}
@@ -184,7 +184,7 @@ function AddObjectField({
             }}
           />
         </div>
-        <div className="space-y-1">
+        <div className="basis-[150px] space-y-1">
           <Label className="text-muted-foreground">Type</Label>
           <select
             className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
@@ -203,6 +203,7 @@ function AddObjectField({
         <Button
           variant="outline"
           size="sm"
+          className="w-full sm:w-auto"
           onClick={() => {
             if (!normalizedKey || keyExists) return;
             onAdd(normalizedKey, defaultValueForKind(kind));

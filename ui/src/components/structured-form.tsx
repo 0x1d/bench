@@ -233,18 +233,17 @@ function AddObjectField({
             </div>
           </div>
           <div className="flex justify-end gap-2">
-            <Button variant="ghost" size="sm" onClick={resetAddingState}>
+            <Button variant="outline" size="sm" onClick={resetAddingState}>
               Cancel
             </Button>
             <Button
-              variant="ghost"
-              size="icon-xs"
+              variant="default"
+              size="sm"
               onClick={addField}
               disabled={!normalizedKey || keyExists}
-              aria-label="Confirm add field"
-              className="border border-border/70 bg-background/80 text-primary hover:bg-primary/10 hover:text-primary"
+              aria-label="Add field"
             >
-              <Plus className="size-3" />
+              Add
             </Button>
           </div>
           {keyExists && (
@@ -289,19 +288,18 @@ function AddObjectField({
             <option value="null">null</option>
           </select>
         </div>
-        <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+        <div className="flex w-full justify-end gap-2">
           <Button
-            variant="ghost"
-            size="icon-xs"
+            variant="default"
+            size="sm"
             onClick={addField}
             disabled={!normalizedKey || keyExists}
-            aria-label="Confirm add field"
-            className="border border-border/70 bg-background/80 text-primary hover:bg-primary/10 hover:text-primary"
+            aria-label="Add field"
           >
-            <Plus className="size-3" />
+            Add
           </Button>
           <Button
-            variant="ghost"
+            variant="outline"
             size="sm"
             onClick={resetAddingState}
           >

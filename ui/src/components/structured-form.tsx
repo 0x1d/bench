@@ -158,9 +158,11 @@ function defaultValueForKind(kind: NewValueKind): unknown {
 function AddObjectField({
   existingKeys,
   onAdd,
+  compact = false,
 }: {
   existingKeys: string[];
   onAdd: (key: string, value: unknown) => void;
+  compact?: boolean;
 }) {
   const [isAdding, setIsAdding] = useState(false);
   const [newKey, setNewKey] = useState('');
@@ -182,13 +184,73 @@ function AddObjectField({
     return (
       <Button
         variant="outline"
-        size="sm"
-        onClick={() => setIsAdding(true)}
-        className="w-full justify-start border-dashed text-muted-foreground hover:text-foreground sm:w-auto"
+        size={compact ? 'xs' : 'sm'}
+        onClick={(e) => {
+          e.stopPropagation();
+          setIsAdding(true);
+        }}
+        className={cn(
+          'justify-start border-dashed text-muted-foreground hover:text-foreground',
+          compact ? 'h-6 px-2' : 'w-full sm:w-auto'
+        )}
       >
-        <Plus className="size-4" />
-        Add field to object
+        <Plus className={compact ? 'size-3' : 'size-4'} />
+        {compact ? 'Add field' : 'Add field to object'}
       </Button>
+    );
+  }
+
+  if (compact) {
+    return (
+      <div className="relative" onClick={(e) => e.stopPropagation()}>
+        <div className="bg-popover absolute top-full right-0 z-20 mt-2 w-[300px] space-y-2 rounded-md border p-2 shadow-md">
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="min-w-0 flex-1 basis-[180px] space-y-1">
+              <Label className="text-muted-foreground">Field name</Label>
+              <Input
+                value={newKey}
+                onChange={(e) => setNewKey(e.target.value)}
+                placeholder="new_field"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') addField();
+                  if (e.key === 'Escape') resetAddingState();
+                }}
+              />
+            </div>
+            <div className="basis-[110px] space-y-1">
+              <Label className="text-muted-foreground">Type</Label>
+              <select
+                className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
+                value={kind}
+                onChange={(e) => setKind(e.target.value as NewValueKind)}
+                aria-label="Field type"
+              >
+                <option value="text">text</option>
+                <option value="number">number</option>
+                <option value="boolean">boolean</option>
+                <option value="object">object</option>
+                <option value="array">array</option>
+                <option value="null">null</option>
+              </select>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" size="sm" onClick={resetAddingState}>
+              Cancel
+            </Button>
+            <Button variant="default" size="sm" onClick={addField} disabled={!normalizedKey || keyExists}>
+              <Plus className="size-4" />
+              Add
+            </Button>
+          </div>
+          {keyExists && (
+            <p className="text-xs text-destructive">
+              A field with this name already exists.
+            </p>
+          )}
+        </div>
+      </div>
     );
   }
 
@@ -255,14 +317,21 @@ function AddObjectField({
 
 function FieldBlock({
   label,
+  actions,
   children,
 }: {
   label?: string;
+  actions?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
     <div className="space-y-1.5 rounded-md border border-border/60 bg-card/40 p-2.5">
-      {label && <Label className="text-muted-foreground">{label}</Label>}
+      {(label || actions) && (
+        <div className="flex items-center gap-2">
+          {label ? <Label className="min-w-0 flex-1 truncate text-muted-foreground">{label}</Label> : <span className="flex-1" />}
+          {actions}
+        </div>
+      )}
       {children}
     </div>
   );
@@ -430,11 +499,13 @@ function CollapsibleNode({
   path,
   label,
   typeHint,
+  actions,
   children,
 }: {
   path: string;
   label: string;
   typeHint: string;
+  actions?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const ctx = useContext(ExpandContext);
@@ -456,6 +527,11 @@ function CollapsibleNode({
         )}
         <span className="min-w-0 flex-1 truncate font-medium">{label}</span>
         <span className="shrink-0 text-xs text-muted-foreground">{typeHint}</span>
+        {actions && (
+          <div className="ml-1 flex shrink-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
+            {actions}
+          </div>
+        )}
       </button>
       {isExpanded && <div className="pl-2">{children}</div>}
     </div>
@@ -467,17 +543,30 @@ function FormField({
   onChange,
   path,
   label,
+  onRemove,
 }: {
   value: unknown;
   onChange: (value: unknown) => void;
   path: string;
   label?: string;
+  onRemove?: () => void;
 }) {
   const ctx = useContext(ExpandContext);
+  const removeAction = onRemove ? (
+    <Button
+      variant="ghost"
+      size="icon-xs"
+      onClick={onRemove}
+      aria-label={label ? `Remove ${label}` : 'Remove item'}
+      className="text-destructive hover:text-destructive"
+    >
+      <Trash2 className="size-3" />
+    </Button>
+  ) : null;
 
   if (value === null || value === undefined) {
     return (
-      <FieldBlock label={label}>
+      <FieldBlock label={label} actions={removeAction}>
         <Input
           value=""
           placeholder="null"
@@ -505,6 +594,7 @@ function FormField({
               {label}
             </Label>
           )}
+          {removeAction}
         </div>
       </FieldBlock>
     );
@@ -512,7 +602,7 @@ function FormField({
 
   if (typeof value === 'number') {
     return (
-      <FieldBlock label={label}>
+      <FieldBlock label={label} actions={removeAction}>
         <NumberInput
           value={value}
           onChange={onChange}
@@ -524,7 +614,7 @@ function FormField({
 
   if (typeof value === 'string') {
     return (
-      <FieldBlock label={label}>
+      <FieldBlock label={label} actions={removeAction}>
         <Input
           value={value}
           onChange={(e) => onChange(e.target.value)}
@@ -545,18 +635,20 @@ function FormField({
     const typeHint = `[${value.length} item${value.length !== 1 ? 's' : ''}]`;
     const content = (
       <div className="space-y-3 border-l-2 border-border/70 pl-3">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            const template = value.length > 0 ? cloneStructure(value[value.length - 1]) : {};
-            onChange([...value, template]);
-          }}
-          className="w-full justify-start gap-1 border-dashed text-muted-foreground hover:text-foreground sm:w-auto"
-        >
-          <Plus className="size-4" />
-          Add item to array
-        </Button>
+        {!label && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const template = value.length > 0 ? cloneStructure(value[value.length - 1]) : {};
+              onChange([...value, template]);
+            }}
+            className="w-full justify-start gap-1 border-dashed text-muted-foreground hover:text-foreground sm:w-auto"
+          >
+            <Plus className="size-4" />
+            Add item to array
+          </Button>
+        )}
         {filteredIndices.map((i) => (
           <div key={i} className="group flex items-start gap-2 rounded-md border border-border/60 bg-card/30 p-2">
             <div className="flex-1 min-w-0">
@@ -569,20 +661,12 @@ function FormField({
                 }}
                 path={`${path}[${i}]`}
                 label={`[${i}]`}
+                onRemove={() => {
+                  const next = value.filter((_, j) => j !== i);
+                  onChange(next);
+                }}
               />
             </div>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              onClick={() => {
-                const next = value.filter((_, j) => j !== i);
-                onChange(next);
-              }}
-              aria-label={`Remove item ${i + 1}`}
-              className="shrink-0 text-destructive opacity-70 transition-opacity hover:text-destructive group-hover:opacity-100"
-            >
-              <Trash2 className="size-3" />
-            </Button>
           </div>
         ))}
       </div>
@@ -590,7 +674,37 @@ function FormField({
 
     if (label) {
       return (
-        <CollapsibleNode path={path} label={label} typeHint={typeHint}>
+        <CollapsibleNode
+          path={path}
+          label={label}
+          typeHint={typeHint}
+          actions={
+            <>
+              <Button
+                variant="ghost"
+                size="xs"
+                onClick={() => {
+                  const template = value.length > 0 ? cloneStructure(value[value.length - 1]) : {};
+                  onChange([...value, template]);
+                }}
+              >
+                <Plus className="size-3" />
+                Add
+              </Button>
+              {onRemove && (
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={onRemove}
+                  aria-label={`Remove ${label}`}
+                  className="text-destructive hover:text-destructive"
+                >
+                  <Trash2 className="size-3" />
+                </Button>
+              )}
+            </>
+          }
+        >
           {content}
         </CollapsibleNode>
       );
@@ -612,10 +726,12 @@ function FormField({
     const typeHint = `{${keys.length} key${keys.length !== 1 ? 's' : ''}}`;
     const content = (
       <div className="space-y-3 border-l-2 border-border/70 pl-3">
-        <AddObjectField
-          existingKeys={allKeys}
-          onAdd={(key, val) => onChange({ ...obj, [key]: val })}
-        />
+        {!label && (
+          <AddObjectField
+            existingKeys={allKeys}
+            onAdd={(key, val) => onChange({ ...obj, [key]: val })}
+          />
+        )}
         {keys.map((key) => (
           <FormField
             key={key}
@@ -630,7 +746,31 @@ function FormField({
 
     if (label) {
       return (
-        <CollapsibleNode path={path} label={label} typeHint={typeHint}>
+        <CollapsibleNode
+          path={path}
+          label={label}
+          typeHint={typeHint}
+          actions={
+            <>
+              <AddObjectField
+                compact
+                existingKeys={allKeys}
+                onAdd={(key, val) => onChange({ ...obj, [key]: val })}
+              />
+              {onRemove && (
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={onRemove}
+                  aria-label={`Remove ${label}`}
+                  className="text-destructive hover:text-destructive"
+                >
+                  <Trash2 className="size-3" />
+                </Button>
+              )}
+            </>
+          }
+        >
           {content}
         </CollapsibleNode>
       );

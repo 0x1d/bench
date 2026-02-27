@@ -187,7 +187,7 @@ function AddObjectField({
         className="w-full justify-start border-dashed text-muted-foreground hover:text-foreground sm:w-auto"
       >
         <Plus className="size-4" />
-        Add field
+        Add field to object
       </Button>
     );
   }
@@ -545,6 +545,18 @@ function FormField({
     const typeHint = `[${value.length} item${value.length !== 1 ? 's' : ''}]`;
     const content = (
       <div className="space-y-3 border-l-2 border-border/70 pl-3">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            const template = value.length > 0 ? cloneStructure(value[value.length - 1]) : {};
+            onChange([...value, template]);
+          }}
+          className="w-full justify-start gap-1 border-dashed text-muted-foreground hover:text-foreground sm:w-auto"
+        >
+          <Plus className="size-4" />
+          Add item to array
+        </Button>
         {filteredIndices.map((i) => (
           <div key={i} className="group flex items-start gap-2 rounded-md border border-border/60 bg-card/30 p-2">
             <div className="flex-1 min-w-0">
@@ -573,18 +585,6 @@ function FormField({
             </Button>
           </div>
         ))}
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            const template = value.length > 0 ? cloneStructure(value[value.length - 1]) : {};
-            onChange([...value, template]);
-          }}
-          className="w-full justify-start gap-1 border-dashed text-muted-foreground hover:text-foreground sm:w-auto"
-        >
-          <Plus className="size-4" />
-          Add item
-        </Button>
       </div>
     );
 
@@ -612,6 +612,10 @@ function FormField({
     const typeHint = `{${keys.length} key${keys.length !== 1 ? 's' : ''}}`;
     const content = (
       <div className="space-y-3 border-l-2 border-border/70 pl-3">
+        <AddObjectField
+          existingKeys={allKeys}
+          onAdd={(key, val) => onChange({ ...obj, [key]: val })}
+        />
         {keys.map((key) => (
           <FormField
             key={key}
@@ -621,10 +625,6 @@ function FormField({
             label={key}
           />
         ))}
-        <AddObjectField
-          existingKeys={allKeys}
-          onAdd={(key, val) => onChange({ ...obj, [key]: val })}
-        />
       </div>
     );
 

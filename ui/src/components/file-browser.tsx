@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Folder, File, Download, Upload, FolderPlus, Pencil, Trash2, HardDrive } from 'lucide-react';
+import { Folder, File, Download, Upload, FolderPlus, FilePlus2, Pencil, Trash2, HardDrive } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
@@ -29,6 +29,7 @@ import {
 import {
   useResourceList,
   useResourceMutations,
+  useSaveFile,
   triggerDownload,
 } from '@/hooks/use-resources';
 import { useFileView } from '@/contexts/file-view-context';
@@ -79,9 +80,12 @@ export function FileBrowser({
   const [deleteTarget, setDeleteTarget] = useState<{ path: string; name: string } | null>(null);
   const [renameTarget, setRenameTarget] = useState<{ path: string; name: string } | null>(null);
   const [renameValue, setRenameValue] = useState('');
+  const [showNewFile, setShowNewFile] = useState(false);
+  const [newFileName, setNewFileName] = useState('');
 
   const { data, error, isLoading } = useResourceList(root, path);
   const mutations = useResourceMutations(root, path);
+  const saveMutation = useSaveFile(root);
   const { setViewedFile } = useFileView();
 
   const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -114,6 +118,23 @@ export function FileBrowser({
       mutations.delete.mutate(deleteTarget.path);
       setDeleteTarget(null);
     }
+  };
+
+  const handleCreateFile = () => {
+    const name = newFileName.trim();
+    if (!name) return;
+    if (name.includes('/')) return;
+    const filePath = path === '.' || path === '' ? name : `${path}/${name}`;
+    saveMutation.mutate(
+      { path: filePath, content: '' },
+      {
+        onSuccess: () => {
+          setShowNewFile(false);
+          setNewFileName('');
+          setViewedFile({ root, path: filePath, name, type: 'text' });
+        },
+      }
+    );
   };
 
   const openRenameDialog = (entry: { path: string; name: string }) => {
@@ -240,6 +261,20 @@ export function FileBrowser({
           ) : (
             <>
               <Separator orientation="vertical" className="h-6" />
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowNewFile(true)}
+                    disabled={saveMutation.isPending}
+                  >
+                    <FilePlus2 className="size-4" />
+                    New file
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Create and open a new file</TooltipContent>
+              </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -424,6 +459,54 @@ export function FileBrowser({
             <AlertDialogAction asChild>
               <Button onClick={handleRename} disabled={!renameValue.trim()}>
                 Rename
+              </Button>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* New file dialog */}
+      <AlertDialog
+        open={showNewFile}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowNewFile(false);
+            setNewFileName('');
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Create file</AlertDialogTitle>
+            <AlertDialogDescription>
+              Enter a file name (for example: <code>settings.yaml</code> or{' '}
+              <code>config.json</code>).
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-2 space-y-2">
+            <Input
+              value={newFileName}
+              onChange={(e) => setNewFileName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleCreateFile();
+              }}
+              placeholder="filename.ext"
+              autoFocus
+            />
+            {newFileName.includes('/') && (
+              <p className="text-xs text-destructive">Use a file name without path separators.</p>
+            )}
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel asChild>
+              <Button variant="outline">Cancel</Button>
+            </AlertDialogCancel>
+            <AlertDialogAction asChild>
+              <Button
+                onClick={handleCreateFile}
+                disabled={!newFileName.trim() || newFileName.includes('/') || saveMutation.isPending}
+              >
+                {saveMutation.isPending ? 'Creating...' : 'Create'}
               </Button>
             </AlertDialogAction>
           </AlertDialogFooter>

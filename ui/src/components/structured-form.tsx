@@ -183,19 +183,16 @@ function AddObjectField({
   if (!isAdding) {
     return (
       <Button
-        variant="outline"
-        size={compact ? 'xs' : 'sm'}
+        variant="ghost"
+        size="icon-xs"
         onClick={(e) => {
           e.stopPropagation();
           setIsAdding(true);
         }}
-        className={cn(
-          'justify-start border-dashed text-muted-foreground hover:text-foreground',
-          compact ? 'h-6 px-2' : 'w-full sm:w-auto'
-        )}
+        aria-label={compact ? 'Add field' : 'Add field to object'}
+        className="border border-border/70 bg-background/80 text-primary hover:bg-primary/10 hover:text-primary"
       >
-        <Plus className={compact ? 'size-3' : 'size-4'} />
-        {compact ? 'Add field' : 'Add field to object'}
+        <Plus className="size-3" />
       </Button>
     );
   }
@@ -239,9 +236,15 @@ function AddObjectField({
             <Button variant="ghost" size="sm" onClick={resetAddingState}>
               Cancel
             </Button>
-            <Button variant="default" size="sm" onClick={addField} disabled={!normalizedKey || keyExists}>
-              <Plus className="size-4" />
-              Add
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              onClick={addField}
+              disabled={!normalizedKey || keyExists}
+              aria-label="Confirm add field"
+              className="border border-border/70 bg-background/80 text-primary hover:bg-primary/10 hover:text-primary"
+            >
+              <Plus className="size-3" />
             </Button>
           </div>
           {keyExists && (
@@ -288,13 +291,14 @@ function AddObjectField({
         </div>
         <div className="flex w-full flex-wrap gap-2 sm:w-auto">
           <Button
-            variant="default"
-            size="sm"
+            variant="ghost"
+            size="icon-xs"
             onClick={addField}
             disabled={!normalizedKey || keyExists}
+            aria-label="Confirm add field"
+            className="border border-border/70 bg-background/80 text-primary hover:bg-primary/10 hover:text-primary"
           >
-            <Plus className="size-4" />
-            Add field
+            <Plus className="size-3" />
           </Button>
           <Button
             variant="ghost"
@@ -637,16 +641,16 @@ function FormField({
       <div className="space-y-3 border-l-2 border-border/70 pl-3">
         {!label && (
           <Button
-            variant="outline"
-            size="sm"
+            variant="ghost"
+            size="icon-xs"
             onClick={() => {
               const template = value.length > 0 ? cloneStructure(value[value.length - 1]) : {};
               onChange([...value, template]);
             }}
-            className="w-full justify-start gap-1 border-dashed text-muted-foreground hover:text-foreground sm:w-auto"
+            aria-label="Add item to array"
+            className="border border-border/70 bg-background/80 text-primary hover:bg-primary/10 hover:text-primary"
           >
-            <Plus className="size-4" />
-            Add item to array
+            <Plus className="size-3" />
           </Button>
         )}
         {filteredIndices.map((i) => (
@@ -682,14 +686,15 @@ function FormField({
             <>
               <Button
                 variant="ghost"
-                size="xs"
+                size="icon-xs"
                 onClick={() => {
                   const template = value.length > 0 ? cloneStructure(value[value.length - 1]) : {};
                   onChange([...value, template]);
                 }}
+                aria-label={`Add item to ${label}`}
+                className="border border-border/70 bg-background/80 text-primary hover:bg-primary/10 hover:text-primary"
               >
                 <Plus className="size-3" />
-                Add
               </Button>
               {onRemove && (
                 <Button

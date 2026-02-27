@@ -287,14 +287,14 @@ export function FileBrowser({
 
       {/* Table */}
       <div className="rounded-lg border border-border bg-card overflow-hidden">
-        <table className="w-full table-fixed text-sm">
+        <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border bg-muted/30">
-              <th className="w-[46%] px-4 py-3 text-left font-medium sm:w-[42%]">Name</th>
+              <th className="px-4 py-3 text-left font-medium">Name</th>
               <th className="hidden px-4 py-3 text-left font-medium sm:table-cell">Type</th>
               <th className="hidden px-4 py-3 text-right font-medium md:table-cell">Size</th>
-              <th className="w-[34%] px-4 py-3 text-left font-medium sm:w-[28%]">Modified</th>
-              <th className="hidden w-28 sm:table-cell" />
+              <th className="hidden px-4 py-3 text-left font-medium sm:table-cell">Modified</th>
+              <th className="w-28 px-2 py-3" />
             </tr>
           </thead>
           <tbody>
@@ -315,41 +315,12 @@ export function FileBrowser({
               >
                 <td className="px-4 py-2">
                   <div className="flex items-center gap-2">
-                  {entry.isDir ? (
-                    <Folder className="size-4 text-primary shrink-0" />
-                  ) : (
-                    <File className="size-4 text-muted-foreground shrink-0" />
-                  )}
-                  <span className="truncate">{entry.name}</span>
-                  </div>
-                  <div className="mt-1 flex flex-wrap items-center gap-1 sm:hidden" onClick={(e) => e.stopPropagation()}>
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      onClick={() => openRenameDialog(entry)}
-                      aria-label={`Rename ${entry.name}`}
-                    >
-                      <Pencil className="size-3" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      onClick={() => setDeleteTarget({ path: entry.path, name: entry.name })}
-                      aria-label={`Delete ${entry.name}`}
-                      className="text-destructive hover:text-destructive"
-                    >
-                      <Trash2 className="size-3" />
-                    </Button>
-                    {!entry.isDir && (
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        onClick={() => triggerDownload(root, entry.path)}
-                        aria-label={`Download ${entry.name}`}
-                      >
-                        <Download className="size-3" />
-                      </Button>
+                    {entry.isDir ? (
+                      <Folder className="size-4 text-primary shrink-0" />
+                    ) : (
+                      <File className="size-4 text-muted-foreground shrink-0" />
                     )}
+                    <span className="min-w-0 truncate">{entry.name}</span>
                   </div>
                 </td>
                 <td className="hidden px-4 py-2 text-muted-foreground sm:table-cell">
@@ -358,11 +329,11 @@ export function FileBrowser({
                 <td className="hidden px-4 py-2 text-right text-muted-foreground tabular-nums md:table-cell">
                   {entry.isDir ? '—' : formatSize(entry.size ?? 0)}
                 </td>
-                <td className="px-4 py-2 text-muted-foreground">
+                <td className="hidden px-4 py-2 text-muted-foreground sm:table-cell">
                   {entry.mtime != null ? formatMtime(entry.mtime) : '—'}
                 </td>
-                <td className="hidden px-2 py-2 sm:table-cell" onClick={(e) => e.stopPropagation()}>
-                  <div className="flex items-center gap-1">
+                <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center justify-end gap-1 whitespace-nowrap">
                   <Button
                     variant="ghost"
                     size="icon-xs"

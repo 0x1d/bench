@@ -162,10 +162,32 @@ function AddObjectField({
   existingKeys: string[];
   onAdd: (key: string, value: unknown) => void;
 }) {
+  const [isAdding, setIsAdding] = useState(false);
   const [newKey, setNewKey] = useState('');
   const [kind, setKind] = useState<NewValueKind>('text');
   const normalizedKey = newKey.trim();
   const keyExists = normalizedKey !== '' && existingKeys.includes(normalizedKey);
+  const addField = () => {
+    if (!normalizedKey || keyExists) return;
+    onAdd(normalizedKey, defaultValueForKind(kind));
+    setNewKey('');
+    setKind('text');
+    setIsAdding(false);
+  };
+
+  if (!isAdding) {
+    return (
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => setIsAdding(true)}
+        className="w-full sm:w-auto"
+      >
+        <Plus className="size-4" />
+        Add field
+      </Button>
+    );
+  }
 
   return (
     <div className="rounded-md border border-dashed border-border p-2 space-y-2">
@@ -176,11 +198,9 @@ function AddObjectField({
             value={newKey}
             onChange={(e) => setNewKey(e.target.value)}
             placeholder="new_field"
+            autoFocus
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && normalizedKey && !keyExists) {
-                onAdd(normalizedKey, defaultValueForKind(kind));
-                setNewKey('');
-              }
+              if (e.key === 'Enter') addField();
             }}
           />
         </div>
@@ -200,20 +220,28 @@ function AddObjectField({
             <option value="null">null</option>
           </select>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          className="w-full sm:w-auto"
-          onClick={() => {
-            if (!normalizedKey || keyExists) return;
-            onAdd(normalizedKey, defaultValueForKind(kind));
-            setNewKey('');
-          }}
-          disabled={!normalizedKey || keyExists}
-        >
-          <Plus className="size-4" />
-          Add field
-        </Button>
+        <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={addField}
+            disabled={!normalizedKey || keyExists}
+          >
+            <Plus className="size-4" />
+            Add field
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setIsAdding(false);
+              setNewKey('');
+              setKind('text');
+            }}
+          >
+            Cancel
+          </Button>
+        </div>
       </div>
       {keyExists && (
         <p className="text-xs text-destructive">

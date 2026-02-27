@@ -560,7 +560,7 @@ function FormField({
       size="icon-xs"
       onClick={onRemove}
       aria-label={label ? `Remove ${label}` : 'Remove item'}
-      className="text-destructive hover:text-destructive"
+      className="border border-border/70 bg-background/80 text-destructive hover:bg-destructive/10 hover:text-destructive"
     >
       <Trash2 className="size-3" />
     </Button>
@@ -700,7 +700,7 @@ function FormField({
                   size="icon-xs"
                   onClick={onRemove}
                   aria-label={`Remove ${label}`}
-                  className="text-destructive hover:text-destructive"
+                  className="border border-border/70 bg-background/80 text-destructive hover:bg-destructive/10 hover:text-destructive"
                 >
                   <Trash2 className="size-3" />
                 </Button>
@@ -766,7 +766,7 @@ function FormField({
                   size="icon-xs"
                   onClick={onRemove}
                   aria-label={`Remove ${label}`}
-                  className="text-destructive hover:text-destructive"
+                  className="border border-border/70 bg-background/80 text-destructive hover:bg-destructive/10 hover:text-destructive"
                 >
                   <Trash2 className="size-3" />
                 </Button>

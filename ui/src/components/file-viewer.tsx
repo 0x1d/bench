@@ -322,6 +322,12 @@ export function FileViewer() {
                       <StructuredForm
                         data={formData}
                         onChange={setFormData}
+                        initialExpandAll={
+                          content != null && new TextEncoder().encode(content).length < 2048
+                        }
+                        resetKey={
+                          viewedFile ? `${viewedFile.root}:${viewedFile.path}` : '__no_file__'
+                        }
                       />
                     ) : (
                       <p className="text-muted-foreground text-sm">Loading form...</p>

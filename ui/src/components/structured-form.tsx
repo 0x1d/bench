@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight, Plus, Search, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -110,12 +110,50 @@ interface StructuredFormProps {
   data: unknown;
   onChange: (data: unknown) => void;
   className?: string;
+  initialExpandAll?: boolean;
+  resetKey?: string;
 }
 
-export function StructuredForm({ data, onChange, className }: StructuredFormProps) {
+function cloneStructure(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    if (value.length === 0) return [];
+    return [cloneStructure(value[value.length - 1])];
+  }
+  if (typeof value === 'object' && value !== null) {
+    const obj = value as Record<string, unknown>;
+    const next: Record<string, unknown> = {};
+    for (const [key, val] of Object.entries(obj)) {
+      next[key] = cloneStructure(val);
+    }
+    return next;
+  }
+  if (typeof value === 'string') return '';
+  if (typeof value === 'number') return 0;
+  if (typeof value === 'boolean') return false;
+  if (value === null || value === undefined) return null;
+  return '';
+}
+
+export function StructuredForm({
+  data,
+  onChange,
+  className,
+  initialExpandAll = false,
+  resetKey = '__default__',
+}: StructuredFormProps) {
   const allPaths = useMemo(() => collectCollapsiblePaths(data, ''), [data]);
-  const [expandedPaths, setExpandedPaths] = useState<Set<string>>(() => new Set());
+  const [expandedPaths, setExpandedPaths] = useState<Set<string>>(
+    () => (initialExpandAll ? new Set(allPaths) : new Set())
+  );
   const [searchQuery, setSearchQuery] = useState('');
+
+  useEffect(() => {
+    const paths = collectCollapsiblePaths(data, '');
+    setExpandedPaths(initialExpandAll ? new Set(paths) : new Set());
+    setSearchQuery('');
+    // reset only when switching source document/expansion mode
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resetKey, initialExpandAll]);
 
   const { visiblePaths, expandPathsWhenFiltered } = useMemo(() => {
     const q = searchQuery.trim();
@@ -390,7 +428,10 @@ function FormField({
         <Button
           variant="outline"
           size="sm"
-          onClick={() => onChange([...value, ''])}
+          onClick={() => {
+            const template = value.length > 0 ? cloneStructure(value[value.length - 1]) : '';
+            onChange([...value, template]);
+          }}
           className="gap-1"
         >
           <Plus className="size-4" />

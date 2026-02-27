@@ -206,6 +206,16 @@ export function FileViewer() {
       ? serializeStructured(formData, format)
       : editContent;
 
+  const handleFormChange = useCallback(
+    (next: unknown) => {
+      setFormData(next);
+      // Keep content tab in sync with unsaved Data edits.
+      setEditContent(serializeStructured(next, format));
+      setFormParseError(null);
+    },
+    [format]
+  );
+
   const handleSave = () => {
     if (!viewedFile || !contentToSave || viewedFile.type !== 'text') return;
     saveMutation.mutate(
@@ -328,6 +338,10 @@ export function FileViewer() {
                       setFormParseError(result.error);
                     }
                   } else {
+                    if (mode === 'content' && textMode === 'data' && formData != null) {
+                      // Reflect current form state in raw YAML/JSON before switching tabs.
+                      setEditContent(serializeStructured(formData, format));
+                    }
                     setTextMode(mode);
                   }
                 }}
@@ -342,7 +356,7 @@ export function FileViewer() {
                     {formData != null ? (
                       <StructuredForm
                         data={formData}
-                        onChange={setFormData}
+                        onChange={handleFormChange}
                         initialExpandAll={
                           content != null && new TextEncoder().encode(content).length < 2048
                         }

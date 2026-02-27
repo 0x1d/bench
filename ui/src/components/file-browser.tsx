@@ -157,14 +157,14 @@ export function FileBrowser({
       <TooltipProvider>
         <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 shadow-sm">
           {roots.length > 0 && onRootChange && (
-            <>
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
               <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
                 <HardDrive className="size-4" />
                 Root
               </div>
-              <Separator orientation="vertical" className="h-5" />
+              <Separator orientation="vertical" className="hidden h-5 sm:block" />
               <Select value={root} onValueChange={onRootChange}>
-                <SelectTrigger size="sm" className="w-[220px]">
+                <SelectTrigger size="sm" className="w-full sm:w-[220px]">
                   <SelectValue placeholder="Select resource root" />
                 </SelectTrigger>
                 <SelectContent>
@@ -175,10 +175,10 @@ export function FileBrowser({
                   ))}
                 </SelectContent>
               </Select>
-              <Separator orientation="vertical" className="h-5" />
-            </>
+              <Separator orientation="vertical" className="hidden h-5 sm:block" />
+            </div>
           )}
-          <div className="ml-auto flex flex-wrap items-center gap-2">
+          <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto">
           <input
             ref={fileInputRef}
             type="file"

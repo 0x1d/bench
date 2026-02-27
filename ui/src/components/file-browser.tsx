@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Folder, File, Download, Upload, FolderPlus, Pencil, Trash2, HardDrive } from 'lucide-react';
+import { Folder, File, Download, Upload, FolderPlus, FilePlus2, Pencil, Trash2, HardDrive } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
@@ -29,6 +29,7 @@ import {
 import {
   useResourceList,
   useResourceMutations,
+  useSaveFile,
   triggerDownload,
 } from '@/hooks/use-resources';
 import { useFileView } from '@/contexts/file-view-context';
@@ -57,7 +58,12 @@ function formatSize(bytes: number): string {
 
 function formatMtime(ts: number): string {
   const d = new Date(ts * 1000);
-  return d.toLocaleString();
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  const hours = String(d.getHours()).padStart(2, '0');
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  return `${day}.${month}.${year} ${hours}:${minutes}`;
 }
 
 export function FileBrowser({
@@ -74,9 +80,12 @@ export function FileBrowser({
   const [deleteTarget, setDeleteTarget] = useState<{ path: string; name: string } | null>(null);
   const [renameTarget, setRenameTarget] = useState<{ path: string; name: string } | null>(null);
   const [renameValue, setRenameValue] = useState('');
+  const [showNewFile, setShowNewFile] = useState(false);
+  const [newFileName, setNewFileName] = useState('');
 
   const { data, error, isLoading } = useResourceList(root, path);
   const mutations = useResourceMutations(root, path);
+  const saveMutation = useSaveFile(root);
   const { setViewedFile } = useFileView();
 
   const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -109,6 +118,23 @@ export function FileBrowser({
       mutations.delete.mutate(deleteTarget.path);
       setDeleteTarget(null);
     }
+  };
+
+  const handleCreateFile = () => {
+    const name = newFileName.trim();
+    if (!name) return;
+    if (name.includes('/')) return;
+    const filePath = path === '.' || path === '' ? name : `${path}/${name}`;
+    saveMutation.mutate(
+      { path: filePath, content: '' },
+      {
+        onSuccess: () => {
+          setShowNewFile(false);
+          setNewFileName('');
+          setViewedFile({ root, path: filePath, name, type: 'text' });
+        },
+      }
+    );
   };
 
   const openRenameDialog = (entry: { path: string; name: string }) => {
@@ -152,14 +178,14 @@ export function FileBrowser({
       <TooltipProvider>
         <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 shadow-sm">
           {roots.length > 0 && onRootChange && (
-            <>
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
               <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
                 <HardDrive className="size-4" />
                 Root
               </div>
-              <Separator orientation="vertical" className="h-5" />
+              <Separator orientation="vertical" className="hidden h-5 sm:block" />
               <Select value={root} onValueChange={onRootChange}>
-                <SelectTrigger size="sm" className="w-[220px]">
+                <SelectTrigger size="sm" className="w-full sm:w-[220px]">
                   <SelectValue placeholder="Select resource root" />
                 </SelectTrigger>
                 <SelectContent>
@@ -170,10 +196,10 @@ export function FileBrowser({
                   ))}
                 </SelectContent>
               </Select>
-              <Separator orientation="vertical" className="h-5" />
-            </>
+              <Separator orientation="vertical" className="hidden h-5 sm:block" />
+            </div>
           )}
-          <div className="ml-auto flex flex-wrap items-center gap-2">
+          <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto">
           <input
             ref={fileInputRef}
             type="file"
@@ -240,6 +266,20 @@ export function FileBrowser({
                   <Button
                     variant="outline"
                     size="sm"
+                    onClick={() => setShowNewFile(true)}
+                    disabled={saveMutation.isPending}
+                  >
+                    <FilePlus2 className="size-4" />
+                    New file
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Create and open a new file</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={() => setShowNewFolder(true)}
                   >
                     <FolderPlus className="size-4" />
@@ -286,10 +326,10 @@ export function FileBrowser({
           <thead>
             <tr className="border-b border-border bg-muted/30">
               <th className="px-4 py-3 text-left font-medium">Name</th>
-              <th className="px-4 py-3 text-left font-medium">Type</th>
-              <th className="px-4 py-3 text-right font-medium">Size</th>
-              <th className="px-4 py-3 text-left font-medium">Modified</th>
-              <th className="w-28" />
+              <th className="hidden px-4 py-3 text-left font-medium sm:table-cell">Type</th>
+              <th className="hidden px-4 py-3 text-right font-medium md:table-cell">Size</th>
+              <th className="hidden px-4 py-3 text-left font-medium sm:table-cell">Modified</th>
+              <th className="w-28 px-2 py-3" />
             </tr>
           </thead>
           <tbody>
@@ -308,24 +348,27 @@ export function FileBrowser({
                   }
                 }}
               >
-                <td className="px-4 py-2 flex items-center gap-2">
-                  {entry.isDir ? (
-                    <Folder className="size-4 text-primary shrink-0" />
-                  ) : (
-                    <File className="size-4 text-muted-foreground shrink-0" />
-                  )}
-                  <span>{entry.name}</span>
+                <td className="px-4 py-2">
+                  <div className="flex items-center gap-2">
+                    {entry.isDir ? (
+                      <Folder className="size-4 text-primary shrink-0" />
+                    ) : (
+                      <File className="size-4 text-muted-foreground shrink-0" />
+                    )}
+                    <span className="min-w-0 truncate">{entry.name}</span>
+                  </div>
                 </td>
-                <td className="px-4 py-2 text-muted-foreground">
+                <td className="hidden px-4 py-2 text-muted-foreground sm:table-cell">
                   {entry.isDir ? 'Folder' : 'File'}
                 </td>
-                <td className="px-4 py-2 text-right text-muted-foreground tabular-nums">
+                <td className="hidden px-4 py-2 text-right text-muted-foreground tabular-nums md:table-cell">
                   {entry.isDir ? '—' : formatSize(entry.size ?? 0)}
                 </td>
-                <td className="px-4 py-2 text-muted-foreground">
+                <td className="hidden px-4 py-2 text-muted-foreground sm:table-cell">
                   {entry.mtime != null ? formatMtime(entry.mtime) : '—'}
                 </td>
-                <td className="px-2 py-2 flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center justify-end gap-1 whitespace-nowrap">
                   <Button
                     variant="ghost"
                     size="icon-xs"
@@ -353,6 +396,7 @@ export function FileBrowser({
                       <Download className="size-3" />
                     </Button>
                   )}
+                  </div>
                 </td>
               </tr>
             ))}
@@ -415,6 +459,54 @@ export function FileBrowser({
             <AlertDialogAction asChild>
               <Button onClick={handleRename} disabled={!renameValue.trim()}>
                 Rename
+              </Button>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* New file dialog */}
+      <AlertDialog
+        open={showNewFile}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowNewFile(false);
+            setNewFileName('');
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Create file</AlertDialogTitle>
+            <AlertDialogDescription>
+              Enter a file name (for example: <code>settings.yaml</code> or{' '}
+              <code>config.json</code>).
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-2 space-y-2">
+            <Input
+              value={newFileName}
+              onChange={(e) => setNewFileName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleCreateFile();
+              }}
+              placeholder="filename.ext"
+              autoFocus
+            />
+            {newFileName.includes('/') && (
+              <p className="text-xs text-destructive">Use a file name without path separators.</p>
+            )}
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel asChild>
+              <Button variant="outline">Cancel</Button>
+            </AlertDialogCancel>
+            <AlertDialogAction asChild>
+              <Button
+                onClick={handleCreateFile}
+                disabled={!newFileName.trim() || newFileName.includes('/') || saveMutation.isPending}
+              >
+                {saveMutation.isPending ? 'Creating...' : 'Create'}
               </Button>
             </AlertDialogAction>
           </AlertDialogFooter>

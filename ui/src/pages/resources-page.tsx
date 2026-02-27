@@ -26,7 +26,7 @@ export function ResourcesPage() {
 
   if (rootsLoading) {
     return (
-      <div className="w-full p-6">
+      <div className="w-full">
         <p className="text-muted-foreground">Loading roots...</p>
       </div>
     );
@@ -34,7 +34,7 @@ export function ResourcesPage() {
 
   if (rootsError) {
     return (
-      <div className="w-full p-6">
+      <div className="w-full">
         <p className="text-destructive">
           {rootsError instanceof Error ? rootsError.message : 'Failed to load roots'}
         </p>
@@ -58,7 +58,7 @@ export function ResourcesPage() {
   const currentRootLabel = roots.find((r) => r.id === displayRoot)?.label ?? displayRoot ?? '';
 
   return (
-    <div className="w-full p-6">
+    <div className="w-full">
       {displayRoot && (
         <FileBrowser
           root={displayRoot}

@@ -54,6 +54,13 @@ function getInitialWidth(): number {
 
 type TextMode = 'content' | 'data';
 
+function getEmptyStructuredDefault(text: string, supportsStructuredForm: boolean): unknown | null {
+  if (!supportsStructuredForm) return null;
+  if (text.trim() !== '') return null;
+  // Default to an array so users can immediately add YAML/JSON items from Data mode.
+  return [];
+}
+
 export function FileViewer() {
   const { viewedFile, setViewedFile } = useFileView();
   const [content, setContent] = useState<string | null>(null);
@@ -125,6 +132,13 @@ export function FileViewer() {
             setEditContent(formatted);
             const fmt = detectFormat(viewedFile.name);
             if (supportsFormMode(viewedFile.name)) {
+              const emptyDefault = getEmptyStructuredDefault(formatted, true);
+              if (emptyDefault != null) {
+                setFormData(emptyDefault);
+                setFormParseError(null);
+                setTextMode('data');
+                return;
+              }
               const result = tryParseStructured(formatted, fmt);
               if (result.success) {
                 setFormData(result.data);
@@ -192,7 +206,17 @@ export function FileViewer() {
       ? serializeStructured(formData, format)
       : editContent;
 
-  const handleSave = useCallback(() => {
+  const handleFormChange = useCallback(
+    (next: unknown) => {
+      setFormData(next);
+      // Keep content tab in sync with unsaved Data edits.
+      setEditContent(serializeStructured(next, format));
+      setFormParseError(null);
+    },
+    [format]
+  );
+
+  const handleSave = () => {
     if (!viewedFile || !contentToSave || viewedFile.type !== 'text') return;
     saveMutation.mutate(
       { path: viewedFile.path, content: contentToSave },
@@ -203,33 +227,37 @@ export function FileViewer() {
         },
       }
     );
-  }, [viewedFile, contentToSave, saveMutation]);
+  };
 
   useEffect(() => {
     if (!isTextFile || !hasUnsavedChanges) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
-        handleSave();
+        if (!viewedFile || viewedFile.type !== 'text') return;
+        const nextContent =
+          textMode === 'data' && formData != null
+            ? serializeStructured(formData, format)
+            : editContent;
+        if (!nextContent) return;
+        saveMutation.mutate(
+          { path: viewedFile.path, content: nextContent },
+          {
+            onSuccess: () => {
+              setContent(nextContent);
+              setEditContent(nextContent);
+            },
+          }
+        );
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [isTextFile, hasUnsavedChanges, handleSave]);
+  }, [isTextFile, hasUnsavedChanges, viewedFile, textMode, formData, format, editContent, saveMutation]);
 
-  return (
-    <div
-      className={cn(
-        'bg-sidebar text-sidebar-foreground relative hidden flex-col border-l overflow-hidden lg:flex min-h-0',
-        isExpanded ? 'shrink-0' : 'w-0 min-w-0 shrink-0'
-      )}
-      style={
-        isExpanded
-          ? ({ width: `${width}px`, minWidth: `${width}px` } as React.CSSProperties)
-          : undefined
-      }
-    >
-      {isExpanded && (
+  const viewerPanel = (showResizeHandle: boolean) => (
+    <>
+      {showResizeHandle && isExpanded && (
         <div
           role="separator"
           aria-orientation="vertical"
@@ -294,6 +322,13 @@ export function FileViewer() {
                 onValueChange={(v) => {
                   const mode = v as TextMode;
                   if (mode === 'data' && editContent != null) {
+                    const emptyDefault = getEmptyStructuredDefault(editContent, showFormTab);
+                    if (emptyDefault != null) {
+                      setFormData(emptyDefault);
+                      setFormParseError(null);
+                      setTextMode('data');
+                      return;
+                    }
                     const result = tryParseStructured(editContent, format);
                     if (result.success) {
                       setFormData(result.data);
@@ -303,6 +338,10 @@ export function FileViewer() {
                       setFormParseError(result.error);
                     }
                   } else {
+                    if (mode === 'content' && textMode === 'data' && formData != null) {
+                      // Reflect current form state in raw YAML/JSON before switching tabs.
+                      setEditContent(serializeStructured(formData, format));
+                    }
                     setTextMode(mode);
                   }
                 }}
@@ -317,7 +356,13 @@ export function FileViewer() {
                     {formData != null ? (
                       <StructuredForm
                         data={formData}
-                        onChange={setFormData}
+                        onChange={handleFormChange}
+                        initialExpandAll={
+                          content != null && new TextEncoder().encode(content).length < 2048
+                        }
+                        resetKey={
+                          viewedFile ? `${viewedFile.root}:${viewedFile.path}` : '__no_file__'
+                        }
                       />
                     ) : (
                       <p className="text-muted-foreground text-sm">Loading form...</p>
@@ -377,7 +422,32 @@ export function FileViewer() {
           </>
         )}
       </div>
+    </>
+  );
 
+  return (
+    <>
+      <div
+        className={cn(
+          'bg-sidebar text-sidebar-foreground fixed inset-0 z-30 flex min-h-0 flex-col overflow-hidden border-l lg:hidden',
+          isExpanded ? 'translate-x-0' : 'hidden'
+        )}
+      >
+        {viewerPanel(false)}
+      </div>
+      <div
+        className={cn(
+          'bg-sidebar text-sidebar-foreground relative hidden min-h-0 flex-col overflow-hidden border-l lg:flex',
+          isExpanded ? 'shrink-0' : 'w-0 min-w-0 shrink-0'
+        )}
+        style={
+          isExpanded
+            ? ({ width: `${width}px`, minWidth: `${width}px` } as React.CSSProperties)
+            : undefined
+        }
+      >
+        {viewerPanel(true)}
+      </div>
       <AlertDialog open={!!formParseError} onOpenChange={(open) => !open && setFormParseError(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -393,6 +463,6 @@ export function FileViewer() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </>
   );
 }

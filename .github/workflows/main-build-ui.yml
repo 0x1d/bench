@@ -1,36 +1,17 @@
-name: PR Check
+name: Main Build UI
 
 on:
-  pull_request:
+  push:
     branches: [main]
+    paths:
+      - 'ui/**'
+      - '.github/workflows/main-build-ui.yml'
 
 concurrency:
-  group: pr-${{ github.event.pull_request.number }}
+  group: main-build-ui
   cancel-in-progress: true
 
 jobs:
-  api:
-    name: API
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: api
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: api/go.mod
-
-      - name: Vet
-        run: go vet ./...
-
-      - name: Test
-        run: go test -race -coverprofile=coverage.out ./...
-
-      - name: Build
-        run: go build ./cmd/server
-
   ui:
     name: UI
     runs-on: ubuntu-latest
@@ -58,3 +39,9 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ui-dist
+          path: ui/dist
+          retention-days: 14

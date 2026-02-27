@@ -44,7 +44,11 @@ export function App() {
           <SidebarInset className="min-h-0 overflow-auto">
             <section
               id="status"
-              className="flex flex-1 items-start justify-center p-4 md:min-h-min"
+              className={
+                hash === 'resources'
+                  ? 'flex min-h-0 flex-1 items-start p-4 md:p-6'
+                  : 'flex flex-1 items-start justify-center p-4 md:min-h-min'
+              }
             >
               {hash === 'resources' ? <ResourcesPage /> : <StatusPage />}
             </section>

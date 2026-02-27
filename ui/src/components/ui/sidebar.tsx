@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- sidebar exports shared hook and components */
 import * as React from "react"
 import { cva, type VariantProps } from "class-variance-authority"
 import { PanelLeftIcon } from "lucide-react"
@@ -717,4 +718,5 @@ export {
   SidebarRail,
   SidebarSeparator,
   SidebarTrigger,
+  useSidebar,
 }

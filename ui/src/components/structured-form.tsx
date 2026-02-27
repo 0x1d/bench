@@ -253,6 +253,21 @@ function AddObjectField({
   );
 }
 
+function FieldBlock({
+  label,
+  children,
+}: {
+  label?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-1.5 rounded-md border border-border/60 bg-card/40 p-2.5">
+      {label && <Label className="text-muted-foreground">{label}</Label>}
+      {children}
+    </div>
+  );
+}
+
 export function StructuredForm({
   data,
   onChange,
@@ -431,7 +446,7 @@ function CollapsibleNode({
       <button
         type="button"
         onClick={toggle}
-        className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground"
+        className="flex w-full items-center gap-2 rounded-md border border-transparent px-2 py-1.5 text-left text-sm hover:border-border hover:bg-accent/60 hover:text-accent-foreground"
         aria-expanded={isExpanded}
       >
         {isExpanded ? (
@@ -442,9 +457,7 @@ function CollapsibleNode({
         <span className="min-w-0 flex-1 truncate font-medium">{label}</span>
         <span className="shrink-0 text-xs text-muted-foreground">{typeHint}</span>
       </button>
-      {isExpanded && (
-        <div className="pl-2">{children}</div>
-      )}
+      {isExpanded && <div className="pl-2">{children}</div>}
     </div>
   );
 }
@@ -464,8 +477,7 @@ function FormField({
 
   if (value === null || value === undefined) {
     return (
-      <div className="space-y-2">
-        {label && <Label className="text-muted-foreground">{label}</Label>}
+      <FieldBlock label={label}>
         <Input
           value=""
           placeholder="null"
@@ -475,50 +487,50 @@ function FormField({
           }}
           className="font-mono"
         />
-      </div>
+      </FieldBlock>
     );
   }
 
   if (typeof value === 'boolean') {
     return (
-      <div className="flex items-center gap-2">
-        <Checkbox
-          id={path}
-          checked={value}
-          onCheckedChange={(v) => onChange(v === true)}
-        />
-        {label && (
-          <Label htmlFor={path} className="text-sm font-normal cursor-pointer">
-            {label}
-          </Label>
-        )}
-      </div>
+      <FieldBlock>
+        <div className="flex items-center gap-2">
+          <Checkbox
+            id={path}
+            checked={value}
+            onCheckedChange={(v) => onChange(v === true)}
+          />
+          {label && (
+            <Label htmlFor={path} className="cursor-pointer text-sm font-normal">
+              {label}
+            </Label>
+          )}
+        </div>
+      </FieldBlock>
     );
   }
 
   if (typeof value === 'number') {
     return (
-      <div className="space-y-2">
-        {label && <Label className="text-muted-foreground">{label}</Label>}
+      <FieldBlock label={label}>
         <NumberInput
           value={value}
           onChange={onChange}
           className="font-mono"
         />
-      </div>
+      </FieldBlock>
     );
   }
 
   if (typeof value === 'string') {
     return (
-      <div className="space-y-2">
-        {label && <Label className="text-muted-foreground">{label}</Label>}
+      <FieldBlock label={label}>
         <Input
           value={value}
           onChange={(e) => onChange(e.target.value)}
           className="font-mono"
         />
-      </div>
+      </FieldBlock>
     );
   }
 
@@ -532,9 +544,9 @@ function FormField({
 
     const typeHint = `[${value.length} item${value.length !== 1 ? 's' : ''}]`;
     const content = (
-      <div className="space-y-2 pl-2 border-l-2 border-border">
+      <div className="space-y-3 border-l-2 border-border/70 pl-3">
         {filteredIndices.map((i) => (
-          <div key={i} className="flex items-start gap-2">
+          <div key={i} className="group flex items-start gap-2 rounded-md border border-border/60 bg-card/30 p-2">
             <div className="flex-1 min-w-0">
               <FormField
                 value={value[i]}
@@ -555,7 +567,7 @@ function FormField({
                 onChange(next);
               }}
               aria-label={`Remove item ${i + 1}`}
-              className="text-destructive hover:text-destructive shrink-0"
+              className="shrink-0 text-destructive opacity-70 transition-opacity hover:text-destructive group-hover:opacity-100"
             >
               <Trash2 className="size-3" />
             </Button>
@@ -583,7 +595,7 @@ function FormField({
         </CollapsibleNode>
       );
     }
-    return <div className="space-y-2">{content}</div>;
+    return <div className="space-y-3">{content}</div>;
   }
 
   if (typeof value === 'object' && value !== null) {
@@ -599,7 +611,7 @@ function FormField({
 
     const typeHint = `{${keys.length} key${keys.length !== 1 ? 's' : ''}}`;
     const content = (
-      <div className="space-y-4 pl-2 border-l-2 border-border">
+      <div className="space-y-3 border-l-2 border-border/70 pl-3">
         {keys.map((key) => (
           <FormField
             key={key}
@@ -623,7 +635,7 @@ function FormField({
         </CollapsibleNode>
       );
     }
-    return <div className="space-y-4">{content}</div>;
+    return <div className="space-y-3">{content}</div>;
   }
 
   return null;

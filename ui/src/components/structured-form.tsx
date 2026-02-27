@@ -114,6 +114,8 @@ interface StructuredFormProps {
   resetKey?: string;
 }
 
+type NewValueKind = 'text' | 'number' | 'boolean' | 'object' | 'array' | 'null';
+
 function cloneStructure(value: unknown): unknown {
   if (Array.isArray(value)) {
     if (value.length === 0) return [];
@@ -132,6 +134,93 @@ function cloneStructure(value: unknown): unknown {
   if (typeof value === 'boolean') return false;
   if (value === null || value === undefined) return null;
   return '';
+}
+
+function defaultValueForKind(kind: NewValueKind): unknown {
+  switch (kind) {
+    case 'text':
+      return '';
+    case 'number':
+      return 0;
+    case 'boolean':
+      return false;
+    case 'object':
+      return {};
+    case 'array':
+      return [];
+    case 'null':
+      return null;
+    default:
+      return '';
+  }
+}
+
+function AddObjectField({
+  existingKeys,
+  onAdd,
+}: {
+  existingKeys: string[];
+  onAdd: (key: string, value: unknown) => void;
+}) {
+  const [newKey, setNewKey] = useState('');
+  const [kind, setKind] = useState<NewValueKind>('text');
+  const normalizedKey = newKey.trim();
+  const keyExists = normalizedKey !== '' && existingKeys.includes(normalizedKey);
+
+  return (
+    <div className="rounded-md border border-dashed border-border p-2 space-y-2">
+      <div className="grid gap-2 sm:grid-cols-[1fr_160px_auto] sm:items-end">
+        <div className="space-y-1">
+          <Label className="text-muted-foreground">Field name</Label>
+          <Input
+            value={newKey}
+            onChange={(e) => setNewKey(e.target.value)}
+            placeholder="new_field"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && normalizedKey && !keyExists) {
+                onAdd(normalizedKey, defaultValueForKind(kind));
+                setNewKey('');
+              }
+            }}
+          />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-muted-foreground">Type</Label>
+          <select
+            className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
+            value={kind}
+            onChange={(e) => setKind(e.target.value as NewValueKind)}
+            aria-label="Field type"
+          >
+            <option value="text">text</option>
+            <option value="number">number</option>
+            <option value="boolean">boolean</option>
+            <option value="object">object</option>
+            <option value="array">array</option>
+            <option value="null">null</option>
+          </select>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            if (!normalizedKey || keyExists) return;
+            onAdd(normalizedKey, defaultValueForKind(kind));
+            setNewKey('');
+          }}
+          disabled={!normalizedKey || keyExists}
+        >
+          <Plus className="size-4" />
+          Add field
+        </Button>
+      </div>
+      {keyExists && (
+        <p className="text-xs text-destructive">
+          A field with this name already exists.
+        </p>
+      )}
+    </div>
+  );
 }
 
 export function StructuredForm({
@@ -429,7 +518,7 @@ function FormField({
           variant="outline"
           size="sm"
           onClick={() => {
-            const template = value.length > 0 ? cloneStructure(value[value.length - 1]) : '';
+            const template = value.length > 0 ? cloneStructure(value[value.length - 1]) : {};
             onChange([...value, template]);
           }}
           className="gap-1"
@@ -473,6 +562,10 @@ function FormField({
             label={key}
           />
         ))}
+        <AddObjectField
+          existingKeys={allKeys}
+          onAdd={(key, val) => onChange({ ...obj, [key]: val })}
+        />
       </div>
     );
 

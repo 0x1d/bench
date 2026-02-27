@@ -54,6 +54,13 @@ function getInitialWidth(): number {
 
 type TextMode = 'content' | 'data';
 
+function getEmptyStructuredDefault(text: string, supportsStructuredForm: boolean): unknown | null {
+  if (!supportsStructuredForm) return null;
+  if (text.trim() !== '') return null;
+  // Default to an array so users can immediately add YAML/JSON items from Data mode.
+  return [];
+}
+
 export function FileViewer() {
   const { viewedFile, setViewedFile } = useFileView();
   const [content, setContent] = useState<string | null>(null);
@@ -125,6 +132,13 @@ export function FileViewer() {
             setEditContent(formatted);
             const fmt = detectFormat(viewedFile.name);
             if (supportsFormMode(viewedFile.name)) {
+              const emptyDefault = getEmptyStructuredDefault(formatted, true);
+              if (emptyDefault != null) {
+                setFormData(emptyDefault);
+                setFormParseError(null);
+                setTextMode('data');
+                return;
+              }
               const result = tryParseStructured(formatted, fmt);
               if (result.success) {
                 setFormData(result.data);
@@ -298,6 +312,13 @@ export function FileViewer() {
                 onValueChange={(v) => {
                   const mode = v as TextMode;
                   if (mode === 'data' && editContent != null) {
+                    const emptyDefault = getEmptyStructuredDefault(editContent, showFormTab);
+                    if (emptyDefault != null) {
+                      setFormData(emptyDefault);
+                      setFormParseError(null);
+                      setTextMode('data');
+                      return;
+                    }
                     const result = tryParseStructured(editContent, format);
                     if (result.success) {
                       setFormData(result.data);

@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { ChevronDown, ChevronRight, Plus, Search, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Plus, Search, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -167,12 +167,15 @@ function AddObjectField({
   const [kind, setKind] = useState<NewValueKind>('text');
   const normalizedKey = newKey.trim();
   const keyExists = normalizedKey !== '' && existingKeys.includes(normalizedKey);
+  const resetAddingState = () => {
+    setIsAdding(false);
+    setNewKey('');
+    setKind('text');
+  };
   const addField = () => {
     if (!normalizedKey || keyExists) return;
     onAdd(normalizedKey, defaultValueForKind(kind));
-    setNewKey('');
-    setKind('text');
-    setIsAdding(false);
+    resetAddingState();
   };
 
   if (!isAdding) {
@@ -201,6 +204,7 @@ function AddObjectField({
             autoFocus
             onKeyDown={(e) => {
               if (e.key === 'Enter') addField();
+              if (e.key === 'Escape') resetAddingState();
             }}
           />
         </div>
@@ -233,16 +237,13 @@ function AddObjectField({
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => {
-              setIsAdding(false);
-              setNewKey('');
-              setKind('text');
-            }}
+            onClick={resetAddingState}
           >
             Cancel
           </Button>
         </div>
       </div>
+      <p className="text-xs text-muted-foreground">Press Enter to quickly add the field.</p>
       {keyExists && (
         <p className="text-xs text-destructive">
           A field with this name already exists.
@@ -273,12 +274,13 @@ export function StructuredForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resetKey, initialExpandAll]);
 
-  const { visiblePaths, expandPathsWhenFiltered } = useMemo(() => {
+  const { visiblePaths, expandPathsWhenFiltered, matchCount } = useMemo(() => {
     const q = searchQuery.trim();
     if (!q) {
       return {
         visiblePaths: new Set<string>(),
         expandPathsWhenFiltered: new Set<string>(),
+        matchCount: 0,
       };
     }
     const matching = findMatchingPaths(data, q, '');
@@ -287,6 +289,7 @@ export function StructuredForm({
     return {
       visiblePaths: visible,
       expandPathsWhenFiltered: toExpand,
+      matchCount: matching.length,
     };
   }, [data, searchQuery]);
 
@@ -355,17 +358,32 @@ export function StructuredForm({
             role="toolbar"
             className="sticky top-0 z-10 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 shadow-sm"
           >
-            <div className="relative flex-1 min-w-[120px] max-w-[200px]">
+            <div className="relative min-w-[180px] flex-1 sm:max-w-[320px]">
               <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />
               <Input
                 type="search"
                 placeholder="Search..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-8 h-8"
+                className="h-8 pr-8 pl-8"
                 aria-label="Filter form data"
               />
+              {searchQuery.trim() && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  aria-label="Clear search"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="size-4" />
+                </button>
+              )}
             </div>
+            {isFiltered && (
+              <span className="text-xs text-muted-foreground whitespace-nowrap">
+                {matchCount} match{matchCount === 1 ? '' : 'es'}
+              </span>
+            )}
             <Toggle
               variant="outline"
               size="sm"
@@ -421,8 +439,8 @@ function CollapsibleNode({
         ) : (
           <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
         )}
-        <span className="font-medium">{label}</span>
-        <span className="text-muted-foreground">{typeHint}</span>
+        <span className="min-w-0 flex-1 truncate font-medium">{label}</span>
+        <span className="shrink-0 text-xs text-muted-foreground">{typeHint}</span>
       </button>
       {isExpanded && (
         <div className="pl-2">{children}</div>

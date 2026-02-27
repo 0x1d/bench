@@ -200,9 +200,9 @@ function AddObjectField({
   if (compact) {
     return (
       <div className="relative" onClick={(e) => e.stopPropagation()}>
-        <div className="bg-popover absolute top-full right-0 z-20 mt-2 w-[300px] space-y-2 rounded-md border p-2 shadow-md">
-          <div className="flex flex-wrap items-end gap-2">
-            <div className="min-w-0 flex-1 basis-[180px] space-y-1">
+        <div className="bg-popover absolute top-full right-0 z-20 mt-3 w-[320px] space-y-2 rounded-md border p-2 shadow-md">
+          <div className="space-y-2">
+            <div className="w-full space-y-1">
               <Label className="text-muted-foreground">Field name</Label>
               <Input
                 value={newKey}
@@ -215,7 +215,7 @@ function AddObjectField({
                 }}
               />
             </div>
-            <div className="basis-[110px] space-y-1">
+            <div className="w-full space-y-1">
               <Label className="text-muted-foreground">Type</Label>
               <select
                 className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"

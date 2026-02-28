@@ -8,6 +8,7 @@ A tool for workflow and resource management.
 bench/
 ├── api/             # Go backend API
 ├── ui/              # React/TypeScript frontend (Vite)
+├── docs/            # Documentation (database API, security)
 ├── config.yaml      # Resource roots (see config.example.yaml)
 ├── dev.sh           # Run API and UI together for local development
 ├── example.env
@@ -87,6 +88,20 @@ DATABASE_URL=postgresql://bench:bench@localhost:5432/bench
 **Supabase**: Use the connection string from your project dashboard (Connect → Connection string). Set `DATABASE_URL` in your deployment environment.
 
 If `DATABASE_URL` is not set, the Database page shows a setup message and the nav item remains available.
+
+See [docs/database.md](docs/database.md) for the full API reference and query endpoint details.
+
+## Documentation
+
+- [docs/database.md](docs/database.md) — Database integration API reference, query endpoint, and features
+- [docs/filesystem.md](docs/filesystem.md) — File system resource manager API reference
+- [docs/security.md](docs/security.md) — Security concepts (API token, credentials, path traversal prevention)
+
+## Resources (File System)
+
+The Resources page provides a file browser for configured directory roots. Configure roots in `config.yaml` under `resources.filesystem`. Each entry has `id`, `label`, and `path` (absolute or relative to the config file). Supports list, download, upload, create folder, rename, and delete.
+
+See [docs/filesystem.md](docs/filesystem.md) for the full API reference.
 
 ## Configuration
 

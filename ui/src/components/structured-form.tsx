@@ -321,11 +321,26 @@ function FieldBlock({
   label,
   actions,
   children,
+  inline = false,
 }: {
   label?: string;
   actions?: React.ReactNode;
   children: React.ReactNode;
+  inline?: boolean;
 }) {
+  if (inline) {
+    return (
+      <div className="flex items-center gap-1.5">
+        {label ? (
+          <Label className="w-28 shrink-0 truncate text-muted-foreground">
+            {label}
+          </Label>
+        ) : null}
+        <div className="min-w-0 flex-1">{children}</div>
+        {actions}
+      </div>
+    );
+  }
   return (
     <div className="space-y-1.5">
       {(label || actions) && (
@@ -568,7 +583,7 @@ function FormField({
 
   if (value === null || value === undefined) {
     return (
-      <FieldBlock label={label} actions={removeAction}>
+      <FieldBlock label={label} actions={removeAction} inline>
         <Input
           value=""
           placeholder="null"
@@ -604,7 +619,7 @@ function FormField({
 
   if (typeof value === 'number') {
     return (
-      <FieldBlock label={label} actions={removeAction}>
+      <FieldBlock label={label} actions={removeAction} inline>
         <NumberInput
           value={value}
           onChange={onChange}
@@ -616,7 +631,7 @@ function FormField({
 
   if (typeof value === 'string') {
     return (
-      <FieldBlock label={label} actions={removeAction}>
+      <FieldBlock label={label} actions={removeAction} inline>
         <Input
           value={value}
           onChange={(e) => onChange(e.target.value)}

@@ -125,6 +125,7 @@ export function DatabasePanel() {
         )}
         {panelMode === 'alter' && alterTarget && (
           <DatabaseAlterTablePanelContent
+            key={alterTarget}
             tableName={alterTarget}
             onSuccess={handleClose}
           />

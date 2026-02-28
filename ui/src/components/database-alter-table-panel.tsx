@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -65,34 +65,31 @@ export function DatabaseAlterTablePanelContent({
   const { data: tablesData } = useDatabaseTables(true);
   const tables = tablesData?.tables ?? [];
 
-  const [columns, setColumns] = useState<ColumnDef[]>([]);
-  const [initialized, setInitialized] = useState(false);
+  const schemaColumns = useMemo(
+    () =>
+      schema?.columns?.map((c) => ({
+        name: c.name,
+        dataType: mapDataTypeFromDb(c.dataType),
+        required: c.required ?? false,
+        autoIncrement: c.autoIncrement ?? false,
+        primaryKey: c.primaryKey ?? false,
+        references: c.references ?? null,
+      })) ?? [],
+    [schema]
+  );
 
-  useEffect(() => {
-    if (schema?.columns && !initialized) {
-      setColumns(
-        schema.columns.map((c) => ({
-          name: c.name,
-          dataType: mapDataTypeFromDb(c.dataType),
-          required: c.required ?? false,
-          autoIncrement: c.autoIncrement ?? false,
-          primaryKey: c.primaryKey ?? false,
-          references: c.references ?? null,
-        }))
-      );
-      setInitialized(true);
-    }
-  }, [schema, initialized]);
+  const [columns, setColumns] = useState<ColumnDef[] | null>(null);
+  const effectiveColumns = columns ?? schemaColumns;
 
   const addColumn = () => {
     setColumns((prev) => [
-      ...prev,
+      ...(prev ?? schemaColumns),
       { name: '', dataType: 'text', required: false, autoIncrement: false, primaryKey: false, references: null },
     ]);
   };
 
   const removeColumn = (index: number) => {
-    setColumns((prev) => prev.filter((_, i) => i !== index));
+    setColumns((prev) => (prev ?? schemaColumns).filter((_, i) => i !== index));
   };
 
   const updateColumn = (
@@ -101,14 +98,14 @@ export function DatabaseAlterTablePanelContent({
     value: string | boolean | ForeignKeyRef | null
   ) => {
     setColumns((prev) =>
-      prev.map((c, i) => (i === index ? { ...c, [field]: value } : c))
+      (prev ?? schemaColumns).map((c, i) => (i === index ? { ...c, [field]: value } : c))
     );
   };
 
   const handleAlterTable = () => {
-    const validColumns = columns.filter((c) => c.name.trim() !== '');
+    const validColumns = effectiveColumns.filter((c) => c.name.trim() !== '');
     if (validColumns.length === 0) return;
-    alterMutation.mutate(
+        alterMutation.mutate(
       {
         columns: validColumns.map((c) => {
           const ref = c.references;
@@ -166,7 +163,7 @@ export function DatabaseAlterTablePanelContent({
           </Button>
         </div>
         <div className="space-y-2">
-          {columns.map((col, i) => (
+          {effectiveColumns.map((col, i) => (
             <div key={i} className="space-y-2">
               <div className="flex flex-wrap gap-2 items-center">
                 <Input
@@ -194,7 +191,7 @@ export function DatabaseAlterTablePanelContent({
                   variant="ghost"
                   size="icon"
                   onClick={() => removeColumn(i)}
-                  disabled={columns.length <= 1}
+                  disabled={effectiveColumns.length <= 1}
                   aria-label="Remove column"
                   className="shrink-0"
                 >
@@ -244,7 +241,7 @@ export function DatabaseAlterTablePanelContent({
       <Button
         onClick={handleAlterTable}
         disabled={
-          columns.every((c) => !c.name.trim()) || alterMutation.isPending
+          effectiveColumns.every((c) => !c.name.trim()) || alterMutation.isPending
         }
       >
         {alterMutation.isPending ? 'Altering...' : 'Alter table'}

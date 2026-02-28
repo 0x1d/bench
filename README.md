@@ -8,6 +8,7 @@ A tool for workflow and resource management.
 bench/
 ├── api/             # Go backend API
 ├── ui/              # React/TypeScript frontend (Vite)
+├── docs/            # Documentation (database API, security)
 ├── config.yaml      # Resource roots (see config.example.yaml)
 ├── dev.sh           # Run API and UI together for local development
 ├── example.env
@@ -61,6 +62,46 @@ Set `API_BASE_URL` to point the UI proxy at your API host.
 You can provide either a host (for example, `https://your-api.example.com`) or a full `/api` URL.
 If unset, it defaults to `http://localhost:8080/api`.
 Set `API_TOKEN` in the UI runtime environment so the proxy can send `X-API-Token` to the API.
+
+## Database (PostgreSQL)
+
+The Database page provides a table browser, table creator, schema editor, and SQL query editor. It works with local PostgreSQL or [Supabase](https://supabase.com).
+
+### Features
+
+- **Tables**: Create, alter, and browse tables with pagination and search.
+- **Foreign keys**: Add single references (one-to-one / many-to-one) or multiple references (one-to-many) via the "Many" checkbox. Multiple references use array columns (`integer[]`, `bigint[]`, `uuid[]`) and support multi-select when adding or editing rows.
+- **Query editor**: Run ad-hoc SQL and view results.
+
+**Local development**: Start Postgres with Docker (run in foreground so Ctrl+C stops it):
+
+```bash
+docker compose up
+```
+
+Then set `DATABASE_URL` in `.env`:
+
+```
+DATABASE_URL=postgresql://bench:bench@localhost:5432/bench
+```
+
+**Supabase**: Use the connection string from your project dashboard (Connect → Connection string). Set `DATABASE_URL` in your deployment environment.
+
+If `DATABASE_URL` is not set, the Database page shows a setup message and the nav item remains available.
+
+See [docs/database.md](docs/database.md) for the full API reference and query endpoint details.
+
+## Documentation
+
+- [docs/database.md](docs/database.md) — Database integration API reference, query endpoint, and features
+- [docs/filesystem.md](docs/filesystem.md) — File system resource manager API reference
+- [docs/security.md](docs/security.md) — Security concepts (API token, credentials, path traversal prevention)
+
+## Resources (File System)
+
+The Resources page provides a file browser for configured directory roots. Configure roots in `config.yaml` under `resources.filesystem`. Each entry has `id`, `label`, and `path` (absolute or relative to the config file). Supports list, download, upload, create folder, rename, and delete.
+
+See [docs/filesystem.md](docs/filesystem.md) for the full API reference.
 
 ## Configuration
 

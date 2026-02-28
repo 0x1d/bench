@@ -1,0 +1,12 @@
+---
+description: Docker Compose usage for local development
+alwaysApply: false
+globs: docker-compose*.yml,**/docker-compose*
+---
+
+# Docker Compose
+
+When running `docker compose` for local development or testing:
+
+- **Do not use detached mode** (`-d`). Run `docker compose up` (foreground) so Ctrl+C stops the containers.
+- With `-d`, containers run in the background and are harder to stop; the user must run `docker compose down` separately.

@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Activity, FolderOpen } from 'lucide-react';
+import { Activity, Database, FolderOpen } from 'lucide-react';
 import { NavMain } from '@/components/nav-main';
 import { cn } from '@/lib/utils';
 import {
@@ -12,6 +12,7 @@ import {
 const navItems = [
   { title: 'Status', url: '#status', icon: Activity },
   { title: 'Resources', url: '#resources', icon: FolderOpen },
+  { title: 'Database', url: '#database', icon: Database },
 ];
 
 export function SidebarLeft({

@@ -58,7 +58,7 @@ export function ResourcesPage() {
   const currentRootLabel = roots.find((r) => r.id === displayRoot)?.label ?? displayRoot ?? '';
 
   return (
-    <div className="w-full">
+    <div className="flex w-full min-h-0 flex-1 flex-col gap-4">
       {displayRoot && (
         <FileBrowser
           root={displayRoot}

@@ -16,4 +16,16 @@ func RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PATCH /api/resources", HandleResourcePatch)
 	mux.HandleFunc("DELETE /api/resources", HandleResourceDelete)
 	mux.HandleFunc("GET /api/resources", HandleResourceList)
+	// Database routes: more specific paths first
+	mux.HandleFunc("PATCH /api/database/tables/{name}/rows", HandleDatabaseTableUpdateRow)
+	mux.HandleFunc("DELETE /api/database/tables/{name}/rows", HandleDatabaseTableDeleteRow)
+	mux.HandleFunc("POST /api/database/tables/{name}/rows", HandleDatabaseTableInsert)
+	mux.HandleFunc("DELETE /api/database/tables/{name}", HandleDatabaseTableDrop)
+	mux.HandleFunc("PATCH /api/database/tables/{name}", HandleDatabaseTableAlter)
+	mux.HandleFunc("GET /api/database/schema/{name}", HandleDatabaseTableSchema)
+	mux.HandleFunc("GET /api/database/tables/{name}/lookup", HandleDatabaseTableLookup)
+	mux.HandleFunc("GET /api/database/tables/{name}", HandleDatabaseTableData)
+	mux.HandleFunc("GET /api/database/tables", HandleDatabaseTablesList)
+	mux.HandleFunc("POST /api/database/tables", HandleDatabaseTablesCreate)
+	mux.HandleFunc("POST /api/database/query", HandleDatabaseQuery)
 }

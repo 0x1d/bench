@@ -1,0 +1,161 @@
+import { useState } from 'react';
+import { Database, Pencil, Trash2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { useDropTable } from '@/hooks/use-database';
+import { cn } from '@/lib/utils';
+
+export interface DatabaseTableListProps {
+  tables: { name: string; rows?: number }[];
+  selectedTable: string | null;
+  onSelectTable: (name: string | null) => void;
+  onNewTable: () => void;
+  onEditTable?: (name: string) => void;
+  onTableDropped?: (name: string) => void;
+  isLoading?: boolean;
+  error?: Error | null;
+}
+
+export function DatabaseTableList({
+  tables,
+  selectedTable,
+  onSelectTable,
+  onNewTable,
+  onEditTable,
+  onTableDropped,
+  isLoading,
+  error,
+}: DatabaseTableListProps) {
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
+  const dropMutation = useDropTable();
+
+  const handleConfirmDrop = () => {
+    if (dropTarget) {
+      dropMutation.mutate(dropTarget, {
+        onSuccess: () => onTableDropped?.(dropTarget),
+        onSettled: () => setDropTarget(null),
+      });
+    }
+  };
+
+  if (error) {
+    return (
+      <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
+        <p className="text-sm text-destructive">{error.message}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      {isLoading ? (
+        <p className="text-sm text-muted-foreground">Loading tables...</p>
+      ) : tables.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-border p-8 text-center">
+          <Database className="mx-auto size-10 text-muted-foreground" />
+          <p className="mt-2 text-sm text-muted-foreground">No tables yet</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Create a table or run a query to get started
+          </p>
+          <Button variant="outline" size="sm" className="mt-4" onClick={onNewTable}>
+            Create table
+          </Button>
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-lg border border-border bg-card">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border bg-muted/30">
+                <th className="px-4 py-3 text-left font-medium">Name</th>
+                <th className="px-4 py-3 text-right font-medium">Rows</th>
+                <th className="w-28 px-2 py-3" />
+              </tr>
+            </thead>
+            <tbody>
+              {tables.map((t) => (
+                <tr
+                  key={t.name}
+                  className={cn(
+                    'border-b border-border/50 last:border-b-0 cursor-pointer transition-colors',
+                    'hover:bg-accent/30',
+                    selectedTable === t.name && 'bg-muted/50'
+                  )}
+                  onClick={() => onSelectTable(t.name)}
+                >
+                  <td className="px-4 py-2 font-mono">{t.name}</td>
+                  <td className="px-4 py-2 text-right text-muted-foreground">
+                    {t.rows ?? '—'}
+                  </td>
+                  <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center justify-end gap-1 whitespace-nowrap">
+                      {onEditTable && (
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onEditTable(t.name);
+                          }}
+                          aria-label={`Edit ${t.name}`}
+                        >
+                          <Pencil className="size-3" />
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDropTarget(t.name);
+                        }}
+                        aria-label={`Drop ${t.name}`}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="size-3" />
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <AlertDialog open={!!dropTarget} onOpenChange={(open) => !open && setDropTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Drop table</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to drop the table &quot;{dropTarget}&quot;? All data will be
+              permanently deleted. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel asChild>
+              <Button variant="outline">Cancel</Button>
+            </AlertDialogCancel>
+            <AlertDialogAction asChild>
+              <Button
+                variant="destructive"
+                onClick={handleConfirmDrop}
+                disabled={dropMutation.isPending}
+              >
+                {dropMutation.isPending ? 'Dropping...' : 'Drop table'}
+              </Button>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}

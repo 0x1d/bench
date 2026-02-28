@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
 
+	"github.com/0x1d/bench/api/internal/db"
 	"github.com/0x1d/bench/api/internal/handler"
 	"github.com/0x1d/bench/api/internal/middleware"
 )
@@ -17,6 +19,14 @@ func main() {
 	apiToken := os.Getenv("API_TOKEN")
 	if apiToken == "" {
 		log.Fatal("API_TOKEN is required")
+	}
+
+	if connStr := os.Getenv("DATABASE_URL"); connStr != "" {
+		if err := db.Init(context.Background(), connStr); err != nil {
+			log.Fatalf("database init: %v", err)
+		}
+		defer db.Close()
+		log.Print("database connected")
 	}
 
 	mux := http.NewServeMux()

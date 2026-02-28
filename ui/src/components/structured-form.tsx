@@ -327,7 +327,7 @@ function FieldBlock({
   children: React.ReactNode;
 }) {
   return (
-    <div className="space-y-1.5 rounded-md border border-border/60 bg-card/40 p-2.5">
+    <div className="space-y-1.5">
       {(label || actions) && (
         <div className="flex items-center gap-2">
           {label ? <Label className="min-w-0 flex-1 truncate text-muted-foreground">{label}</Label> : <span className="flex-1" />}

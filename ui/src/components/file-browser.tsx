@@ -174,6 +174,32 @@ export function FileBrowser({
 
   return (
     <div className="space-y-4">
+      {/* Breadcrumbs */}
+      <nav className="flex flex-wrap items-center gap-1 text-sm">
+        <button
+          type="button"
+          onClick={() => onNavigate('.')}
+          className="rounded px-2 py-1 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+        >
+          {rootLabel ?? root}
+        </button>
+        {pathParts.map((part, i) => {
+          const targetPath = pathParts.slice(0, i + 1).join('/');
+          return (
+            <span key={targetPath} className="flex items-center gap-1">
+              <span className="text-muted-foreground">/</span>
+              <button
+                type="button"
+                onClick={() => onNavigate(targetPath)}
+                className="rounded px-2 py-1 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+              >
+                {part}
+              </button>
+            </span>
+          );
+        })}
+      </nav>
+
       {/* Toolbar */}
       <TooltipProvider>
         <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 shadow-sm">
@@ -293,32 +319,6 @@ export function FileBrowser({
           </div>
         </div>
       </TooltipProvider>
-
-      {/* Breadcrumbs */}
-      <nav className="flex flex-wrap items-center gap-1 text-sm">
-        <button
-          type="button"
-          onClick={() => onNavigate('.')}
-          className="rounded px-2 py-1 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-        >
-          {rootLabel ?? root}
-        </button>
-        {pathParts.map((part, i) => {
-          const targetPath = pathParts.slice(0, i + 1).join('/');
-          return (
-            <span key={targetPath} className="flex items-center gap-1">
-              <span className="text-muted-foreground">/</span>
-              <button
-                type="button"
-                onClick={() => onNavigate(targetPath)}
-                className="rounded px-2 py-1 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-              >
-                {part}
-              </button>
-            </span>
-          );
-        })}
-      </nav>
 
       {/* Table */}
       <div className="rounded-lg border border-border bg-card overflow-hidden">

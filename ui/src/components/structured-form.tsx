@@ -529,11 +529,20 @@ function CollapsibleNode({
   const isExpanded = ctx ? ctx.expandedPaths.has(path) : false;
   const toggle = ctx ? () => ctx.togglePath(path) : () => {};
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      toggle();
+    }
+  };
+
   return (
     <div className="space-y-2">
-      <button
-        type="button"
+      <div
+        role="button"
+        tabIndex={0}
         onClick={toggle}
+        onKeyDown={handleKeyDown}
         className="flex w-full items-center gap-2 rounded-md border border-transparent px-2 py-1.5 text-left text-sm hover:border-border hover:bg-accent/60 hover:text-accent-foreground"
         aria-expanded={isExpanded}
       >
@@ -549,7 +558,7 @@ function CollapsibleNode({
             {actions}
           </div>
         )}
-      </button>
+      </div>
       {isExpanded && <div className="pl-2">{children}</div>}
     </div>
   );

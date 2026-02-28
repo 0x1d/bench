@@ -38,13 +38,13 @@ export function StatusPage() {
   };
 
   return (
-    <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl">
+    <div className="w-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl">
       <div className="bg-background/90 text-card-foreground border rounded-xl p-6 relative">
         <div className="flex items-start justify-between gap-2">
           <div>
             <h2 className="text-lg font-medium tracking-tight">API Status</h2>
             <p className="text-muted-foreground mt-1 text-sm">
-              Current backend availability and version metadata.
+              Backend availability.
             </p>
           </div>
           <Button
@@ -90,6 +90,54 @@ export function StatusPage() {
           <dt className="text-muted-foreground">API base URL</dt>
           <dd className="break-all">{apiBaseUrl}</dd>
         </dl>
+      </div>
+
+      <div className="bg-background/90 text-card-foreground border rounded-xl p-6 relative">
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <h2 className="text-lg font-medium tracking-tight">Database</h2>
+            <p className="text-muted-foreground mt-1 text-sm">
+              PostgreSQL connection status.
+            </p>
+          </div>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            onClick={refetchStatus}
+            disabled={statusLoading}
+            className="shrink-0 text-muted-foreground hover:text-foreground"
+            aria-label="Refresh database status"
+          >
+            <RefreshCw
+              className={`size-4 ${statusLoading ? 'animate-spin' : ''}`}
+            />
+          </Button>
+        </div>
+
+        {statusLoading && <p className="text-muted-foreground mt-3">Loading...</p>}
+
+        {statusData && (
+          <div className="mt-3">
+            <div className="flex items-center gap-2">
+              <span
+                className={`h-2.5 w-2.5 rounded-full shadow-[0_0_6px_rgba(74,222,128,0.5)] ${
+                  statusData.database?.configured
+                    ? 'bg-green-500'
+                    : 'bg-amber-500 shadow-[0_0_6px_rgba(245,158,11,0.5)]'
+                }`}
+              />
+              <span>
+                {statusData.database?.configured ? 'Connected' : 'Not configured'}
+              </span>
+            </div>
+            {!statusData.database?.configured && (
+              <p className="mt-2 text-sm text-muted-foreground">
+                Set <code className="rounded bg-muted px-1">DATABASE_URL</code> in your
+                environment. For local dev, run <code className="rounded bg-muted px-1">docker compose up</code>.
+              </p>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="bg-background/90 text-card-foreground border rounded-xl p-6 relative">

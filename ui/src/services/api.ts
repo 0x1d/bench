@@ -16,6 +16,9 @@ export interface StatusResponse {
     configured: boolean;
     paths: FilesystemPath[];
   };
+  database?: {
+    configured: boolean;
+  };
 }
 
 export async function fetchHealth(): Promise<HealthStatus> {
@@ -195,4 +198,222 @@ export async function deleteResource(root: string, path: string): Promise<void> 
     const text = await response.text();
     throw new Error(text || `Delete failed: ${response.status}`);
   }
+}
+
+// Database types and API
+export interface TableInfo {
+  name: string;
+  rows?: number;
+}
+
+export interface ForeignKeyRef {
+  table: string;
+  column: string;
+  multiple?: boolean;
+}
+
+export interface TableSchemaResponse {
+  columns: {
+    name: string;
+    dataType: string;
+    required?: boolean;
+    autoIncrement?: boolean;
+    primaryKey?: boolean;
+    references?: ForeignKeyRef;
+  }[];
+}
+
+export interface TablesResponse {
+  tables: TableInfo[];
+}
+
+export interface TableDataResponse {
+  columns: string[];
+  rows: unknown[][];
+  total: number;
+}
+
+export interface CreateTableRequest {
+  name: string;
+  columns: {
+    name: string;
+    dataType: string;
+    required?: boolean;
+    autoIncrement?: boolean;
+    primaryKey?: boolean;
+    references?: ForeignKeyRef;
+  }[];
+}
+
+export interface AlterTableRequest {
+  columns: {
+    name: string;
+    dataType: string;
+    required?: boolean;
+    autoIncrement?: boolean;
+    primaryKey?: boolean;
+    references?: ForeignKeyRef;
+  }[];
+}
+
+export interface QueryResponse {
+  columns: string[];
+  rows: unknown[][];
+}
+
+export interface QueryRowsAffectedResponse {
+  rowsAffected: number;
+}
+
+export async function fetchDatabaseTables(): Promise<TablesResponse> {
+  const response = await fetch(`${API_BASE}/database/tables`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch tables: ${response.status} ${response.statusText}`);
+  }
+  return response.json();
+}
+
+export interface TableLookupResponse {
+  columns: string[];
+  rows: unknown[][];
+  total: number;
+}
+
+export async function fetchTableLookup(
+  tableName: string,
+  valueColumn: string,
+  search: string,
+  limit = 50
+): Promise<TableLookupResponse> {
+  const params = new URLSearchParams({
+    column: valueColumn,
+    limit: String(limit),
+  });
+  if (search) params.set('search', search);
+  const response = await fetch(
+    `${API_BASE}/database/tables/${encodeURIComponent(tableName)}/lookup?${params}`
+  );
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Failed to fetch lookup: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function fetchTableSchema(tableName: string): Promise<TableSchemaResponse> {
+  const response = await fetch(`${API_BASE}/database/schema/${encodeURIComponent(tableName)}`);
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Failed to fetch schema: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function insertRow(tableName: string, row: Record<string, unknown>): Promise<void> {
+  const response = await fetch(`${API_BASE}/database/tables/${encodeURIComponent(tableName)}/rows`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ row }),
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Failed to insert row: ${response.status}`);
+  }
+}
+
+export async function fetchTableData(
+  tableName: string,
+  limit = 20,
+  offset = 0,
+  search = ''
+): Promise<TableDataResponse> {
+  const params = new URLSearchParams({
+    limit: String(limit),
+    offset: String(offset),
+  });
+  if (search) params.set('search', search);
+  const response = await fetch(`${API_BASE}/database/tables/${encodeURIComponent(tableName)}?${params}`);
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Failed to fetch table data: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function createTable(req: CreateTableRequest): Promise<void> {
+  const response = await fetch(`${API_BASE}/database/tables`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Failed to create table: ${response.status}`);
+  }
+}
+
+export async function alterTable(tableName: string, req: AlterTableRequest): Promise<void> {
+  const response = await fetch(`${API_BASE}/database/tables/${encodeURIComponent(tableName)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Failed to alter table: ${response.status}`);
+  }
+}
+
+export async function updateRow(
+  tableName: string,
+  where: Record<string, unknown>,
+  set: Record<string, unknown>
+): Promise<void> {
+  const response = await fetch(`${API_BASE}/database/tables/${encodeURIComponent(tableName)}/rows`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ where, set }),
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Failed to update row: ${response.status}`);
+  }
+}
+
+export async function deleteRow(
+  tableName: string,
+  where: Record<string, unknown>
+): Promise<void> {
+  const response = await fetch(`${API_BASE}/database/tables/${encodeURIComponent(tableName)}/rows`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ where }),
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Failed to delete row: ${response.status}`);
+  }
+}
+
+export async function dropTable(tableName: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/database/tables/${encodeURIComponent(tableName)}`, {
+    method: 'DELETE',
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Failed to drop table: ${response.status}`);
+  }
+}
+
+export async function executeQuery(sql: string): Promise<QueryResponse | QueryRowsAffectedResponse> {
+  const response = await fetch(`${API_BASE}/database/query`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sql }),
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Failed to execute query: ${response.status}`);
+  }
+  return response.json();
 }

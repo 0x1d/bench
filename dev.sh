@@ -12,6 +12,12 @@ cd "$(dirname "$0")"
 [ -z "$BENCH_CONFIG" ] && [ -f config.yaml ] && export BENCH_CONFIG="$PWD/config.yaml"
 
 trap 'kill 0' EXIT
+
+if [ -f docker-compose.yml ] && command -v docker >/dev/null 2>&1; then
+  (docker compose up) &
+  sleep 3
+fi
+
 (cd api && go run ./cmd/server) &
 (cd ui && pnpm dev) &
 wait

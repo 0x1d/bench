@@ -152,7 +152,7 @@ export function DatabaseAlterTablePanelContent({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 w-full min-w-0">
       <div className="space-y-2">
         <Label>Table</Label>
         <Input value={tableName} readOnly className="font-mono bg-muted" />
@@ -167,28 +167,40 @@ export function DatabaseAlterTablePanelContent({
         </div>
         <div className="space-y-2">
           {columns.map((col, i) => (
-            <div key={i} className="flex flex-wrap gap-x-2 gap-y-2 items-center">
-              <Input
-                value={col.name}
-                onChange={(e) => updateColumn(i, 'name', e.target.value)}
-                placeholder="column_name"
-                className="font-mono w-[140px] shrink-0"
-              />
-              <Select
-                value={col.dataType}
-                onValueChange={(v) => updateColumn(i, 'dataType', v)}
-              >
-                <SelectTrigger className="w-[130px] shrink-0">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {DATA_TYPES.map((dt) => (
-                    <SelectItem key={dt} value={dt}>
-                      {dt}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div key={i} className="space-y-2">
+              <div className="flex flex-wrap gap-2 items-center">
+                <Input
+                  value={col.name}
+                  onChange={(e) => updateColumn(i, 'name', e.target.value)}
+                  placeholder="column_name"
+                  className="font-mono min-w-[100px] flex-1"
+                />
+                <Select
+                  value={col.dataType}
+                  onValueChange={(v) => updateColumn(i, 'dataType', v)}
+                >
+                  <SelectTrigger className="min-w-[120px] flex-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DATA_TYPES.map((dt) => (
+                      <SelectItem key={dt} value={dt}>
+                        {dt}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => removeColumn(i)}
+                  disabled={columns.length <= 1}
+                  aria-label="Remove column"
+                  className="shrink-0"
+                >
+                  <Trash2 className="size-4" />
+                </Button>
+              </div>
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                 <label className="flex items-center gap-1.5 text-sm cursor-pointer">
                   <Checkbox
@@ -222,16 +234,6 @@ export function DatabaseAlterTablePanelContent({
                   />
                 )}
               </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => removeColumn(i)}
-                disabled={columns.length <= 1}
-                aria-label="Remove column"
-                className="shrink-0"
-              >
-                <Trash2 className="size-4" />
-              </Button>
             </div>
           ))}
         </div>

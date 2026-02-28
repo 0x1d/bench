@@ -5,6 +5,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useTableSchema } from '@/hooks/use-database';
 
 export interface ForeignKeyRef {
@@ -69,11 +70,9 @@ export function ForeignKeySelect({
       )}
       {value?.table && (
         <label className="flex items-center gap-1.5 text-sm cursor-pointer shrink-0">
-          <input
-            type="checkbox"
+          <Checkbox
             checked={value?.multiple ?? false}
-            onChange={(e) => onChange(value ? { ...value, multiple: e.target.checked } : null)}
-            className="h-4 w-4 rounded border-input"
+            onCheckedChange={(v) => onChange(value ? { ...value, multiple: v === true } : null)}
           />
           Many
         </label>

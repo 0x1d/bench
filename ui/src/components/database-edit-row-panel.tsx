@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useTableSchema, useUpdateRow } from '@/hooks/use-database';
 import { ForeignKeyLookup } from '@/components/database-foreign-key-lookup';
 
@@ -196,12 +197,10 @@ function EditRowForm({
             </Label>
             {isCheckbox ? (
               <div className="flex items-center gap-2">
-                <input
+                <Checkbox
                   id={`edit-col-${col.name}`}
-                  type="checkbox"
                   checked={(values[col.name] as string) === 'true'}
-                  onChange={(e) => updateValue(col.name, e.target.checked ? 'true' : 'false')}
-                  className="h-4 w-4 rounded border-input"
+                  onCheckedChange={(v) => updateValue(col.name, v === true ? 'true' : 'false')}
                 />
                 <span className="text-sm text-muted-foreground">
                   {(values[col.name] as string) === 'true' ? 'true' : 'false'}

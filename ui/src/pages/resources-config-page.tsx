@@ -495,8 +495,7 @@ export function ResourcesConfigPage() {
           <div className="rounded-lg border border-border bg-card p-4">
             <h2 className="text-lg font-medium tracking-tight">Resources</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Configure filesystem roots and database resources. Database URLs support environment
-              placeholders like <code className="rounded bg-muted px-1">${'{BENCH_DB_MAIN_URL}'}</code>.
+              Configure filesystem roots and database resources.
             </p>
           </div>
 

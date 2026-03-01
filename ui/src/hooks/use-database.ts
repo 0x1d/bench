@@ -75,7 +75,7 @@ export function useCreateTable(dbId: string | null) {
   return useMutation({
     mutationFn: (req: CreateTableRequest) => createTable(req, dbId ?? undefined),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['database', 'tables'] });
+      queryClient.invalidateQueries({ queryKey: ['database', dbId, 'tables'] });
     },
   });
 }
@@ -86,10 +86,10 @@ export function useAlterTable(tableName: string | null, dbId: string | null) {
   return useMutation({
     mutationFn: (req: AlterTableRequest) => alterTable(tableName!, req, dbId ?? undefined),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['database', 'tables'] });
+      queryClient.invalidateQueries({ queryKey: ['database', dbId, 'tables'] });
       if (tableName) {
-        queryClient.invalidateQueries({ queryKey: ['database', 'schema', tableName] });
-        queryClient.invalidateQueries({ queryKey: ['database', 'table', tableName] });
+        queryClient.invalidateQueries({ queryKey: ['database', dbId, 'schema', tableName] });
+        queryClient.invalidateQueries({ queryKey: ['database', dbId, 'table', tableName] });
       }
     },
   });
@@ -101,7 +101,7 @@ export function useDropTable(dbId: string | null) {
   return useMutation({
     mutationFn: (tableName: string) => dropTable(tableName, dbId ?? undefined),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['database'] });
+      queryClient.invalidateQueries({ queryKey: ['database', dbId] });
     },
   });
 }
@@ -118,9 +118,9 @@ export function useUpdateRow(tableName: string | null, dbId: string | null) {
       set: Record<string, unknown>;
     }) => updateRow(tableName!, where, set, dbId ?? undefined),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['database', 'tables'] });
+      queryClient.invalidateQueries({ queryKey: ['database', dbId, 'tables'] });
       if (tableName) {
-        queryClient.invalidateQueries({ queryKey: ['database', 'table', tableName] });
+        queryClient.invalidateQueries({ queryKey: ['database', dbId, 'table', tableName] });
       }
     },
   });
@@ -132,9 +132,9 @@ export function useDeleteRow(tableName: string | null, dbId: string | null) {
   return useMutation({
     mutationFn: (where: Record<string, unknown>) => deleteRow(tableName!, where, dbId ?? undefined),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['database', 'tables'] });
+      queryClient.invalidateQueries({ queryKey: ['database', dbId, 'tables'] });
       if (tableName) {
-        queryClient.invalidateQueries({ queryKey: ['database', 'table', tableName] });
+        queryClient.invalidateQueries({ queryKey: ['database', dbId, 'table', tableName] });
       }
     },
   });
@@ -146,9 +146,9 @@ export function useInsertRow(tableName: string | null, dbId: string | null) {
   return useMutation({
     mutationFn: (row: Record<string, unknown>) => insertRow(tableName!, row, dbId ?? undefined),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['database', 'tables'] });
+      queryClient.invalidateQueries({ queryKey: ['database', dbId, 'tables'] });
       if (tableName) {
-        queryClient.invalidateQueries({ queryKey: ['database', 'table', tableName] });
+        queryClient.invalidateQueries({ queryKey: ['database', dbId, 'table', tableName] });
       }
     },
   });
@@ -160,7 +160,7 @@ export function useExecuteQuery(dbId: string | null) {
   return useMutation<QueryResponse | QueryRowsAffectedResponse, Error, string>({
     mutationFn: (sql: string) => executeQuery(sql, dbId ?? undefined),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['database'] });
+      queryClient.invalidateQueries({ queryKey: ['database', dbId] });
     },
   });
 }

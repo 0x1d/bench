@@ -1,12 +1,16 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   Folder,
+  File,
   ChevronDown,
   ChevronRight,
   Loader2,
   FolderPlus,
   FilePlus2,
   X,
+  Download,
+  Pencil,
+  Trash2,
 } from 'lucide-react';
 import { GalleryGridItem } from './gallery-grid-item';
 import { useResourceList } from '@/hooks/use-resources';
@@ -14,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import type { ResourceEntry } from '@/services/api';
+import { getViewableType } from '@/lib/viewable-types';
 
 const DRAG_MIME = 'application/x-bench-move';
 
@@ -23,6 +28,28 @@ function isInternalDrag(dt: DataTransfer): boolean {
 
 function isExternalFileDrag(dt: DataTransfer): boolean {
   return !dt.types.includes(DRAG_MIME) && dt.types.includes('Files');
+}
+
+function isPreviewableInExpanded(entry: ResourceEntry): boolean {
+  if (entry.isDir) return false;
+  const t = getViewableType(entry.name);
+  return t === 'image' || t === 'video';
+}
+
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatMtime(ts: number): string {
+  const d = new Date(ts * 1000);
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  const hours = String(d.getHours()).padStart(2, '0');
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  return `${day}.${month}.${year} ${hours}:${minutes}`;
 }
 
 interface ExpandedViewProps {
@@ -60,6 +87,8 @@ export function ExpandedView({
   const visible = entries.filter((e) => !(e.name === '.cache' && e.isDir));
   const files = visible.filter((e) => !e.isDir);
   const folders = visible.filter((e) => e.isDir);
+  const previewFiles = files.filter(isPreviewableInExpanded);
+  const otherFiles = files.filter((e) => !isPreviewableInExpanded(e));
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     if (isInternalDrag(e.dataTransfer)) {
@@ -126,9 +155,9 @@ export function ExpandedView({
         />
       </div>
 
-      {files.length > 0 && (
+      {previewFiles.length > 0 && (
         <div className="grid grid-cols-[repeat(auto-fill,_minmax(140px,_1fr))] gap-3">
-          {files.map((file) => (
+          {previewFiles.map((file) => (
             <DraggableItem key={file.path} entry={file}>
               <GalleryGridItem
                 entry={file}
@@ -144,6 +173,15 @@ export function ExpandedView({
             </DraggableItem>
           ))}
         </div>
+      )}
+      {otherFiles.length > 0 && (
+        <FilesTable
+          files={otherFiles}
+          onFileClick={onFileClick}
+          onRename={onRename}
+          onDelete={onDelete}
+          onDownload={onDownload}
+        />
       )}
 
       {folders.map((folder) => (
@@ -328,6 +366,8 @@ function LazyFolderSection({
   const visible = entries.filter((e) => !(e.name === '.cache' && e.isDir));
   const files = visible.filter((e) => !e.isDir);
   const folders = visible.filter((e) => e.isDir);
+  const previewFiles = files.filter(isPreviewableInExpanded);
+  const otherFiles = files.filter((e) => !isPreviewableInExpanded(e));
 
   const handleHeaderDragEnter = useCallback(
     (e: React.DragEvent) => {
@@ -474,9 +514,9 @@ function LazyFolderSection({
             <p className="py-4 text-center text-xs text-muted-foreground">Empty</p>
           ) : (
             <div className="space-y-3">
-              {files.length > 0 && (
+              {previewFiles.length > 0 && (
                 <div className="grid grid-cols-[repeat(auto-fill,_minmax(140px,_1fr))] gap-3">
-                  {files.map((file) => (
+                  {previewFiles.map((file) => (
                     <DraggableItem key={file.path} entry={file}>
                       <GalleryGridItem
                         entry={file}
@@ -492,6 +532,15 @@ function LazyFolderSection({
                     </DraggableItem>
                   ))}
                 </div>
+              )}
+              {otherFiles.length > 0 && (
+                <FilesTable
+                  files={otherFiles}
+                  onFileClick={onFileClick}
+                  onRename={onRename}
+                  onDelete={onDelete}
+                  onDownload={onDownload}
+                />
               )}
 
               {folders.map((sub) => (
@@ -516,6 +565,96 @@ function LazyFolderSection({
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function FilesTable({
+  files,
+  onFileClick,
+  onRename,
+  onDelete,
+  onDownload,
+}: {
+  files: ResourceEntry[];
+  onFileClick: (entry: { path: string; name: string }) => void;
+  onRename: (entry: { path: string; name: string }) => void;
+  onDelete: (entry: { path: string; name: string }) => void;
+  onDownload: (path: string) => void;
+}) {
+  return (
+    <div className="overflow-x-auto rounded-lg border border-border bg-card">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-border bg-muted/30">
+            <th className="px-4 py-2 text-left font-medium">Name</th>
+            <th className="hidden px-4 py-2 text-left font-medium sm:table-cell">Type</th>
+            <th className="hidden px-4 py-2 text-right font-medium md:table-cell">Size</th>
+            <th className="hidden px-4 py-2 text-left font-medium sm:table-cell">Modified</th>
+            <th className="w-28 px-2 py-2" />
+          </tr>
+        </thead>
+        <tbody>
+          {files.map((file) => (
+            <tr
+              key={file.path}
+              className="border-b border-border/50 last:border-b-0 hover:bg-accent/30 cursor-pointer"
+              onClick={() => onFileClick(file)}
+              draggable
+              onDragStart={(e) => {
+                e.stopPropagation();
+                e.dataTransfer.setData(DRAG_MIME, JSON.stringify({ path: file.path }));
+                e.dataTransfer.effectAllowed = 'move';
+              }}
+            >
+              <td className="px-4 py-2">
+                <div className="flex items-center gap-2">
+                  <File className="size-4 text-muted-foreground shrink-0" />
+                  <span className="min-w-0 truncate">{file.name}</span>
+                </div>
+              </td>
+              <td className="hidden px-4 py-2 text-muted-foreground sm:table-cell">
+                File
+              </td>
+              <td className="hidden px-4 py-2 text-right text-muted-foreground tabular-nums md:table-cell">
+                {file.size != null ? formatSize(file.size) : '—'}
+              </td>
+              <td className="hidden px-4 py-2 text-muted-foreground sm:table-cell">
+                {file.mtime != null ? formatMtime(file.mtime) : '—'}
+              </td>
+              <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-end gap-1 whitespace-nowrap">
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={() => onRename(file)}
+                    aria-label={`Rename ${file.name}`}
+                  >
+                    <Pencil className="size-3" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={() => onDelete(file)}
+                    aria-label={`Delete ${file.name}`}
+                    className="text-destructive hover:text-destructive"
+                  >
+                    <Trash2 className="size-3" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={() => onDownload(file.path)}
+                    aria-label={`Download ${file.name}`}
+                  >
+                    <Download className="size-3" />
+                  </Button>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

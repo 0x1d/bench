@@ -19,9 +19,8 @@ func ListTables(ctx context.Context) ([]model.TableInfo, error) {
 		return nil, fmt.Errorf("database not configured")
 	}
 	rows, err := db.Pool.Query(ctx, `
-		SELECT t.tablename, COALESCE(s.n_live_tup::int, 0)
+		SELECT t.tablename
 		FROM pg_tables t
-		LEFT JOIN pg_stat_user_tables s ON s.schemaname = t.schemaname AND s.relname = t.tablename
 		WHERE t.schemaname = 'public'
 		  AND t.tablename NOT LIKE '__bench_m2m_%'
 		ORDER BY t.tablename
@@ -34,9 +33,13 @@ func ListTables(ctx context.Context) ([]model.TableInfo, error) {
 	var tables []model.TableInfo
 	for rows.Next() {
 		var name string
-		var rowCount int
-		if err := rows.Scan(&name, &rowCount); err != nil {
+		if err := rows.Scan(&name); err != nil {
 			return nil, fmt.Errorf("scan table: %w", err)
+		}
+		// Use exact COUNT(*) so row numbers reflect writes immediately.
+		var rowCount int
+		if err := db.Pool.QueryRow(ctx, fmt.Sprintf("SELECT COUNT(*) FROM %q", name)).Scan(&rowCount); err != nil {
+			return nil, fmt.Errorf("count rows for %s: %w", name, err)
 		}
 		tables = append(tables, model.TableInfo{Name: name, Rows: rowCount})
 	}

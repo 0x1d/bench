@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { FileViewProvider, useFileView } from '@/contexts/file-view-context';
 import { DatabaseViewProvider, useDatabaseView } from '@/contexts/database-view-context';
+import { UploadProvider } from '@/contexts/upload-context';
+import { UploadProgress } from '@/components/upload-progress';
 import { FileViewer } from '@/components/file-viewer';
 import { DatabasePanel } from '@/components/database-panel';
 import { SidebarLeft } from '@/components/sidebar-left';
@@ -45,6 +47,7 @@ export function App() {
   }, []);
 
   return (
+    <UploadProvider>
     <FileViewProvider>
       <DatabaseViewProvider>
         <ClearFileViewOnNavigate hash={hash} />
@@ -78,5 +81,7 @@ export function App() {
         </div>
       </DatabaseViewProvider>
     </FileViewProvider>
+    <UploadProgress />
+    </UploadProvider>
   );
 }

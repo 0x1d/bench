@@ -50,6 +50,13 @@ type RenameRequest struct {
 	NewName string `json:"newName"`
 }
 
+// MoveRequest is the request body for PUT /api/resources (move).
+type MoveRequest struct {
+	Root        string `json:"root"`
+	Path        string `json:"path"`
+	Destination string `json:"destination"`
+}
+
 // CreateDirRequest is the request body for POST when creating a folder.
 type CreateDirRequest struct {
 	Action string `json:"action"`

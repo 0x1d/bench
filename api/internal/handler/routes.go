@@ -13,6 +13,7 @@ func RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/resources/roots", HandleResourceRoots)
 	mux.HandleFunc("GET /api/resources/download", HandleResourceDownload)
 	mux.HandleFunc("POST /api/resources", HandleResourcePost)
+	mux.HandleFunc("PUT /api/resources", HandleResourceMove)
 	mux.HandleFunc("PATCH /api/resources", HandleResourcePatch)
 	mux.HandleFunc("DELETE /api/resources", HandleResourceDelete)
 	mux.HandleFunc("GET /api/resources", HandleResourceList)

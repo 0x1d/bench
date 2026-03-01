@@ -46,13 +46,15 @@ import {
   useSaveFile,
   triggerDownload,
 } from '@/hooks/use-resources';
-import { uploadFile } from '@/services/api';
+import { moveResource, createFolder, saveFile } from '@/services/api';
 import { useFileView } from '@/contexts/file-view-context';
+import { useUpload } from '@/contexts/upload-context';
 import { getViewableType } from '@/lib/viewable-types';
 import { cn } from '@/lib/utils';
 import { GalleryGrid } from '@/components/gallery-grid';
 import { ExpandedView } from '@/components/expanded-view';
 
+const DRAG_MIME = 'application/x-bench-move';
 const VIEW_MODE_KEY = 'bench-resource-view-mode';
 type ViewMode = 'list' | 'gallery' | 'expanded';
 
@@ -127,6 +129,7 @@ export function FileBrowser({
   const mutations = useResourceMutations(root, path);
   const saveMutation = useSaveFile(root);
   const { viewedFile, setViewedFile } = useFileView();
+  const { trackUpload } = useUpload();
 
   const [isDragOver, setIsDragOver] = useState(false);
   const [dragOverFolder, setDragOverFolder] = useState<string | null>(null);
@@ -134,21 +137,56 @@ export function FileBrowser({
 
   const handleFileDrop = useCallback(
     async (targetPath: string, files: FileList) => {
-      for (const file of Array.from(files)) {
-        await uploadFile(root, targetPath, file);
-      }
+      const uploads = Array.from(files).map((file) => trackUpload(root, targetPath, file));
+      await Promise.allSettled(uploads);
       queryClient.invalidateQueries({ queryKey: ['resources', 'list', root, targetPath] });
       if (targetPath !== path) {
         queryClient.invalidateQueries({ queryKey: ['resources', 'list', root, path] });
       }
     },
-    [root, path, queryClient]
+    [root, path, queryClient, trackUpload]
   );
 
-  const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const [moveError, setMoveError] = useState<string | null>(null);
+  const handleMove = useCallback(
+    async (sourcePath: string, destinationDir: string) => {
+      try {
+        setMoveError(null);
+        await moveResource(root, sourcePath, destinationDir);
+        const srcDir = sourcePath.split('/').slice(0, -1).join('/') || '.';
+        queryClient.invalidateQueries({ queryKey: ['resources', 'list', root, srcDir] });
+        queryClient.invalidateQueries({ queryKey: ['resources', 'list', root, destinationDir] });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Move failed';
+        setMoveError(msg);
+      }
+    },
+    [root, queryClient]
+  );
+
+  const handleCreateFolderAt = useCallback(
+    async (dirPath: string, name: string) => {
+      await createFolder(root, dirPath, name);
+      queryClient.invalidateQueries({ queryKey: ['resources', 'list', root, dirPath] });
+    },
+    [root, queryClient]
+  );
+
+  const handleCreateFileAt = useCallback(
+    async (dirPath: string, name: string) => {
+      const filePath = dirPath === '.' || dirPath === '' ? name : `${dirPath}/${name}`;
+      await saveFile(root, filePath, '');
+      queryClient.invalidateQueries({ queryKey: ['resources', 'list', root, dirPath] });
+      setViewedFile({ root, path: filePath, name, type: 'text' });
+    },
+    [root, queryClient, setViewedFile]
+  );
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      mutations.upload.mutate(file);
+      await trackUpload(root, path, file);
+      queryClient.invalidateQueries({ queryKey: ['resources', 'list', root, path] });
     }
     e.target.value = '';
   };
@@ -351,7 +389,6 @@ export function FileBrowser({
                 variant="outline"
                 size="sm"
                 onClick={() => fileInputRef.current?.click()}
-                disabled={mutations.upload.isPending}
               >
                 <Upload className="size-4" />
                 Upload
@@ -432,19 +469,67 @@ export function FileBrowser({
         </div>
       </TooltipProvider>
 
+      {/* Move error banner */}
+      {moveError && (
+        <div className="flex items-center justify-between rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-2 text-sm text-destructive">
+          <span>Move failed: {moveError}</span>
+          <Button variant="ghost" size="sm" onClick={() => setMoveError(null)} className="h-6 px-2 text-destructive hover:text-destructive">
+            Dismiss
+          </Button>
+        </div>
+      )}
+
       {/* Content: List, Gallery, or Expanded */}
       {viewMode === 'expanded' ? (
-        <div className="rounded-lg border border-border bg-card p-4">
+        <div
+          className={cn(
+            'rounded-lg border bg-card p-4 transition-colors',
+            isDragOver && !dragOverFolder
+              ? 'border-primary bg-primary/5 ring-2 ring-primary/30'
+              : 'border-border'
+          )}
+          onDragEnter={(e) => {
+            e.preventDefault();
+            dragCounterRef.current++;
+            if (dragCounterRef.current === 1) setIsDragOver(true);
+          }}
+          onDragOver={(e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'copy';
+          }}
+          onDragLeave={(e) => {
+            e.preventDefault();
+            dragCounterRef.current--;
+            if (dragCounterRef.current === 0) {
+              setIsDragOver(false);
+              setDragOverFolder(null);
+            }
+          }}
+          onDrop={(e) => {
+            if (e.dataTransfer.types.includes(DRAG_MIME)) return;
+            e.preventDefault();
+            dragCounterRef.current = 0;
+            setIsDragOver(false);
+            setDragOverFolder(null);
+            const files = e.dataTransfer.files;
+            if (files.length > 0) handleFileDrop(path, files);
+          }}
+        >
           {entries.length > 0 ? (
             <ExpandedView
               entries={entries}
               root={root}
+              currentPath={path}
               hasCache={hasCache}
               onNavigate={onNavigate}
               onFileClick={handleFileClick}
               onRename={openRenameDialog}
               onDelete={(e) => setDeleteTarget({ path: e.path, name: e.name })}
               onDownload={(p) => triggerDownload(root, p)}
+              onMove={handleMove}
+              onFileDrop={handleFileDrop}
+              onCreateFolder={handleCreateFolderAt}
+              onCreateFile={handleCreateFileAt}
             />
           ) : (
             <div className="py-8 text-center text-muted-foreground">This folder is empty.</div>

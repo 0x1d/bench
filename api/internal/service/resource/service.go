@@ -2,9 +2,11 @@ package resource
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/0x1d/bench/api/internal/config"
 	"github.com/0x1d/bench/api/internal/model"
@@ -26,6 +28,7 @@ var (
 	ErrNotFound       = errors.New("not found")
 	ErrEmptyName      = errors.New("name cannot be empty")
 	ErrInvalidNewName = errors.New("new name contains invalid path characters")
+	ErrMoveIntoSelf   = errors.New("cannot move a folder into itself or its subtree")
 )
 
 // Service provides file system resource operations.
@@ -346,6 +349,129 @@ func (s *Service) Rename(rootID, oldPath, newName string) error {
 	}
 
 	return os.Rename(oldAbsPath, newAbsPath)
+}
+
+// Move moves a file or directory into a different directory.
+func (s *Service) Move(rootID, srcPath, destDir string) error {
+	srcAbs, rootPath, err := s.resolvePath(rootID, srcPath)
+	if err != nil {
+		return err
+	}
+
+	if _, err := os.Stat(srcAbs); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return ErrNotFound
+		}
+		return err
+	}
+
+	destAbs, _, err := s.resolvePath(rootID, destDir)
+	if err != nil {
+		return err
+	}
+
+	info, err := os.Stat(destAbs)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return ErrNotFound
+		}
+		return err
+	}
+	if !info.IsDir() {
+		return ErrNotADirectory
+	}
+
+	// Prevent moving a directory into itself or its own subtree
+	srcClean := filepath.Clean(srcAbs) + string(filepath.Separator)
+	destClean := filepath.Clean(destAbs) + string(filepath.Separator)
+	if srcAbs == destAbs || strings.HasPrefix(destClean, srcClean) {
+		return ErrMoveIntoSelf
+	}
+
+	newAbs := filepath.Join(destAbs, filepath.Base(srcAbs))
+	if err := s.ensureUnderRoot(newAbs, rootPath); err != nil {
+		return err
+	}
+
+	if err := os.Rename(srcAbs, newAbs); err == nil {
+		return nil
+	}
+	// Fallback: copy then delete (handles cross-device and DrvFS/WSL mounts)
+	return s.copyAndRemove(srcAbs, newAbs)
+}
+
+// copyAndRemove copies src to dst then removes src. Works for both files and directories.
+func (s *Service) copyAndRemove(src, dst string) error {
+	info, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+
+	if info.IsDir() {
+		if err := s.copyDir(src, dst); err != nil {
+			return fmt.Errorf("copy failed: %w", err)
+		}
+	} else {
+		if err := s.copyFile(src, dst, info.Mode()); err != nil {
+			return fmt.Errorf("copy failed: %w", err)
+		}
+	}
+
+	return os.RemoveAll(src)
+}
+
+func (s *Service) copyFile(src, dst string, perm os.FileMode) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, perm)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	if _, err := io.Copy(out, in); err != nil {
+		return err
+	}
+	return out.Close()
+}
+
+func (s *Service) copyDir(src, dst string) error {
+	srcInfo, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(dst, srcInfo.Mode()); err != nil {
+		return err
+	}
+
+	entries, err := os.ReadDir(src)
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range entries {
+		srcPath := filepath.Join(src, entry.Name())
+		dstPath := filepath.Join(dst, entry.Name())
+
+		if entry.IsDir() {
+			if err := s.copyDir(srcPath, dstPath); err != nil {
+				return err
+			}
+		} else {
+			info, err := entry.Info()
+			if err != nil {
+				return err
+			}
+			if err := s.copyFile(srcPath, dstPath, info.Mode()); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // Delete removes a file or directory.

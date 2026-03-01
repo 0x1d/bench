@@ -218,6 +218,39 @@ export async function uploadFile(
   }
 }
 
+/** Upload with progress callback via XMLHttpRequest. */
+export function uploadFileWithProgress(
+  root: string,
+  path: string,
+  file: File,
+  onProgress: (loaded: number, total: number) => void,
+  signal?: AbortSignal
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const params = new URLSearchParams({ root, path: path || '.' });
+    xhr.open('POST', `${API_BASE}/resources?${params}`);
+
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress(e.loaded, e.total);
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) resolve();
+      else reject(new Error(xhr.responseText || `Upload failed: ${xhr.status}`));
+    };
+    xhr.onerror = () => reject(new Error('Upload network error'));
+    xhr.onabort = () => reject(new Error('Upload cancelled'));
+
+    if (signal) {
+      signal.addEventListener('abort', () => xhr.abort(), { once: true });
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+    xhr.send(formData);
+  });
+}
+
 /** Save text content to an existing file. Overwrites the file. */
 export async function saveFile(
   root: string,
@@ -261,6 +294,22 @@ export async function renameResource(
   if (!response.ok) {
     const text = await response.text();
     throw new Error(text || `Rename failed: ${response.status}`);
+  }
+}
+
+export async function moveResource(
+  root: string,
+  path: string,
+  destination: string
+): Promise<void> {
+  const response = await fetch(`${API_BASE}/resources`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ root, path, destination }),
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Move failed: ${response.status}`);
   }
 }
 

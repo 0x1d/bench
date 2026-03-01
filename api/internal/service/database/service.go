@@ -850,8 +850,8 @@ func AlterTable(ctx context.Context, tableName string, req *model.AlterTableRequ
 	return nil
 }
 
-// DropTable drops a table.
-func DropTable(ctx context.Context, tableName string) error {
+// DropTable drops a table. When cascade is true, dependent objects are dropped too.
+func DropTable(ctx context.Context, tableName string, cascade bool) error {
 	if !db.Configured() {
 		return fmt.Errorf("database not configured")
 	}
@@ -870,6 +870,9 @@ func DropTable(ctx context.Context, tableName string) error {
 	}
 
 	query := fmt.Sprintf("DROP TABLE IF EXISTS %q", tableName)
+	if cascade {
+		query += " CASCADE"
+	}
 	_, err = db.Pool.Exec(ctx, query)
 	if err != nil {
 		return fmt.Errorf("drop table: %w", err)
@@ -1268,7 +1271,7 @@ func ensureManyRefJoinTablePrimaryKey(ctx context.Context, joinTable string) err
 				AND t.relname = $1
 				AND c.contype = 'p'
 				AND (
-					SELECT array_agg(a.attname ORDER BY x.ordinality)
+					SELECT array_agg(a.attname::text ORDER BY x.ordinality)
 					FROM unnest(c.conkey) WITH ORDINALITY AS x(attnum, ordinality)
 					JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = x.attnum
 				) = ARRAY['owner_value', 'ref_value']::text[]

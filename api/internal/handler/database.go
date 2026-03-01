@@ -277,7 +277,9 @@ func HandleDatabaseTableDrop(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := database.DropTable(ctx, tableName); err != nil {
+	cascade := strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("cascade")), "true")
+
+	if err := database.DropTable(ctx, tableName, cascade); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

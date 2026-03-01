@@ -99,7 +99,8 @@ export function useDropTable(dbId: string | null) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (tableName: string) => dropTable(tableName, dbId ?? undefined),
+    mutationFn: ({ tableName, cascade = false }: { tableName: string; cascade?: boolean }) =>
+      dropTable(tableName, dbId ?? undefined, { cascade }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['database', dbId] });
     },

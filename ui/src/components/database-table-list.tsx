@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Database, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -38,14 +40,42 @@ export function DatabaseTableList({
 }: DatabaseTableListProps) {
   const { selectedDatabaseId } = useDatabaseView();
   const [dropTarget, setDropTarget] = useState<string | null>(null);
+  const [dropCascade, setDropCascade] = useState(false);
+  const [dropError, setDropError] = useState<string | null>(null);
   const dropMutation = useDropTable(selectedDatabaseId);
+
+  const handleDropDialogChange = (open: boolean) => {
+    if (open || dropMutation.isPending) return;
+    setDropTarget(null);
+    setDropCascade(false);
+    setDropError(null);
+  };
+
+  const handleDropTargetChange = (tableName: string) => {
+    if (dropMutation.isPending) return;
+    setDropTarget(tableName);
+    setDropCascade(false);
+    setDropError(null);
+    dropMutation.reset();
+  };
 
   const handleConfirmDrop = () => {
     if (dropTarget) {
-      dropMutation.mutate(dropTarget, {
-        onSuccess: () => onTableDropped?.(dropTarget),
-        onSettled: () => setDropTarget(null),
-      });
+      setDropError(null);
+      dropMutation.mutate(
+        { tableName: dropTarget, cascade: dropCascade },
+        {
+          onSuccess: () => {
+            onTableDropped?.(dropTarget);
+            setDropTarget(null);
+            setDropCascade(false);
+            setDropError(null);
+          },
+          onError: (error) => {
+            setDropError(error.message);
+          },
+        }
+      );
     }
   };
 
@@ -117,7 +147,7 @@ export function DatabaseTableList({
                         size="icon-xs"
                         onClick={(e) => {
                           e.stopPropagation();
-                          setDropTarget(t.name);
+                          handleDropTargetChange(t.name);
                         }}
                         aria-label={`Drop ${t.name}`}
                         className="text-destructive hover:text-destructive"
@@ -133,7 +163,7 @@ export function DatabaseTableList({
         </div>
       )}
 
-      <AlertDialog open={!!dropTarget} onOpenChange={(open) => !open && setDropTarget(null)}>
+      <AlertDialog open={!!dropTarget} onOpenChange={handleDropDialogChange}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Drop table</AlertDialogTitle>
@@ -142,9 +172,29 @@ export function DatabaseTableList({
               permanently deleted. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="drop-table-cascade"
+                checked={dropCascade}
+                onCheckedChange={(checked) => setDropCascade(checked === true)}
+                disabled={dropMutation.isPending}
+              />
+              <Label htmlFor="drop-table-cascade" className="cursor-pointer text-sm">
+                Drop table with cascade
+              </Label>
+            </div>
+            {dropError && (
+              <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {dropError}
+              </p>
+            )}
+          </div>
           <AlertDialogFooter>
             <AlertDialogCancel asChild>
-              <Button variant="outline">Cancel</Button>
+              <Button variant="outline" disabled={dropMutation.isPending}>
+                Cancel
+              </Button>
             </AlertDialogCancel>
             <AlertDialogAction asChild>
               <Button

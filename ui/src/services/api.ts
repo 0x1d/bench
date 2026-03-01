@@ -541,10 +541,25 @@ export async function deleteRow(
   }
 }
 
-export async function dropTable(tableName: string, dbId?: string): Promise<void> {
-  const response = await fetch(withDbQuery(`${API_BASE}/database/tables/${encodeURIComponent(tableName)}`, dbId), {
+export interface DropTableOptions {
+  cascade?: boolean;
+}
+
+export async function dropTable(
+  tableName: string,
+  dbId?: string,
+  options?: DropTableOptions
+): Promise<void> {
+  const params = new URLSearchParams();
+  if (options?.cascade) {
+    params.set('cascade', 'true');
+  }
+  const response = await fetch(
+    withDbParams(`${API_BASE}/database/tables/${encodeURIComponent(tableName)}`, params, dbId),
+    {
     method: 'DELETE',
-  });
+    }
+  );
   if (!response.ok) {
     const text = await response.text();
     throw new Error(text || `Failed to drop table: ${response.status}`);
@@ -574,5 +589,6 @@ function withDbParams(url: string, params: URLSearchParams, dbId?: string): stri
   if (dbId) {
     params.set('db', dbId);
   }
-  return `${url}?${params.toString()}`;
+  const query = params.toString();
+  return query ? `${url}?${query}` : url;
 }

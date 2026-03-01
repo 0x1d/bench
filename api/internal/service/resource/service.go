@@ -21,6 +21,7 @@ var (
 	ErrNotUnderRoot   = errors.New("path is not under root")
 	ErrNotAFile       = errors.New("path is not a file")
 	ErrNotADirectory  = errors.New("path is not a directory")
+	ErrNotFound       = errors.New("not found")
 	ErrEmptyName      = errors.New("name cannot be empty")
 	ErrInvalidNewName = errors.New("new name contains invalid path characters")
 )
@@ -134,6 +135,9 @@ func (s *Service) Download(rootID, relPath string) (io.ReadCloser, os.FileInfo, 
 
 	info, err := os.Stat(absPath)
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil, ErrNotFound
+		}
 		return nil, nil, err
 	}
 	if info.IsDir() {

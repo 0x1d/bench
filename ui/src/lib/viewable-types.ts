@@ -45,6 +45,10 @@ export function isViewable(filename: string): boolean {
   return getViewableType(filename) != null;
 }
 
+export function isImage(filename: string): boolean {
+  return getViewableType(filename) === 'image';
+}
+
 const FORM_EXTENSIONS = new Set(['json', 'yml', 'yaml']);
 
 export function supportsFormMode(filename: string): boolean {

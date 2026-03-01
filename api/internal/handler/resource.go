@@ -94,8 +94,8 @@ func HandleResourceDownload(w http.ResponseWriter, r *http.Request) {
 	rc, info, err := resourceSvc.Download(rootID, path)
 	if err != nil {
 		switch {
-		case err == resource.ErrRootNotFound:
-			http.Error(w, "root not found", http.StatusNotFound)
+		case err == resource.ErrRootNotFound, err == resource.ErrNotFound:
+			http.Error(w, "not found", http.StatusNotFound)
 		case err == resource.ErrNotAFile:
 			http.Error(w, "path is not a file", http.StatusBadRequest)
 		case err == resource.ErrPathTraversal:

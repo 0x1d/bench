@@ -124,6 +124,55 @@ export async function downloadFile(root: string, path: string): Promise<Blob> {
   return response.blob();
 }
 
+/** Tries to download a file. Returns null if not found (404). */
+export async function downloadFileIfExists(
+  root: string,
+  path: string
+): Promise<Blob | null> {
+  const params = new URLSearchParams({ root, path });
+  const response = await fetch(`${API_BASE}/resources/download?${params}`);
+  if (response.status === 404) return null;
+  if (!response.ok) {
+    throw new Error(`Failed to download: ${response.status} ${response.statusText}`);
+  }
+  return response.blob();
+}
+
+/**
+ * Returns cache paths to try for a preview.
+ * Images: dir/.cache/thumbnails/{base}_thumb.jpg
+ * Videos: dir/.cache/thumbnails/{base}_thumb_1.jpg (first frame)
+ */
+export function getPreviewCachePaths(filePath: string, isVideo: boolean): string[] {
+  const parts = filePath.split('/').filter(Boolean);
+  const name = parts.pop() ?? filePath;
+  const dir = parts.length > 0 ? parts.join('/') : '.';
+  const base = name.replace(/\.[^.]+$/, '');
+
+  const thumbDir = `${dir}/.cache/thumbnails`;
+  if (isVideo) {
+    return [
+      `${thumbDir}/${base}_thumb_1.jpg`,
+      `${thumbDir}/${base}_thumb_1.png`,
+      `${thumbDir}/${base}_thumb.jpg`,
+      `${thumbDir}/${base}-poster.jpg`,
+    ];
+  }
+  return [`${thumbDir}/${base}_thumb.jpg`];
+}
+
+/** Paths to try for video thumbnail at index (1-based). e.g. filename_thumb_2.jpg */
+export function getVideoThumbPaths(filePath: string, index: number): string[] {
+  const parts = filePath.split('/').filter(Boolean);
+  const name = parts.pop() ?? filePath;
+  const dir = parts.length > 0 ? parts.join('/') : '.';
+  const base = name.replace(/\.[^.]+$/, '');
+  return [
+    `${dir}/.cache/thumbnails/${base}_thumb_${index}.jpg`,
+    `${dir}/.cache/thumbnails/${base}_thumb_${index}.png`,
+  ];
+}
+
 export async function uploadFile(
   root: string,
   path: string,

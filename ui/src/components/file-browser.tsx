@@ -1,5 +1,18 @@
-import { useRef, useState } from 'react';
-import { Folder, File, Download, Upload, FolderPlus, FilePlus2, Pencil, Trash2, HardDrive } from 'lucide-react';
+import { useCallback, useRef, useState } from 'react';
+import {
+  Folder,
+  File,
+  Download,
+  Upload,
+  FolderPlus,
+  FilePlus2,
+  Pencil,
+  Trash2,
+  HardDrive,
+  List,
+  LayoutGrid,
+} from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
@@ -32,9 +45,32 @@ import {
   useSaveFile,
   triggerDownload,
 } from '@/hooks/use-resources';
+import { uploadFile } from '@/services/api';
 import { useFileView } from '@/contexts/file-view-context';
 import { getViewableType } from '@/lib/viewable-types';
 import { cn } from '@/lib/utils';
+import { GalleryGrid } from '@/components/gallery-grid';
+
+const VIEW_MODE_KEY = 'bench-resource-view-mode';
+type ViewMode = 'list' | 'gallery';
+
+function loadViewMode(): ViewMode {
+  try {
+    const v = localStorage.getItem(VIEW_MODE_KEY);
+    if (v === 'list' || v === 'gallery') return v;
+  } catch {
+    /* ignore */
+  }
+  return 'list';
+}
+
+function saveViewMode(mode: ViewMode) {
+  try {
+    localStorage.setItem(VIEW_MODE_KEY, mode);
+  } catch {
+    /* ignore */
+  }
+}
 
 interface RootOption {
   id: string;
@@ -75,6 +111,7 @@ export function FileBrowser({
   onRootChange,
 }: FileBrowserProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>(loadViewMode);
   const [newFolderName, setNewFolderName] = useState('');
   const [showNewFolder, setShowNewFolder] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ path: string; name: string } | null>(null);
@@ -83,10 +120,28 @@ export function FileBrowser({
   const [showNewFile, setShowNewFile] = useState(false);
   const [newFileName, setNewFileName] = useState('');
 
+  const queryClient = useQueryClient();
   const { data, error, isLoading } = useResourceList(root, path);
   const mutations = useResourceMutations(root, path);
   const saveMutation = useSaveFile(root);
-  const { setViewedFile } = useFileView();
+  const { viewedFile, setViewedFile } = useFileView();
+
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [dragOverFolder, setDragOverFolder] = useState<string | null>(null);
+  const dragCounterRef = useRef(0);
+
+  const handleFileDrop = useCallback(
+    async (targetPath: string, files: FileList) => {
+      for (const file of Array.from(files)) {
+        await uploadFile(root, targetPath, file);
+      }
+      queryClient.invalidateQueries({ queryKey: ['resources', 'list', root, targetPath] });
+      if (targetPath !== path) {
+        queryClient.invalidateQueries({ queryKey: ['resources', 'list', root, path] });
+      }
+    },
+    [root, path, queryClient]
+  );
 
   const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -169,7 +224,8 @@ export function FileBrowser({
     return null;
   }
 
-  const entries = data.entries;
+  const hasCache = data.entries.some((e) => e.name === '.cache' && e.isDir);
+  const entries = data.entries.filter((e) => !(e.name === '.cache' && e.isDir));
   const pathParts = path === '.' || path === '' ? [] : path.split('/').filter(Boolean);
 
   return (
@@ -226,6 +282,43 @@ export function FileBrowser({
             </div>
           )}
           <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto">
+          <div className="flex items-center rounded-md border border-border p-0.5" role="group" aria-label="View mode">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+                  size="sm"
+                  className="h-7 px-2"
+                  onClick={() => {
+                    setViewMode('list');
+                    saveViewMode('list');
+                  }}
+                  aria-pressed={viewMode === 'list'}
+                >
+                  <List className="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>List view</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={viewMode === 'gallery' ? 'secondary' : 'ghost'}
+                  size="sm"
+                  className="h-7 px-2"
+                  onClick={() => {
+                    setViewMode('gallery');
+                    saveViewMode('gallery');
+                  }}
+                  aria-pressed={viewMode === 'gallery'}
+                >
+                  <LayoutGrid className="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Gallery view</TooltipContent>
+            </Tooltip>
+          </div>
+          <Separator orientation="vertical" className="h-6" />
           <input
             ref={fileInputRef}
             type="file"
@@ -320,94 +413,217 @@ export function FileBrowser({
         </div>
       </TooltipProvider>
 
-      {/* Table */}
-      <div className="rounded-lg border border-border bg-card overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border bg-muted/30">
-              <th className="px-4 py-3 text-left font-medium">Name</th>
-              <th className="hidden px-4 py-3 text-left font-medium sm:table-cell">Type</th>
-              <th className="hidden px-4 py-3 text-right font-medium md:table-cell">Size</th>
-              <th className="hidden px-4 py-3 text-left font-medium sm:table-cell">Modified</th>
-              <th className="w-28 px-2 py-3" />
-            </tr>
-          </thead>
-          <tbody>
-            {entries.map((entry) => (
-              <tr
-                key={entry.path}
-                className={cn(
-                  'border-b border-border/50 last:border-0 hover:bg-accent/30',
-                  (entry.isDir || getViewableType(entry.name)) && 'cursor-pointer'
-                )}
-                onClick={() => {
-                  if (entry.isDir) {
-                    onNavigate(entry.path);
-                  } else {
-                    handleFileClick(entry);
-                  }
-                }}
-              >
-                <td className="px-4 py-2">
-                  <div className="flex items-center gap-2">
-                    {entry.isDir ? (
-                      <Folder className="size-4 text-primary shrink-0" />
-                    ) : (
-                      <File className="size-4 text-muted-foreground shrink-0" />
-                    )}
-                    <span className="min-w-0 truncate">{entry.name}</span>
-                  </div>
-                </td>
-                <td className="hidden px-4 py-2 text-muted-foreground sm:table-cell">
-                  {entry.isDir ? 'Folder' : 'File'}
-                </td>
-                <td className="hidden px-4 py-2 text-right text-muted-foreground tabular-nums md:table-cell">
-                  {entry.isDir ? '—' : formatSize(entry.size ?? 0)}
-                </td>
-                <td className="hidden px-4 py-2 text-muted-foreground sm:table-cell">
-                  {entry.mtime != null ? formatMtime(entry.mtime) : '—'}
-                </td>
-                <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
-                  <div className="flex items-center justify-end gap-1 whitespace-nowrap">
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    onClick={() => openRenameDialog(entry)}
-                    aria-label={`Rename ${entry.name}`}
-                  >
-                    <Pencil className="size-3" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    onClick={() => setDeleteTarget({ path: entry.path, name: entry.name })}
-                    aria-label={`Delete ${entry.name}`}
-                    className="text-destructive hover:text-destructive"
-                  >
-                    <Trash2 className="size-3" />
-                  </Button>
-                  {!entry.isDir && (
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      onClick={() => triggerDownload(root, entry.path)}
-                      aria-label={`Download ${entry.name}`}
-                    >
-                      <Download className="size-3" />
-                    </Button>
-                  )}
-                  </div>
-                </td>
+      {/* Content: List or Gallery */}
+      {viewMode === 'list' ? (
+        <div
+          className={cn(
+            'rounded-lg border bg-card overflow-hidden transition-colors',
+            isDragOver && !dragOverFolder
+              ? 'border-primary bg-primary/5 ring-2 ring-primary/30'
+              : 'border-border'
+          )}
+          onDragEnter={(e) => {
+            e.preventDefault();
+            dragCounterRef.current++;
+            if (dragCounterRef.current === 1) setIsDragOver(true);
+          }}
+          onDragOver={(e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'copy';
+          }}
+          onDragLeave={(e) => {
+            e.preventDefault();
+            dragCounterRef.current--;
+            if (dragCounterRef.current === 0) {
+              setIsDragOver(false);
+              setDragOverFolder(null);
+            }
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            dragCounterRef.current = 0;
+            setIsDragOver(false);
+            setDragOverFolder(null);
+            const files = e.dataTransfer.files;
+            if (files.length > 0) handleFileDrop(path, files);
+          }}
+        >
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border bg-muted/30">
+                <th className="px-4 py-3 text-left font-medium">Name</th>
+                <th className="hidden px-4 py-3 text-left font-medium sm:table-cell">Type</th>
+                <th className="hidden px-4 py-3 text-right font-medium md:table-cell">Size</th>
+                <th className="hidden px-4 py-3 text-left font-medium sm:table-cell">Modified</th>
+                <th className="w-28 px-2 py-3" />
               </tr>
-            ))}
-          </tbody>
-        </table>
-        {entries.length === 0 && (
-          <div className="px-4 py-8 text-center text-muted-foreground">
-            This folder is empty.
-          </div>
-        )}
-      </div>
+            </thead>
+            <tbody>
+              {entries.map((entry) => {
+                const isActive =
+                  viewedFile != null &&
+                  viewedFile.root === root &&
+                  viewedFile.path === entry.path;
+                return (
+                <tr
+                  key={entry.path}
+                  className={cn(
+                    'border-b border-border/50 last:border-0 hover:bg-accent/30',
+                    isActive && 'bg-primary/10 ring-2 ring-inset ring-primary/30',
+                    (entry.isDir || getViewableType(entry.name)) && 'cursor-pointer',
+                    entry.isDir && dragOverFolder === entry.path && 'bg-primary/20 ring-2 ring-inset ring-primary/50'
+                  )}
+                  onClick={() => {
+                    if (entry.isDir) {
+                      onNavigate(entry.path);
+                    } else {
+                      handleFileClick(entry);
+                    }
+                  }}
+                  {...(entry.isDir
+                    ? {
+                        onDragEnter: (e: React.DragEvent) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setDragOverFolder(entry.path);
+                        },
+                        onDragOver: (e: React.DragEvent) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          e.dataTransfer.dropEffect = 'copy';
+                        },
+                        onDragLeave: (e: React.DragEvent) => {
+                          e.preventDefault();
+                          if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                            setDragOverFolder(null);
+                          }
+                        },
+                        onDrop: (e: React.DragEvent) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          dragCounterRef.current = 0;
+                          setIsDragOver(false);
+                          setDragOverFolder(null);
+                          const files = e.dataTransfer.files;
+                          if (files.length > 0) handleFileDrop(entry.path, files);
+                        },
+                      }
+                    : {})}
+                >
+                  <td className="px-4 py-2">
+                    <div className="flex items-center gap-2">
+                      {entry.isDir ? (
+                        <Folder className="size-4 text-primary shrink-0" />
+                      ) : (
+                        <File className="size-4 text-muted-foreground shrink-0" />
+                      )}
+                      <span className="min-w-0 truncate">{entry.name}</span>
+                    </div>
+                  </td>
+                  <td className="hidden px-4 py-2 text-muted-foreground sm:table-cell">
+                    {entry.isDir ? 'Folder' : 'File'}
+                  </td>
+                  <td className="hidden px-4 py-2 text-right text-muted-foreground tabular-nums md:table-cell">
+                    {entry.isDir ? '—' : formatSize(entry.size ?? 0)}
+                  </td>
+                  <td className="hidden px-4 py-2 text-muted-foreground sm:table-cell">
+                    {entry.mtime != null ? formatMtime(entry.mtime) : '—'}
+                  </td>
+                  <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center justify-end gap-1 whitespace-nowrap">
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        onClick={() => openRenameDialog(entry)}
+                        aria-label={`Rename ${entry.name}`}
+                      >
+                        <Pencil className="size-3" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        onClick={() => setDeleteTarget({ path: entry.path, name: entry.name })}
+                        aria-label={`Delete ${entry.name}`}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="size-3" />
+                      </Button>
+                      {!entry.isDir && (
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          onClick={() => triggerDownload(root, entry.path)}
+                          aria-label={`Download ${entry.name}`}
+                        >
+                          <Download className="size-3" />
+                        </Button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+              })}
+            </tbody>
+          </table>
+          {entries.length === 0 && (
+            <div className="px-4 py-8 text-center text-muted-foreground">
+              {isDragOver ? 'Drop files here to upload' : 'This folder is empty.'}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div
+          className={cn(
+            'rounded-lg border bg-card p-4 transition-colors',
+            isDragOver && !dragOverFolder
+              ? 'border-primary bg-primary/5 ring-2 ring-primary/30'
+              : 'border-border'
+          )}
+          onDragEnter={(e) => {
+            e.preventDefault();
+            dragCounterRef.current++;
+            if (dragCounterRef.current === 1) setIsDragOver(true);
+          }}
+          onDragOver={(e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'copy';
+          }}
+          onDragLeave={(e) => {
+            e.preventDefault();
+            dragCounterRef.current--;
+            if (dragCounterRef.current === 0) {
+              setIsDragOver(false);
+              setDragOverFolder(null);
+            }
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            dragCounterRef.current = 0;
+            setIsDragOver(false);
+            setDragOverFolder(null);
+            const files = e.dataTransfer.files;
+            if (files.length > 0) handleFileDrop(path, files);
+          }}
+        >
+          {entries.length === 0 ? (
+            <div className="py-8 text-center text-muted-foreground">
+              {isDragOver ? 'Drop files here to upload' : 'This folder is empty.'}
+            </div>
+          ) : (
+            <GalleryGrid
+              entries={entries}
+              root={root}
+              onNavigate={onNavigate}
+              onFileClick={handleFileClick}
+              onRename={openRenameDialog}
+              onDelete={(e) => setDeleteTarget({ path: e.path, name: e.name })}
+              onDownload={(p) => triggerDownload(root, p)}
+              hasCache={hasCache}
+              onFolderDrop={handleFileDrop}
+            />
+          )}
+        </div>
+      )}
 
       {/* Delete confirmation */}
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>

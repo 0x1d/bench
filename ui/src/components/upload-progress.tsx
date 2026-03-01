@@ -13,25 +13,20 @@ function formatBytes(bytes: number): string {
 export function UploadProgress() {
   const { uploads, clearCompleted } = useUpload();
   const [collapsed, setCollapsed] = useState(false);
-  const [visible, setVisible] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
 
   const active = uploads.filter((u) => u.status === 'uploading');
   const done = uploads.filter((u) => u.status === 'done');
   const failed = uploads.filter((u) => u.status === 'error');
   const hasItems = uploads.length > 0;
-
-  useEffect(() => {
-    if (active.length > 0) {
-      setVisible(true);
-      setCollapsed(false);
-    }
-  }, [active.length]);
+  const visible = hasItems && (!dismissed || active.length > 0);
+  const effectiveCollapsed = active.length > 0 ? false : collapsed;
 
   // Auto-hide after all uploads complete
   useEffect(() => {
     if (hasItems && active.length === 0) {
       const t = setTimeout(() => {
-        setVisible(false);
+        setDismissed(true);
         clearCompleted();
       }, 4000);
       return () => clearTimeout(t);
@@ -62,7 +57,7 @@ export function UploadProgress() {
         {active.length > 0 && (
           <span className="text-xs tabular-nums text-muted-foreground">{overallPct}%</span>
         )}
-        {collapsed ? (
+        {effectiveCollapsed ? (
           <ChevronDown className="size-4 text-muted-foreground" />
         ) : (
           <ChevronUp className="size-4 text-muted-foreground" />
@@ -72,7 +67,7 @@ export function UploadProgress() {
           size="icon-xs"
           onClick={(e) => {
             e.stopPropagation();
-            setVisible(false);
+            setDismissed(true);
             clearCompleted();
           }}
           aria-label="Dismiss"
@@ -92,7 +87,7 @@ export function UploadProgress() {
       )}
 
       {/* File list */}
-      {!collapsed && (
+      {!effectiveCollapsed && (
         <div className="max-h-48 overflow-y-auto">
           {uploads.map((u) => (
             <div

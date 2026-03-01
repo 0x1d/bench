@@ -87,17 +87,15 @@ export function GalleryGridItem({
     hasCache
   );
 
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!data || data.type === 'text') {
-      setPreviewUrl(null);
-      return;
-    }
-    const url = URL.createObjectURL(data.data as Blob);
-    setPreviewUrl(url);
-    return () => URL.revokeObjectURL(url);
+  const previewUrl = useMemo(() => {
+    if (!data || data.type === 'text') return null;
+    return URL.createObjectURL(data.data as Blob);
   }, [data]);
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
 
   // Folder thumbnail: fetch folder contents and pick an image to use as cover
   const { data: folderData } = useResourceList(
@@ -114,7 +112,7 @@ export function GalleryGridItem({
       (e) => e.name === '.cache' && e.isDir
     );
     return { file: images[stableIndex(entry.path, images.length)], folderHasCache };
-  }, [entry.isDir, entry.path, folderData?.entries]);
+  }, [entry.isDir, entry.path, folderData]);
 
   const folderThumbType = folderThumbPick ? 'image' as const : null;
   const { data: folderThumbData } = useFilePreview(
@@ -125,16 +123,15 @@ export function GalleryGridItem({
     folderThumbPick?.folderHasCache ?? false
   );
 
-  const [folderThumbUrl, setFolderThumbUrl] = useState<string | null>(null);
-  useEffect(() => {
-    if (!folderThumbData || folderThumbData.type === 'text') {
-      setFolderThumbUrl(null);
-      return;
-    }
-    const url = URL.createObjectURL(folderThumbData.data as Blob);
-    setFolderThumbUrl(url);
-    return () => URL.revokeObjectURL(url);
+  const folderThumbUrl = useMemo(() => {
+    if (!folderThumbData || folderThumbData.type === 'text') return null;
+    return URL.createObjectURL(folderThumbData.data as Blob);
   }, [folderThumbData]);
+  useEffect(() => {
+    return () => {
+      if (folderThumbUrl) URL.revokeObjectURL(folderThumbUrl);
+    };
+  }, [folderThumbUrl]);
 
   const [videoThumbUrls, setVideoThumbUrls] = useState<string[]>([]);
   const [videoCycleIndex, setVideoCycleIndex] = useState(0);

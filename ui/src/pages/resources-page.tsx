@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRoots } from '@/hooks/use-resources';
 import { useFileBrowserHistory } from '@/hooks/use-file-browser-history';
 import { FileBrowser } from '@/components/file-browser';
@@ -47,20 +47,11 @@ function savePersistedState(paths: Record<string, string>, lastRoot: string | nu
 
 export function ResourcesPage() {
   const { data: rootsData, error: rootsError, isLoading: rootsLoading } = useRoots();
-  const [selectedRoot, setSelectedRoot] = useState<string | null>(null);
-  const [path, setPath] = useState('.');
+  const initialPersisted = useMemo(() => loadPersistedState(), []);
+  const [selectedRoot, setSelectedRoot] = useState<string | null>(initialPersisted.lastRoot);
+  const [path, setPath] = useState(initialPersisted.lastRoot ? (initialPersisted.paths[initialPersisted.lastRoot] ?? '.') : '.');
 
   const roots = rootsData?.roots ?? [];
-  const persistedRestoredRef = useRef(false);
-  useEffect(() => {
-    if (persistedRestoredRef.current || rootsLoading || roots.length === 0) return;
-    persistedRestoredRef.current = true;
-    const { paths, lastRoot } = loadPersistedState();
-    if (lastRoot && roots.some((r) => r.id === lastRoot)) {
-      setSelectedRoot(lastRoot);
-      setPath(paths[lastRoot] ?? '.');
-    }
-  }, [rootsLoading, roots]);
   const displayRoot =
     roots.length > 0
       ? roots.some((r) => r.id === selectedRoot)

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import yaml from 'js-yaml';
-import { Pencil, Plus, Save, Trash2, X } from 'lucide-react';
+import { Pencil, Plus, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -33,24 +33,46 @@ interface DatabaseResource {
   default: boolean;
 }
 
+interface RestAuthConfig {
+  type: 'none' | 'basic' | 'bearer' | 'apiKey';
+  username?: string;
+  password?: string;
+  token?: string;
+  name?: string;
+  in?: string;
+  value?: string;
+}
+
+interface RestResource {
+  id: string;
+  label: string;
+  baseUrl: string;
+  openapiSpec: string;
+  auth?: RestAuthConfig;
+}
+
 interface ResourceFormState {
   filesystem: FilesystemResource[];
   databases: DatabaseResource[];
+  rest: RestResource[];
 }
 
 type PanelMode =
   | 'add-filesystem'
   | 'edit-filesystem'
   | 'add-database'
-  | 'edit-database';
+  | 'edit-database'
+  | 'add-rest'
+  | 'edit-rest';
 
 type DeleteTarget =
   | { type: 'filesystem'; index: number }
   | { type: 'database'; index: number }
+  | { type: 'rest'; index: number }
   | null;
 
 function emptyState(): ResourceFormState {
-  return { filesystem: [], databases: [] };
+  return { filesystem: [], databases: [], rest: [] };
 }
 
 function parseConfigToState(rawConfig: string): ResourceFormState {
@@ -63,6 +85,21 @@ function parseConfigToState(rawConfig: string): ResourceFormState {
         url?: string;
         enabled?: boolean;
         default?: boolean;
+      }>;
+      rest?: Array<{
+        id?: string;
+        label?: string;
+        baseUrl?: string;
+        openapiSpec?: string;
+        auth?: {
+          type?: string;
+          username?: string;
+          password?: string;
+          token?: string;
+          name?: string;
+          in?: string;
+          value?: string;
+        };
       }>;
     };
   }) ?? { resources: {} };
@@ -81,7 +118,25 @@ function parseConfigToState(rawConfig: string): ResourceFormState {
     default: entry.default ?? false,
   }));
 
-  return { filesystem, databases };
+  const rest = (parsed.resources?.rest ?? []).map((entry) => ({
+    id: entry.id ?? '',
+    label: entry.label ?? '',
+    baseUrl: entry.baseUrl ?? '',
+    openapiSpec: entry.openapiSpec ?? '',
+    auth: entry.auth
+      ? {
+          type: (entry.auth.type ?? 'none') as RestAuthConfig['type'],
+          username: entry.auth.username ?? '',
+          password: entry.auth.password ?? '',
+          token: entry.auth.token ?? '',
+          name: entry.auth.name ?? '',
+          in: entry.auth.in ?? 'header',
+          value: entry.auth.value ?? '',
+        }
+      : { type: 'none' as const },
+  }));
+
+  return { filesystem, databases, rest };
 }
 
 function stateToConfig(state: ResourceFormState): string {
@@ -102,6 +157,33 @@ function stateToConfig(state: ResourceFormState): string {
         enabled: entry.enabled,
         default: entry.default || undefined,
       })),
+    rest: state.rest
+      .filter((entry) => entry.id.trim() !== '' || entry.baseUrl.trim() !== '')
+      .map((entry) => {
+        const base: Record<string, unknown> = {
+          id: entry.id.trim(),
+          label: entry.label.trim() || undefined,
+          baseUrl: entry.baseUrl.trim(),
+          openapiSpec: entry.openapiSpec.trim() || undefined,
+        };
+        const auth = entry.auth;
+        if (auth && auth.type !== 'none') {
+          base.auth = {
+            type: auth.type,
+            ...(auth.type === 'basic' && {
+              username: auth.username?.trim(),
+              password: auth.password?.trim(),
+            }),
+            ...(auth.type === 'bearer' && { token: auth.token?.trim() }),
+            ...(auth.type === 'apiKey' && {
+              name: auth.name?.trim(),
+              in: auth.in || 'header',
+              value: auth.value?.trim(),
+            }),
+          };
+        }
+        return base;
+      }),
   };
 
   return yaml.dump({ resources }, { noRefs: true, lineWidth: 120 });
@@ -111,9 +193,7 @@ export function ResourcesConfigPage() {
   const { refetch: refetchStatus } = useStatus();
   const [state, setState] = useState<ResourceFormState>(emptyState);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [panelMode, setPanelMode] = useState<PanelMode | null>(null);
   const [panelIndex, setPanelIndex] = useState<number | null>(null);
   const [panelError, setPanelError] = useState<string | null>(null);
@@ -130,21 +210,19 @@ export function ResourcesConfigPage() {
     enabled: true,
     default: false,
   });
+  const [restDraft, setRestDraft] = useState<RestResource>({
+    id: '',
+    label: '',
+    baseUrl: '',
+    openapiSpec: '',
+    auth: { type: 'none' },
+  });
 
-  const handleSave = async () => {
-    setSaving(true);
+  const persistState = async (newState: ResourceFormState) => {
     setError(null);
-    setSaveMessage(null);
-    try {
-      const nextConfig = stateToConfig(state);
-      await saveConfig(nextConfig);
-      await refetchStatus();
-      setSaveMessage('Resources saved to config.yaml');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Save failed');
-    } finally {
-      setSaving(false);
-    }
+    const nextConfig = stateToConfig(newState);
+    await saveConfig(nextConfig);
+    await refetchStatus();
   };
 
   useEffect(() => {
@@ -219,13 +297,37 @@ export function ResourcesConfigPage() {
     setDeleteTarget({ type: 'database', index });
   };
 
+  const openAddRest = () => {
+    setRestDraft({
+      id: '',
+      label: '',
+      baseUrl: '',
+      openapiSpec: '',
+      auth: { type: 'none' },
+    });
+    setPanelIndex(null);
+    setPanelError(null);
+    setPanelMode('add-rest');
+  };
+
+  const openEditRest = (index: number) => {
+    setRestDraft(state.rest[index]);
+    setPanelIndex(index);
+    setPanelError(null);
+    setPanelMode('edit-rest');
+  };
+
+  const openRemoveRest = (index: number) => {
+    setDeleteTarget({ type: 'rest', index });
+  };
+
   const closePanel = () => {
     setPanelMode(null);
     setPanelIndex(null);
     setPanelError(null);
   };
 
-  const applyFilesystemDraft = () => {
+  const applyFilesystemDraft = async () => {
     const id = filesystemDraft.id.trim();
     const path = filesystemDraft.path.trim();
     if (id === '' || path === '') {
@@ -247,20 +349,32 @@ export function ResourcesConfigPage() {
       path,
     };
 
-    if (panelMode === 'add-filesystem') {
-      setState((prev) => ({ ...prev, filesystem: [...prev.filesystem, nextEntry] }));
-    } else if (panelMode === 'edit-filesystem' && panelIndex != null) {
-      setState((prev) => ({
-        ...prev,
-        filesystem: prev.filesystem.map((entry, idx) =>
-          idx === panelIndex ? nextEntry : entry
-        ),
-      }));
+    const prevState = state;
+    const nextState =
+      panelMode === 'add-filesystem'
+        ? { ...prevState, filesystem: [...prevState.filesystem, nextEntry] }
+        : panelMode === 'edit-filesystem' && panelIndex != null
+          ? {
+              ...prevState,
+              filesystem: prevState.filesystem.map((entry, idx) =>
+                idx === panelIndex ? nextEntry : entry
+              ),
+            }
+          : prevState;
+
+    if (nextState === prevState) return;
+
+    setState(nextState);
+    try {
+      await persistState(nextState);
+      closePanel();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Save failed');
+      setState(prevState);
     }
-    closePanel();
   };
 
-  const applyDatabaseDraft = () => {
+  const applyDatabaseDraft = async () => {
     const id = databaseDraft.id.trim();
     const url = databaseDraft.url.trim();
     if (id === '' || url === '') {
@@ -295,39 +409,126 @@ export function ResourcesConfigPage() {
       );
     };
 
-    if (panelMode === 'add-database') {
-      setState((prev) => {
-        const normalized = applyWithDefaultRule(prev.databases);
-        return { ...prev, databases: [...normalized, nextEntry] };
-      });
-    } else if (panelMode === 'edit-database' && panelIndex != null) {
-      setState((prev) => {
-        const normalized = applyWithDefaultRule(prev.databases);
-        return {
-          ...prev,
-          databases: normalized.map((entry, idx) =>
-            idx === panelIndex ? nextEntry : entry
-          ),
-        };
-      });
+    const prevState = state;
+    const normalized =
+      panelMode === 'add-database'
+        ? applyWithDefaultRule(prevState.databases)
+        : applyWithDefaultRule(
+            prevState.databases.map((entry, idx) =>
+              panelMode === 'edit-database' && panelIndex != null && idx === panelIndex
+                ? nextEntry
+                : entry
+            )
+          );
+    const nextState =
+      panelMode === 'add-database'
+        ? { ...prevState, databases: [...normalized, nextEntry] }
+        : panelMode === 'edit-database' && panelIndex != null
+          ? { ...prevState, databases: normalized }
+          : prevState;
+
+    if (nextState === prevState) return;
+
+    setState(nextState);
+    try {
+      await persistState(nextState);
+      closePanel();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Save failed');
+      setState(prevState);
     }
-    closePanel();
   };
 
-  const confirmRemove = () => {
-    if (!deleteTarget) return;
-    if (deleteTarget.type === 'filesystem') {
-      setState((prev) => ({
-        ...prev,
-        filesystem: prev.filesystem.filter((_, idx) => idx !== deleteTarget.index),
-      }));
-    } else {
-      setState((prev) => ({
-        ...prev,
-        databases: prev.databases.filter((_, idx) => idx !== deleteTarget.index),
-      }));
+  const applyRestDraft = async () => {
+    const id = restDraft.id.trim();
+    const baseUrl = restDraft.baseUrl.trim();
+    if (id === '' || baseUrl === '') {
+      setPanelError('REST ID and base URL are required.');
+      return;
     }
+
+    const duplicate = state.rest.some(
+      (entry, idx) => idx !== panelIndex && entry.id.trim() === id
+    );
+    if (duplicate) {
+      setPanelError(`REST ID "${id}" already exists.`);
+      return;
+    }
+
+    const auth = restDraft.auth;
+    if (auth?.type === 'basic' && (!auth.username?.trim() || !auth.password?.trim())) {
+      setPanelError('Username and password are required for basic auth.');
+      return;
+    }
+    if (auth?.type === 'bearer' && !auth.token?.trim()) {
+      setPanelError('Token is required for bearer auth.');
+      return;
+    }
+    if (auth?.type === 'apiKey' && (!auth.name?.trim() || !auth.value?.trim())) {
+      setPanelError('Name and value are required for API key auth.');
+      return;
+    }
+
+    const nextEntry: RestResource = {
+      id,
+      label: restDraft.label.trim(),
+      baseUrl,
+      openapiSpec: restDraft.openapiSpec.trim(),
+      auth: auth && auth.type !== 'none' ? auth : undefined,
+    };
+
+    const prevState = state;
+    const nextState =
+      panelMode === 'add-rest'
+        ? { ...prevState, rest: [...prevState.rest, nextEntry] }
+        : panelMode === 'edit-rest' && panelIndex != null
+          ? {
+              ...prevState,
+              rest: prevState.rest.map((entry, idx) =>
+                idx === panelIndex ? nextEntry : entry
+              ),
+            }
+          : prevState;
+
+    if (nextState === prevState) return;
+
+    setState(nextState);
+    try {
+      await persistState(nextState);
+      closePanel();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Save failed');
+      setState(prevState);
+    }
+  };
+
+  const confirmRemove = async () => {
+    if (!deleteTarget) return;
+    const prevState = state;
+    const nextState =
+      deleteTarget.type === 'filesystem'
+        ? {
+            ...prevState,
+            filesystem: prevState.filesystem.filter((_, idx) => idx !== deleteTarget.index),
+          }
+        : deleteTarget.type === 'database'
+          ? {
+              ...prevState,
+              databases: prevState.databases.filter((_, idx) => idx !== deleteTarget.index),
+            }
+          : {
+              ...prevState,
+              rest: prevState.rest.filter((_, idx) => idx !== deleteTarget.index),
+            };
+
+    setState(nextState);
     setDeleteTarget(null);
+    try {
+      await persistState(nextState);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Save failed');
+      setState(prevState);
+    }
   };
 
   const panelOpen = panelMode != null;
@@ -340,12 +541,18 @@ export function ResourcesConfigPage() {
             ? 'Add database resource'
             : panelMode === 'edit-database'
               ? 'Edit database resource'
-              : 'Resource';
+              : panelMode === 'add-rest'
+                ? 'Add REST resource'
+                : panelMode === 'edit-rest'
+                  ? 'Edit REST resource'
+                  : 'Resource';
   const panelDescription = panelMode?.includes('filesystem')
     ? 'Configure filesystem resource fields used for file browsing.'
     : panelMode?.includes('database')
       ? 'Configure database resource fields.'
-      : '';
+      : panelMode?.includes('rest')
+        ? 'Configure REST API endpoint with optional auth and OpenAPI spec.'
+        : '';
 
   const panelBody = (
     <>
@@ -395,6 +602,179 @@ export function ResourcesConfigPage() {
                 className="font-mono"
               />
             </div>
+          </div>
+        )}
+
+        {(panelMode === 'add-rest' || panelMode === 'edit-rest') && (
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label>ID</Label>
+              <Input
+                value={restDraft.id}
+                onChange={(e) =>
+                  setRestDraft((prev) => ({ ...prev, id: e.target.value }))
+                }
+                placeholder="petstore"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>Label</Label>
+              <Input
+                value={restDraft.label}
+                onChange={(e) =>
+                  setRestDraft((prev) => ({ ...prev, label: e.target.value }))
+                }
+                placeholder="Petstore API"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>Base URL</Label>
+              <Input
+                value={restDraft.baseUrl}
+                onChange={(e) =>
+                  setRestDraft((prev) => ({ ...prev, baseUrl: e.target.value }))
+                }
+                placeholder="https://api.example.com"
+                className="font-mono"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>OpenAPI spec path</Label>
+              <Input
+                value={restDraft.openapiSpec}
+                onChange={(e) =>
+                  setRestDraft((prev) => ({ ...prev, openapiSpec: e.target.value }))
+                }
+                placeholder="specs/api.json"
+                className="font-mono"
+              />
+              <p className="text-xs text-muted-foreground">
+                Path relative to config directory.
+              </p>
+            </div>
+            <div className="space-y-1">
+              <Label>Auth type</Label>
+              <select
+                value={restDraft.auth?.type ?? 'none'}
+                onChange={(e) =>
+                  setRestDraft((prev) => ({
+                    ...prev,
+                    auth: {
+                      ...prev.auth,
+                      type: e.target.value as RestAuthConfig['type'],
+                    },
+                  }))
+                }
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+              >
+                <option value="none">None</option>
+                <option value="basic">Basic</option>
+                <option value="bearer">Bearer</option>
+                <option value="apiKey">API Key</option>
+              </select>
+            </div>
+            {restDraft.auth?.type === 'basic' && (
+              <>
+                <div className="space-y-1">
+                  <Label>Username</Label>
+                  <Input
+                    value={restDraft.auth.username ?? ''}
+                    onChange={(e) =>
+                      setRestDraft((prev) => ({
+                        ...prev,
+                        auth: { ...prev.auth!, username: e.target.value },
+                      }))
+                    }
+                    placeholder={'${BENCH_REST_USER}'}
+                    className="font-mono"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Password</Label>
+                  <Input
+                    type="password"
+                    value={restDraft.auth.password ?? ''}
+                    onChange={(e) =>
+                      setRestDraft((prev) => ({
+                        ...prev,
+                        auth: { ...prev.auth!, password: e.target.value },
+                      }))
+                    }
+                    placeholder={'${BENCH_REST_PASS}'}
+                    className="font-mono"
+                  />
+                </div>
+              </>
+            )}
+            {restDraft.auth?.type === 'bearer' && (
+              <div className="space-y-1">
+                <Label>Token</Label>
+                <Input
+                  type="password"
+                  value={restDraft.auth.token ?? ''}
+                  onChange={(e) =>
+                    setRestDraft((prev) => ({
+                      ...prev,
+                      auth: { ...prev.auth!, token: e.target.value },
+                    }))
+                  }
+                  placeholder={'${BENCH_REST_TOKEN}'}
+                  className="font-mono"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Use env placeholders for secrets.
+                </p>
+              </div>
+            )}
+            {restDraft.auth?.type === 'apiKey' && (
+              <>
+                <div className="space-y-1">
+                  <Label>Header/param name</Label>
+                  <Input
+                    value={restDraft.auth.name ?? ''}
+                    onChange={(e) =>
+                      setRestDraft((prev) => ({
+                        ...prev,
+                        auth: { ...prev.auth!, name: e.target.value },
+                      }))
+                    }
+                    placeholder="X-API-Key"
+                    className="font-mono"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Location</Label>
+                  <select
+                    value={restDraft.auth.in ?? 'header'}
+                    onChange={(e) =>
+                      setRestDraft((prev) => ({
+                        ...prev,
+                        auth: { ...prev.auth!, in: e.target.value },
+                      }))
+                    }
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+                  >
+                    <option value="header">Header</option>
+                    <option value="query">Query</option>
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <Label>Value</Label>
+                  <Input
+                    type="password"
+                    value={restDraft.auth.value ?? ''}
+                    onChange={(e) =>
+                      setRestDraft((prev) => ({
+                        ...prev,
+                        auth: { ...prev.auth!, value: e.target.value },
+                      }))
+                    }
+                    placeholder={'${BENCH_REST_API_KEY}'}
+                    className="font-mono"
+                  />
+                </div>
+              </>
+            )}
           </div>
         )}
 
@@ -474,6 +854,11 @@ export function ResourcesConfigPage() {
               {panelMode === 'add-database' ? 'Add' : 'Save changes'}
             </Button>
           )}
+          {(panelMode === 'add-rest' || panelMode === 'edit-rest') && (
+            <Button onClick={applyRestDraft}>
+              {panelMode === 'add-rest' ? 'Add' : 'Save changes'}
+            </Button>
+          )}
         </div>
       </div>
     </>
@@ -495,7 +880,7 @@ export function ResourcesConfigPage() {
           <div className="rounded-lg border border-border bg-card p-4">
             <h2 className="text-lg font-medium tracking-tight">Resources</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Configure filesystem roots and database resources.
+              Configure filesystem roots, database resources, and REST API endpoints.
             </p>
           </div>
 
@@ -623,15 +1008,69 @@ export function ResourcesConfigPage() {
             )}
           </section>
 
-          {error && <p className="text-sm text-destructive">{error}</p>}
-          {saveMessage && <p className="text-sm text-emerald-600">{saveMessage}</p>}
+          <section className="rounded-lg border border-border bg-card p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-base font-medium">REST resources</h3>
+              <Button variant="outline" size="sm" onClick={openAddRest}>
+                <Plus className="size-4" />
+                Add REST
+              </Button>
+            </div>
+            {state.rest.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No REST resources configured.</p>
+            ) : (
+              <div className="overflow-x-auto rounded-lg border border-border bg-card">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/30">
+                      <th className="px-4 py-3 text-left font-medium">ID</th>
+                      <th className="px-4 py-3 text-left font-medium">Label</th>
+                      <th className="px-4 py-3 text-left font-medium">Base URL</th>
+                      <th className="px-4 py-3 text-left font-medium">OpenAPI spec</th>
+                      <th className="w-28 px-2 py-3" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {state.rest.map((entry, index) => (
+                      <tr
+                        key={`rest-${index}`}
+                        className="border-b border-border/50 last:border-b-0 cursor-pointer hover:bg-accent/30"
+                        onClick={() => openEditRest(index)}
+                      >
+                        <td className="px-4 py-2 font-mono">{entry.id}</td>
+                        <td className="px-4 py-2">{entry.label || '—'}</td>
+                        <td className="px-4 py-2 font-mono truncate max-w-[200px]">{entry.baseUrl}</td>
+                        <td className="px-4 py-2 font-mono">{entry.openapiSpec || '—'}</td>
+                        <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon-xs"
+                              onClick={() => openEditRest(index)}
+                              aria-label={`Edit REST ${entry.id}`}
+                            >
+                              <Pencil className="size-3" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon-xs"
+                              onClick={() => openRemoveRest(index)}
+                              aria-label={`Remove REST ${entry.id}`}
+                              className="text-destructive hover:text-destructive"
+                            >
+                              <Trash2 className="size-3" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
 
-          <div className="flex">
-            <Button onClick={handleSave} disabled={saving} className="gap-2">
-              <Save className="size-4" />
-              {saving ? 'Saving...' : 'Save resources config'}
-            </Button>
-          </div>
+          {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
       </div>
 
@@ -661,7 +1100,9 @@ export function ResourcesConfigPage() {
                 ? `Remove filesystem resource "${state.filesystem[deleteTarget.index]?.id}"?`
                 : deleteTarget?.type === 'database'
                   ? `Remove database resource "${state.databases[deleteTarget.index]?.id}"?`
-                  : 'Remove selected resource?'}
+                  : deleteTarget?.type === 'rest'
+                    ? `Remove REST resource "${state.rest[deleteTarget.index]?.id}"?`
+                    : 'Remove selected resource?'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

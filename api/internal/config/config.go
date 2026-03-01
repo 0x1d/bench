@@ -34,6 +34,36 @@ type DatabaseEntry struct {
 	Default bool   `yaml:"default,omitempty"`
 }
 
+// RestAuthType is the authentication type for a REST resource.
+type RestAuthType string
+
+const (
+	RestAuthNone   RestAuthType = "none"
+	RestAuthBasic  RestAuthType = "basic"
+	RestAuthBearer RestAuthType = "bearer"
+	RestAuthAPIKey RestAuthType = "apiKey"
+)
+
+// RestAuth represents authentication config for a REST resource.
+type RestAuth struct {
+	Type     RestAuthType `yaml:"type"`
+	Username string       `yaml:"username,omitempty"`
+	Password string       `yaml:"password,omitempty"`
+	Token    string       `yaml:"token,omitempty"`
+	Name     string       `yaml:"name,omitempty"`     // Header/query param name for apiKey
+	In       string       `yaml:"in,omitempty"`      // "header" or "query" for apiKey
+	Value    string       `yaml:"value,omitempty"`    // Env placeholder for apiKey
+}
+
+// RestEntry represents one configured REST resource.
+type RestEntry struct {
+	ID          string    `yaml:"id"`
+	Label       string    `yaml:"label"`
+	BaseURL     string    `yaml:"baseUrl"`
+	OpenAPISpec string    `yaml:"openapiSpec,omitempty"`
+	Auth        *RestAuth `yaml:"auth,omitempty"`
+}
+
 // IsEnabled returns true when the database entry is enabled.
 // Nil defaults to enabled.
 func (d DatabaseEntry) IsEnabled() bool {
@@ -47,6 +77,7 @@ func (d DatabaseEntry) IsEnabled() bool {
 type ResourcesConfig struct {
 	Filesystem []FilesystemEntry `yaml:"filesystem"`
 	Databases  []DatabaseEntry   `yaml:"databases"`
+	Rest       []RestEntry       `yaml:"rest"`
 }
 
 // Config is the top-level config structure.
@@ -130,6 +161,10 @@ func parseConfig(data []byte) (Config, error) {
 	return cfg, nil
 }
 
+var validRestAuthTypes = map[RestAuthType]bool{
+	RestAuthNone: true, RestAuthBasic: true, RestAuthBearer: true, RestAuthAPIKey: true,
+}
+
 func validateConfig(cfg Config) error {
 	seenDB := map[string]struct{}{}
 	defaults := 0
@@ -150,6 +185,44 @@ func validateConfig(cfg Config) error {
 	}
 	if defaults > 1 {
 		return fmt.Errorf("resources.databases allows at most one default entry")
+	}
+
+	seenRest := map[string]struct{}{}
+	for i, rest := range cfg.Resources.Rest {
+		if rest.ID == "" {
+			return fmt.Errorf("resources.rest[%d].id is required", i)
+		}
+		if _, ok := seenRest[rest.ID]; ok {
+			return fmt.Errorf("resources.rest contains duplicate id %q", rest.ID)
+		}
+		seenRest[rest.ID] = struct{}{}
+		if rest.BaseURL == "" {
+			return fmt.Errorf("resources.rest[%d].baseUrl is required", i)
+		}
+		authType := RestAuthNone
+		if rest.Auth != nil {
+			authType = rest.Auth.Type
+			if authType == "" {
+				authType = RestAuthNone
+			}
+			if !validRestAuthTypes[authType] {
+				return fmt.Errorf("resources.rest[%d].auth.type must be one of: none, basic, bearer, apiKey", i)
+			}
+			if authType == RestAuthBasic && (rest.Auth.Username == "" || rest.Auth.Password == "") {
+				return fmt.Errorf("resources.rest[%d].auth.username and auth.password are required for basic auth", i)
+			}
+			if authType == RestAuthBearer && rest.Auth.Token == "" {
+				return fmt.Errorf("resources.rest[%d].auth.token is required for bearer auth", i)
+			}
+			if authType == RestAuthAPIKey {
+				if rest.Auth.Name == "" || rest.Auth.Value == "" {
+					return fmt.Errorf("resources.rest[%d].auth.name and auth.value are required for apiKey auth", i)
+				}
+				if rest.Auth.In != "" && rest.Auth.In != "header" && rest.Auth.In != "query" {
+					return fmt.Errorf("resources.rest[%d].auth.in must be header or query for apiKey auth", i)
+				}
+			}
+		}
 	}
 	return nil
 }
@@ -232,6 +305,34 @@ func DatabasesWithError() ([]DatabaseEntry, error) {
 	return out, nil
 }
 
+// RestResources returns configured REST resources from config.yaml.
+func RestResources() []RestEntry {
+	out, err := RestResourcesWithError()
+	if err != nil {
+		return nil
+	}
+	return out
+}
+
+// RestResourcesWithError returns configured REST resources and preserves load errors.
+func RestResourcesWithError() ([]RestEntry, error) {
+	cfg, _, err := ReadConfig()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]RestEntry, 0, len(cfg.Resources.Rest))
+	for _, e := range cfg.Resources.Rest {
+		if e.ID == "" || e.BaseURL == "" {
+			continue
+		}
+		if e.Label == "" {
+			e.Label = e.ID
+		}
+		out = append(out, e)
+	}
+	return out, nil
+}
+
 // RootStatus represents a filesystem root for status display (includes path).
 type RootStatus struct {
 	ID        string `json:"id"`
@@ -267,6 +368,15 @@ func SaveConfig(data []byte) error {
 		path = ConfigWritePath()
 	}
 	return os.WriteFile(path, data, 0644)
+}
+
+// ConfigDir returns the directory containing config.yaml, or empty if config not found.
+func ConfigDir() string {
+	path := FindConfigPath()
+	if path == "" {
+		return ""
+	}
+	return filepath.Dir(path)
 }
 
 // ExampleConfigPath returns the path to config.example.yaml (same dir as config or write path).

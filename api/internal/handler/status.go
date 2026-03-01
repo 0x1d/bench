@@ -19,17 +19,25 @@ type StatusResponse struct {
 		DefaultID  string               `json:"defaultId,omitempty"`
 		Databases  []db.ConnectionState `json:"databases"`
 	} `json:"database"`
+	REST struct {
+		Configured bool `json:"configured"`
+		Count     int  `json:"count"`
+	} `json:"rest"`
 }
 
-// HandleStatus returns status information including filesystem and database configuration.
+// HandleStatus returns status information including filesystem, database, and REST configuration.
 func HandleStatus(w http.ResponseWriter, r *http.Request) {
 	paths := config.RootsStatus()
+	restEntries := config.RestResources()
+
 	resp := StatusResponse{}
 	resp.Filesystem.Configured = len(paths) > 0
 	resp.Filesystem.Paths = paths
 	resp.Database.Configured = db.Configured()
 	resp.Database.DefaultID = db.DefaultID()
 	resp.Database.Databases = db.States()
+	resp.REST.Configured = len(restEntries) > 0
+	resp.REST.Count = len(restEntries)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)

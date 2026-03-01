@@ -10,6 +10,7 @@ import { SiteHeader } from '@/components/site-header';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import { FilesystemPage } from '@/pages/resources-page';
 import { ResourcesConfigPage } from '@/pages/resources-config-page';
+import { RestPage } from '@/pages/rest-page';
 import { StatusPage } from '@/pages/status-page';
 import { DatabasePage } from '@/pages/database-page';
 
@@ -65,15 +66,16 @@ export function App() {
                 <section
                   id="main"
                   className={
-                    hash === 'filesystem' || hash === 'database' || hash === 'resources'
+                    hash === 'filesystem' || hash === 'database' || hash === 'resources' || hash === 'rest'
                       ? 'flex min-h-0 flex-1 items-start p-4 md:p-6'
                       : 'flex flex-1 items-start justify-center p-4 md:min-h-min'
                   }
                 >
                   {hash === 'filesystem' && <FilesystemPage />}
                   {hash === 'resources' && <ResourcesConfigPage />}
+                  {hash === 'rest' && <RestPage />}
                   {hash === 'database' && <DatabasePage />}
-                  {hash !== 'filesystem' && hash !== 'resources' && hash !== 'database' && <StatusPage />}
+                  {hash !== 'filesystem' && hash !== 'resources' && hash !== 'rest' && hash !== 'database' && <StatusPage />}
                 </section>
               </SidebarInset>
               <FileViewer />

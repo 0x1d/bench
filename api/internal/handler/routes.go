@@ -18,6 +18,10 @@ func RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PATCH /api/resources", HandleResourcePatch)
 	mux.HandleFunc("DELETE /api/resources", HandleResourceDelete)
 	mux.HandleFunc("GET /api/resources", HandleResourceList)
+	// REST routes: more specific paths first
+	mux.HandleFunc("GET /api/rest/{id}/spec", HandleRestSpec)
+	mux.HandleFunc("POST /api/rest/{id}/proxy", HandleRestProxy)
+	mux.HandleFunc("GET /api/rest", HandleRestList)
 	// Database routes: more specific paths first
 	mux.HandleFunc("PATCH /api/database/tables/{name}/rows", HandleDatabaseTableUpdateRow)
 	mux.HandleFunc("DELETE /api/database/tables/{name}/rows", HandleDatabaseTableDeleteRow)

@@ -99,7 +99,7 @@ export function StatusPage() {
   };
 
   return (
-    <div className="w-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl">
+    <div className="w-full grid gap-6 max-w-6xl" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
       <div className="bg-background/90 text-card-foreground border rounded-xl p-6 relative">
         <div className="flex items-start justify-between gap-2">
           <div>
@@ -221,6 +221,55 @@ export function StatusPage() {
                   </li>
                 ))}
               </ul>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="bg-background/90 text-card-foreground border rounded-xl p-6 relative">
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <h2 className="text-lg font-medium tracking-tight">REST</h2>
+            <p className="text-muted-foreground mt-1 text-sm">
+              Configured REST API endpoints.
+            </p>
+          </div>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            onClick={refetchStatus}
+            disabled={statusLoading}
+            className="shrink-0 text-muted-foreground hover:text-foreground"
+            aria-label="Refresh REST status"
+          >
+            <RefreshCw
+              className={`size-4 ${statusLoading ? 'animate-spin' : ''}`}
+            />
+          </Button>
+        </div>
+
+        {statusLoading && <p className="text-muted-foreground mt-3">Loading...</p>}
+
+        {statusData && (
+          <div className="mt-3">
+            <div className="flex items-center gap-2">
+              <span
+                className={`h-2.5 w-2.5 rounded-full ${
+                  statusData.rest?.configured
+                    ? 'bg-green-500 shadow-[0_0_6px_rgba(74,222,128,0.5)]'
+                    : 'bg-amber-500 shadow-[0_0_6px_rgba(245,158,11,0.5)]'
+                }`}
+              />
+              <span>
+                {statusData.rest?.configured
+                  ? `${statusData.rest.count} configured`
+                  : 'Not configured'}
+              </span>
+            </div>
+            {!statusData.rest?.configured && (
+              <p className="mt-2 text-sm text-muted-foreground">
+                Add REST resources in the Resources config page.
+              </p>
             )}
           </div>
         )}

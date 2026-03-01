@@ -15,3 +15,10 @@ resources:
       url: ${BENCH_DB_MAIN_URL}
       enabled: true
       default: true
+  rest:
+    - id: petstore
+      label: Petstore API
+      baseUrl: https://petstore.swagger.io/v2
+      openapiSpec: specs/petstore.json
+      auth:
+        type: none

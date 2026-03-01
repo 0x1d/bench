@@ -1,0 +1,427 @@
+/* Swagger UI Tokyo Night theme overrides */
+.rest-client .swagger-ui .topbar {
+  display: none;
+}
+
+.rest-client .swagger-ui {
+  color: var(--foreground);
+  font-family: inherit;
+  padding: 1.5rem;
+  background: var(--card);
+}
+
+/* Ensure all links are readable */
+.rest-client .swagger-ui a {
+  color: var(--primary);
+}
+
+.rest-client .swagger-ui a:hover {
+  color: var(--primary);
+  opacity: 0.9;
+}
+
+/* Small text and labels - use secondary-foreground for readability */
+.rest-client .swagger-ui small,
+.rest-client .swagger-ui .parameter__name.required span {
+  color: var(--secondary-foreground);
+}
+
+.rest-client .swagger-ui .info {
+  margin: 0 0 2rem;
+}
+
+.rest-client .swagger-ui .info .title {
+  color: var(--foreground);
+  font-size: 2rem;
+}
+
+.rest-client .swagger-ui .info p,
+.rest-client .swagger-ui .info .description,
+.rest-client .swagger-ui .info table {
+  color: var(--muted-foreground);
+}
+
+.rest-client .swagger-ui .info a {
+  color: var(--primary);
+}
+
+.rest-client .swagger-ui .info a:hover {
+  color: var(--primary);
+  opacity: 0.9;
+}
+
+/* Override generic a rule for info - already set above, ensure specificity */
+.rest-client .swagger-ui .info .link {
+  color: var(--primary);
+}
+
+.rest-client .swagger-ui .scheme-container {
+  background-color: var(--card);
+  border: 1px solid var(--border);
+  box-shadow: none;
+  margin: 0 0 2rem;
+  padding: 1.5rem;
+}
+
+.rest-client .swagger-ui .scheme-container .schemes-title {
+  color: var(--foreground);
+}
+
+.rest-client .swagger-ui .opblock {
+  border-color: var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 0.5rem;
+}
+
+.rest-client .swagger-ui .opblock.opblock-get {
+  border-color: var(--chart-2);
+  background: color-mix(in srgb, var(--chart-2) 15%, transparent);
+}
+
+.rest-client .swagger-ui .opblock.opblock-post {
+  border-color: var(--chart-3);
+  background: color-mix(in srgb, var(--chart-3) 15%, transparent);
+}
+
+.rest-client .swagger-ui .opblock.opblock-put {
+  border-color: var(--chart-4);
+  background: color-mix(in srgb, var(--chart-4) 15%, transparent);
+}
+
+.rest-client .swagger-ui .opblock.opblock-delete {
+  border-color: var(--destructive);
+  background: color-mix(in srgb, var(--destructive) 15%, transparent);
+}
+
+.rest-client .swagger-ui .opblock .opblock-summary-method {
+  background: var(--muted);
+  color: var(--foreground);
+  border-radius: var(--radius-sm);
+}
+
+.rest-client .swagger-ui .opblock.opblock-get .opblock-summary-method {
+  background: var(--chart-2);
+  color: var(--background);
+}
+
+.rest-client .swagger-ui .opblock.opblock-post .opblock-summary-method {
+  background: var(--chart-3);
+  color: var(--background);
+}
+
+.rest-client .swagger-ui .opblock.opblock-put .opblock-summary-method {
+  background: var(--chart-4);
+  color: var(--background);
+}
+
+.rest-client .swagger-ui .opblock.opblock-delete .opblock-summary-method {
+  background: var(--destructive);
+  color: var(--background);
+}
+
+.rest-client .swagger-ui .opblock .opblock-summary-path,
+.rest-client .swagger-ui .opblock .opblock-summary-description {
+  color: var(--foreground);
+}
+
+/* Endpoint subtitles and descriptions - use readable secondary-foreground */
+.rest-client .swagger-ui .opblock-summary-description {
+  color: var(--secondary-foreground);
+  font-weight: 500;
+}
+
+.rest-client .swagger-ui .opblock-tag {
+  border-bottom-color: var(--border);
+  color: var(--foreground);
+}
+
+.rest-client .swagger-ui .opblock-tag:hover {
+  background: var(--accent);
+}
+
+.rest-client .swagger-ui .opblock-body {
+  background-color: var(--card);
+  border-top: 1px solid var(--border);
+  color: var(--foreground);
+}
+
+.rest-client .swagger-ui .opblock-body .opblock-description-wrapper,
+.rest-client .swagger-ui .opblock-body .opblock-title_normal,
+.rest-client .swagger-ui .opblock-body p,
+.rest-client .swagger-ui .opblock-body .markdown p,
+.rest-client .swagger-ui .opblock-body .opblock-description {
+  color: var(--secondary-foreground);
+}
+
+.rest-client .swagger-ui .opblock-body .markdown code {
+  color: var(--foreground);
+  background: var(--muted);
+}
+
+/* "Find out more" and other external doc links */
+.rest-client .swagger-ui .opblock-body .opblock-external-docs-wrapper,
+.rest-client .swagger-ui .opblock-external-docs-wrapper {
+  color: var(--primary);
+}
+
+.rest-client .swagger-ui .opblock-external-docs-wrapper a,
+.rest-client .swagger-ui .opblock-body .opblock-external-docs-wrapper a {
+  color: var(--primary);
+  font-weight: 500;
+}
+
+.rest-client .swagger-ui .opblock-external-docs-wrapper a:hover,
+.rest-client .swagger-ui .opblock-body .opblock-external-docs-wrapper a:hover {
+  color: var(--primary);
+  opacity: 0.9;
+  text-decoration: underline;
+}
+
+.rest-client .swagger-ui .table-container {
+  background: var(--background);
+  border: 1px solid var(--border);
+}
+
+.rest-client .swagger-ui table thead tr td,
+.rest-client .swagger-ui table thead tr th {
+  border-bottom-color: var(--border);
+  color: var(--foreground);
+}
+
+.rest-client .swagger-ui table tbody tr td {
+  border-bottom-color: var(--border);
+  color: var(--foreground);
+}
+
+.rest-client .swagger-ui .parameter__name {
+  color: var(--foreground);
+}
+
+.rest-client .swagger-ui .parameter__type {
+  color: var(--chart-5);
+}
+
+.rest-client .swagger-ui .parameter__in {
+  color: var(--muted-foreground);
+}
+
+.rest-client .swagger-ui .btn {
+  background-color: var(--secondary);
+  border-color: var(--border);
+  color: var(--foreground);
+  font-family: inherit;
+}
+
+.rest-client .swagger-ui .btn:hover {
+  background-color: var(--accent);
+  border-color: var(--border);
+}
+
+.rest-client .swagger-ui .btn.execute {
+  background-color: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.rest-client .swagger-ui .btn.execute:hover {
+  opacity: 0.9;
+}
+
+.rest-client .swagger-ui .btn.cancel {
+  border-color: var(--destructive);
+  color: var(--destructive);
+}
+
+.rest-client .swagger-ui .btn.cancel:hover {
+  background-color: color-mix(in srgb, var(--destructive) 20%, transparent);
+}
+
+.rest-client .swagger-ui input[type=text],
+.rest-client .swagger-ui input[type=password],
+.rest-client .swagger-ui textarea,
+.rest-client .swagger-ui select {
+  background-color: var(--background);
+  border-color: var(--border);
+  color: var(--foreground);
+  font-family: inherit;
+}
+
+.rest-client .swagger-ui input[type=text]:focus,
+.rest-client .swagger-ui input[type=password]:focus,
+.rest-client .swagger-ui textarea:focus,
+.rest-client .swagger-ui select:focus {
+  border-color: var(--ring);
+  outline: none;
+}
+
+.rest-client .swagger-ui .response-col_status {
+  color: var(--foreground);
+}
+
+.rest-client .swagger-ui .response-col_links {
+  color: var(--secondary-foreground);
+}
+
+/* Model/Example Value tab links */
+.rest-client .swagger-ui .tab li .tablinks {
+  color: inherit;
+}
+
+.rest-client .swagger-ui .model-box-control .model-toggle {
+  color: var(--foreground);
+}
+
+.rest-client .swagger-ui .model-toggle-control {
+  color: var(--secondary-foreground);
+}
+
+.rest-client .swagger-ui .model-toggle-control a {
+  color: var(--primary);
+}
+
+.rest-client .swagger-ui .model-toggle-control a:hover {
+  color: var(--primary);
+  opacity: 0.9;
+}
+
+.rest-client .swagger-ui .responses-inner h4,
+.rest-client .swagger-ui .responses-inner h5 {
+  color: var(--foreground);
+}
+
+.rest-client .swagger-ui .model-box,
+.rest-client .swagger-ui .model-box-control {
+  background: var(--background);
+  border-color: var(--border);
+  color: var(--foreground);
+}
+
+.rest-client .swagger-ui .model .property,
+.rest-client .swagger-ui .model .property-row {
+  color: var(--foreground);
+}
+
+.rest-client .swagger-ui .model .prop-type {
+  color: var(--chart-5);
+}
+
+.rest-client .swagger-ui .model .prop-format {
+  color: var(--secondary-foreground);
+}
+
+.rest-client .swagger-ui .model .prop-name {
+  color: var(--foreground);
+}
+
+.rest-client .swagger-ui .model-title {
+  color: var(--foreground);
+}
+
+.rest-client .swagger-ui .model .model .prop {
+  color: var(--secondary-foreground);
+}
+
+.rest-client .swagger-ui .model-toggle {
+  background: var(--muted);
+  border-color: var(--border);
+  color: var(--foreground);
+}
+
+.rest-client .swagger-ui .model-toggle:hover {
+  background: var(--accent);
+}
+
+.rest-client .swagger-ui .model-toggle::after {
+  border-color: var(--foreground);
+}
+
+.rest-client .swagger-ui section.models {
+  border-color: var(--border);
+}
+
+.rest-client .swagger-ui section.models h4 {
+  color: var(--foreground);
+  border-bottom-color: var(--border);
+}
+
+.rest-client .swagger-ui section.models h4:hover {
+  background: var(--accent);
+}
+
+.rest-client .swagger-ui .tab li {
+  color: var(--muted-foreground);
+  border-color: var(--border);
+}
+
+.rest-client .swagger-ui .tab li.active {
+  color: var(--foreground);
+  border-bottom-color: var(--primary);
+}
+
+.rest-client .swagger-ui .tab li button {
+  color: inherit;
+}
+
+.rest-client .swagger-ui .loading-container .loading {
+  color: var(--muted-foreground);
+}
+
+.rest-client .swagger-ui .loading-container::before {
+  border-color: var(--border);
+  border-top-color: var(--primary);
+}
+
+.rest-client .swagger-ui .highlight-code {
+  background: var(--muted);
+  border-radius: var(--radius-sm);
+}
+
+.rest-client .swagger-ui .microlight {
+  color: var(--foreground);
+}
+
+.rest-client .swagger-ui .responses-table {
+  background: var(--background);
+}
+
+.rest-client .swagger-ui .response-body,
+.rest-client .swagger-ui .response-body pre {
+  background: var(--muted);
+  color: var(--foreground);
+  border-color: var(--border);
+}
+
+.rest-client .swagger-ui .authorization__btn {
+  background: var(--chart-3);
+  border-color: var(--chart-3);
+  color: var(--background);
+}
+
+.rest-client .swagger-ui .authorization__btn.locked {
+  background: var(--chart-3);
+  color: var(--background);
+}
+
+.rest-client .swagger-ui .authorization__btn.unlocked {
+  background: var(--destructive);
+  border-color: var(--destructive);
+  color: var(--background);
+}
+
+.rest-client .swagger-ui .dialog-ux .modal-ux {
+  background: var(--card);
+  border-color: var(--border);
+}
+
+.rest-client .swagger-ui .dialog-ux .modal-ux-header {
+  border-bottom-color: var(--border);
+  color: var(--foreground);
+}
+
+.rest-client .swagger-ui .dialog-ux .modal-ux-content {
+  color: var(--foreground);
+}
+
+.rest-client .swagger-ui .dialog-ux .modal-ux-backdrop {
+  background: rgba(0, 0, 0, 0.6);
+}

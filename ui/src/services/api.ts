@@ -30,6 +30,10 @@ export interface StatusResponse {
       error?: string;
     }[];
   };
+  rest?: {
+    configured: boolean;
+    count: number;
+  };
 }
 
 export async function fetchHealth(): Promise<HealthStatus> {
@@ -591,4 +595,57 @@ function withDbParams(url: string, params: URLSearchParams, dbId?: string): stri
   }
   const query = params.toString();
   return query ? `${url}?${query}` : url;
+}
+
+// REST resource types and API
+export interface RestResource {
+  id: string;
+  label: string;
+  baseUrl: string;
+  openapiSpec?: string;
+}
+
+export interface RestListResponse {
+  resources: RestResource[];
+}
+
+export async function fetchRestList(): Promise<RestListResponse> {
+  const response = await fetch(`${API_BASE}/rest`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch REST resources: ${response.status} ${response.statusText}`);
+  }
+  return response.json();
+}
+
+export async function fetchRestSpec(id: string): Promise<string> {
+  const response = await fetch(`${API_BASE}/rest/${encodeURIComponent(id)}/spec`);
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Failed to fetch spec: ${response.status}`);
+  }
+  return response.text();
+}
+
+export interface RestProxyRequest {
+  method: string;
+  path: string;
+  headers?: Record<string, string>;
+  body?: string | null;
+}
+
+export async function fetchRestProxy(
+  id: string,
+  req: RestProxyRequest
+): Promise<Response> {
+  const response = await fetch(`${API_BASE}/rest/${encodeURIComponent(id)}/proxy`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      method: req.method,
+      path: req.path,
+      headers: req.headers ?? {},
+      body: req.body ?? null,
+    }),
+  });
+  return response;
 }

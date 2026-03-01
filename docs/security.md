@@ -75,6 +75,17 @@ The token is never sent to the browser or bundled into the frontend.
 - `API_TOKEN` is not prefixed with `VITE_`, so it is not exposed to the client bundle.
 - `DATABASE_URL` is API-only; the UI never receives it.
 
+## REST Resources
+
+- REST resources are defined in `config.yaml` under `resources.rest`.
+- Credentials (basic auth, bearer token, API key) use env placeholders (e.g. `${BENCH_REST_MY_API_TOKEN}`) and are never sent to the client.
+- Auth headers are added server-side before proxying requests to the target API.
+- **SSRF prevention**: The `baseUrl` is validated before proxying. Requests to localhost, 127.x, 10.x, 172.16–31.x, 192.168.x, 169.254.x, and ::1 are blocked.
+- URL scheme: only `http` and `https` are allowed.
+- OpenAPI spec path: resolved relative to config dir; path traversal is rejected.
+
+See [rest.md](rest.md) for the full API reference.
+
 ## Filesystem
 
 - Resource roots are defined in `config.yaml` under `resources.filesystem`.

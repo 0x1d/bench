@@ -26,3 +26,5 @@ config.yaml
 # Test coverage
 coverage/
 *.out
+
+api/server

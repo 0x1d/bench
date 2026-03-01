@@ -72,10 +72,10 @@ export function useFileBrowserHistory(
   );
 
   const handleRootChange = useCallback(
-    (newRoot: string) => {
-      pushState('.', newRoot);
+    (newRoot: string, pathForRoot: string = '.') => {
+      pushState(pathForRoot, newRoot);
       setRoot(newRoot);
-      setPath('.');
+      setPath(pathForRoot);
     },
     [setRoot, setPath]
   );

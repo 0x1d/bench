@@ -1,12 +1,55 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRoots } from '@/hooks/use-resources';
 import { useFileBrowserHistory } from '@/hooks/use-file-browser-history';
 import { FileBrowser } from '@/components/file-browser';
 
+const RESOURCES_STATE_KEY = 'bench-resources-page';
+
+/** Path per root and last selected root. */
+interface PersistedState {
+  paths: Record<string, string>;
+  lastRoot: string | null;
+}
+
+function loadPersistedState(): PersistedState {
+  try {
+    const s = sessionStorage.getItem(RESOURCES_STATE_KEY);
+    if (s) {
+      const v = JSON.parse(s) as {
+        paths?: Record<string, string>;
+        path?: string;
+        root?: string;
+        lastRoot?: string;
+      };
+      const paths: Record<string, string> =
+        v?.paths && typeof v.paths === 'object'
+          ? (v.paths as Record<string, string>)
+          : typeof v?.path === 'string' && typeof v?.root === 'string'
+            ? { [v.root]: v.path }
+            : {};
+      const lastRoot =
+        typeof v?.lastRoot === 'string' ? v.lastRoot : typeof v?.root === 'string' ? v.root : null;
+      return { paths, lastRoot };
+    }
+  } catch {
+    /* ignore */
+  }
+  return { paths: {}, lastRoot: null };
+}
+
+function savePersistedState(paths: Record<string, string>, lastRoot: string | null) {
+  try {
+    sessionStorage.setItem(RESOURCES_STATE_KEY, JSON.stringify({ paths, lastRoot }));
+  } catch {
+    /* ignore */
+  }
+}
+
 export function ResourcesPage() {
   const { data: rootsData, error: rootsError, isLoading: rootsLoading } = useRoots();
-  const [selectedRoot, setSelectedRoot] = useState<string | null>(null);
-  const [path, setPath] = useState('.');
+  const initialPersisted = useMemo(() => loadPersistedState(), []);
+  const [selectedRoot, setSelectedRoot] = useState<string | null>(initialPersisted.lastRoot);
+  const [path, setPath] = useState(initialPersisted.lastRoot ? (initialPersisted.paths[initialPersisted.lastRoot] ?? '.') : '.');
 
   const roots = rootsData?.roots ?? [];
   const displayRoot =
@@ -16,13 +59,30 @@ export function ResourcesPage() {
         : roots[0].id
       : null;
 
-  const { handleNavigate, handleRootChange } = useFileBrowserHistory(
+  const { handleNavigate, handleRootChange: baseHandleRootChange } = useFileBrowserHistory(
     path,
     setPath,
     displayRoot,
     setSelectedRoot,
     !!displayRoot
   );
+
+  const handleRootChange = useCallback(
+    (newRoot: string) => {
+      const { paths } = loadPersistedState();
+      const pathForRoot = paths[newRoot] ?? '.';
+      baseHandleRootChange(newRoot, pathForRoot);
+    },
+    [baseHandleRootChange]
+  );
+
+  useEffect(() => {
+    if (displayRoot) {
+      const { paths } = loadPersistedState();
+      paths[displayRoot] = path;
+      savePersistedState(paths, displayRoot);
+    }
+  }, [path, displayRoot]);
 
   if (rootsLoading) {
     return (

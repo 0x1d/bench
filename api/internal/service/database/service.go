@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"strconv"
 	"strings"
 
@@ -22,6 +23,7 @@ func ListTables(ctx context.Context) ([]model.TableInfo, error) {
 		FROM pg_tables t
 		LEFT JOIN pg_stat_user_tables s ON s.schemaname = t.schemaname AND s.relname = t.tablename
 		WHERE t.schemaname = 'public'
+		  AND t.tablename NOT LIKE '__bench_m2m_%'
 		ORDER BY t.tablename
 	`)
 	if err != nil {
@@ -390,6 +392,25 @@ func UpdateRow(ctx context.Context, tableName string, where, set map[string]any)
 	for _, c := range schema.Columns {
 		validCols[c.Name] = c
 	}
+	manySet := make(map[string]any)
+	for k, v := range set {
+		if col, ok := validCols[k]; ok && col.References != nil && col.References.Multiple {
+			manySet[k] = v
+		}
+	}
+
+	var ownerPK string
+	var ownerVals []any
+	if len(manySet) > 0 {
+		ownerPK, err = getSinglePrimaryKeyColumn(ctx, tableName)
+		if err != nil {
+			return err
+		}
+		ownerVals, err = selectOwnerValuesByWhere(ctx, tableName, ownerPK, where, validCols)
+		if err != nil {
+			return err
+		}
+	}
 
 	var setParts []string
 	var setVals []any
@@ -431,6 +452,19 @@ func UpdateRow(ctx context.Context, tableName string, where, set map[string]any)
 	}
 	if result.RowsAffected() == 0 {
 		return fmt.Errorf("no rows matched")
+	}
+	if len(manySet) > 0 {
+		for _, ownerVal := range ownerVals {
+			for colName, raw := range manySet {
+				ref := validCols[colName].References
+				if ref == nil || !ref.Multiple {
+					continue
+				}
+				if err := syncManyRefJoinRows(ctx, tableName, colName, ref, ownerVal, raw); err != nil {
+					return err
+				}
+			}
+		}
 	}
 	return nil
 }
@@ -504,6 +538,7 @@ func InsertRow(ctx context.Context, tableName string, row map[string]any) error 
 	for _, c := range schema.Columns {
 		validCols[c.Name] = c
 	}
+	manySet := make(map[string]any)
 
 	var cols []string
 	var vals []any
@@ -524,6 +559,9 @@ func InsertRow(ctx context.Context, tableName string, row map[string]any) error 
 		vals = append(vals, normalizeArrayValue(v, col))
 		placeholders = append(placeholders, fmt.Sprintf("$%d", i))
 		i++
+		if col.References != nil && col.References.Multiple {
+			manySet[k] = v
+		}
 	}
 	if len(cols) == 0 {
 		return fmt.Errorf("row must have at least one column value")
@@ -533,15 +571,37 @@ func InsertRow(ctx context.Context, tableName string, row map[string]any) error 
 	for i, c := range cols {
 		quotedCols[i] = fmt.Sprintf("%q", c)
 	}
-	query := fmt.Sprintf(
+	insertQuery := fmt.Sprintf(
 		"INSERT INTO %q (%s) VALUES (%s)",
 		tableName,
 		strings.Join(quotedCols, ", "),
 		strings.Join(placeholders, ", "),
 	)
-	_, err = db.Pool.Exec(ctx, query, vals...)
+	if len(manySet) == 0 {
+		_, err = db.Pool.Exec(ctx, insertQuery, vals...)
+		if err != nil {
+			return fmt.Errorf("insert row: %w", err)
+		}
+		return nil
+	}
+
+	ownerPK, err := getSinglePrimaryKeyColumn(ctx, tableName)
 	if err != nil {
+		return err
+	}
+	var ownerVal any
+	returningQuery := insertQuery + fmt.Sprintf(" RETURNING %q", ownerPK)
+	if err := db.Pool.QueryRow(ctx, returningQuery, vals...).Scan(&ownerVal); err != nil {
 		return fmt.Errorf("insert row: %w", err)
+	}
+	for colName, raw := range manySet {
+		ref := validCols[colName].References
+		if ref == nil || !ref.Multiple {
+			continue
+		}
+		if err := syncManyRefJoinRows(ctx, tableName, colName, ref, ownerVal, raw); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -587,6 +647,11 @@ func AlterTable(ctx context.Context, tableName string, req *model.AlterTableRequ
 	// 1. Drop removed columns
 	for name := range currentByName {
 		if _, ok := desiredByName[name]; !ok {
+			if curRef := currentByName[name].References; curRef != nil && curRef.Multiple {
+				if err := dropManyRefJoinTable(ctx, tableName, name); err != nil {
+					return err
+				}
+			}
 			query := fmt.Sprintf("ALTER TABLE %s DROP COLUMN %q", quotedTable, name)
 			if _, err := db.Pool.Exec(ctx, query); err != nil {
 				return fmt.Errorf("drop column %s: %w", name, err)
@@ -628,6 +693,9 @@ func AlterTable(ctx context.Context, tableName string, req *model.AlterTableRequ
 				comment := fmt.Sprintf("ref:%s:%s:multiple", col.References.Table, col.References.Column)
 				if _, err := db.Pool.Exec(ctx, fmt.Sprintf("COMMENT ON COLUMN %s.%q IS %s", quotedTable, col.Name, quoteLiteral(comment))); err != nil {
 					return fmt.Errorf("set column comment: %w", err)
+				}
+				if err := ensureManyRefJoinTable(ctx, tableName, col.Name, col.References); err != nil {
+					return err
 				}
 			}
 		}
@@ -726,6 +794,12 @@ func AlterTable(ctx context.Context, tableName string, req *model.AlterTableRequ
 			if _, err := db.Pool.Exec(ctx, fmt.Sprintf("COMMENT ON COLUMN %s.%q IS %s", quotedTable, col.Name, quoteLiteral(comment))); err != nil {
 				return fmt.Errorf("set column comment: %w", err)
 			}
+			if err := ensureManyRefJoinTable(ctx, tableName, col.Name, newRef); err != nil {
+				return err
+			}
+			if err := backfillManyRefJoinTableFromArray(ctx, tableName, col.Name, newRef); err != nil {
+				return err
+			}
 			continue
 		}
 
@@ -742,6 +816,19 @@ func AlterTable(ctx context.Context, tableName string, req *model.AlterTableRequ
 				if _, err := db.Pool.Exec(ctx, query); err != nil {
 					return fmt.Errorf("drop foreign key: %w", err)
 				}
+			}
+		}
+		if curWasMultiple && (newRef == nil || !newRef.Multiple || curRefStr != newRefStr) {
+			if err := dropManyRefJoinTable(ctx, tableName, col.Name); err != nil {
+				return err
+			}
+		}
+		if newRef != nil && newRef.Multiple {
+			if err := ensureManyRefJoinTable(ctx, tableName, col.Name, newRef); err != nil {
+				return err
+			}
+			if err := backfillManyRefJoinTableFromArray(ctx, tableName, col.Name, newRef); err != nil {
+				return err
 			}
 		}
 		if newRefStr != "" && curRefStr != newRefStr && newRef != nil && !newRef.Multiple {
@@ -768,9 +855,19 @@ func DropTable(ctx context.Context, tableName string) error {
 	if !isValidIdentifier(tableName) {
 		return fmt.Errorf("invalid table name")
 	}
+	schema, err := GetTableSchema(ctx, tableName)
+	if err == nil {
+		for _, c := range schema.Columns {
+			if c.References != nil && c.References.Multiple {
+				if err := dropManyRefJoinTable(ctx, tableName, c.Name); err != nil {
+					return err
+				}
+			}
+		}
+	}
 
 	query := fmt.Sprintf("DROP TABLE IF EXISTS %q", tableName)
-	_, err := db.Pool.Exec(ctx, query)
+	_, err = db.Pool.Exec(ctx, query)
 	if err != nil {
 		return fmt.Errorf("drop table: %w", err)
 	}
@@ -791,6 +888,10 @@ func CreateTable(ctx context.Context, req *model.CreateTableRequest) error {
 
 	var parts []string
 	var arrayRefComments []struct{ col, comment string }
+	var manyRefs []struct {
+		col string
+		ref *model.ForeignKeyRef
+	}
 	for _, col := range req.Columns {
 		if col.Name == "" {
 			return fmt.Errorf("column name required")
@@ -814,6 +915,10 @@ func CreateTable(ctx context.Context, req *model.CreateTableRequest) error {
 				col.Name,
 				fmt.Sprintf("ref:%s:%s:multiple", col.References.Table, col.References.Column),
 			})
+			manyRefs = append(manyRefs, struct {
+				col string
+				ref *model.ForeignKeyRef
+			}{col: col.Name, ref: col.References})
 		} else {
 			dt = normalizeDataType(col.DataType, col.AutoIncrement)
 		}
@@ -839,6 +944,11 @@ func CreateTable(ctx context.Context, req *model.CreateTableRequest) error {
 		_, err = db.Pool.Exec(ctx, fmt.Sprintf("COMMENT ON COLUMN %q.%q IS %s", req.Name, ac.col, quoteLiteral(ac.comment)))
 		if err != nil {
 			return fmt.Errorf("set column comment: %w", err)
+		}
+	}
+	for _, mr := range manyRefs {
+		if err := ensureManyRefJoinTable(ctx, req.Name, mr.col, mr.ref); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -1060,4 +1170,256 @@ func normalizeDataType(dt string, autoIncrement bool) string {
 		}
 		return "text"
 	}
+}
+
+func manyRefJoinTableName(ownerTable, ownerColumn string) string {
+	base := "__bench_m2m_" + ownerTable + "_" + ownerColumn
+	if len(base) <= 63 {
+		return base
+	}
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(base))
+	suffix := fmt.Sprintf("_%x", h.Sum32())
+	maxPrefix := 63 - len(suffix)
+	if maxPrefix < 1 {
+		return "__bench_m2m" + suffix
+	}
+	return base[:maxPrefix] + suffix
+}
+
+func getSinglePrimaryKeyColumn(ctx context.Context, tableName string) (string, error) {
+	rows, err := db.Pool.Query(ctx, `
+		SELECT kcu.column_name
+		FROM information_schema.table_constraints tc
+		JOIN information_schema.key_column_usage kcu
+			ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
+		WHERE tc.table_schema = 'public' AND tc.table_name = $1 AND tc.constraint_type = 'PRIMARY KEY'
+		ORDER BY kcu.ordinal_position
+	`, tableName)
+	if err != nil {
+		return "", fmt.Errorf("get primary key: %w", err)
+	}
+	defer rows.Close()
+	var cols []string
+	for rows.Next() {
+		var col string
+		if err := rows.Scan(&col); err != nil {
+			return "", fmt.Errorf("scan primary key: %w", err)
+		}
+		cols = append(cols, col)
+	}
+	if err := rows.Err(); err != nil {
+		return "", fmt.Errorf("read primary key: %w", err)
+	}
+	if len(cols) == 0 {
+		return "", fmt.Errorf("table %s must have a PRIMARY KEY to use Many references", tableName)
+	}
+	if len(cols) > 1 {
+		return "", fmt.Errorf("table %s has composite PRIMARY KEY; Many references require a single-column PRIMARY KEY", tableName)
+	}
+	return cols[0], nil
+}
+
+func ensureManyRefJoinTable(ctx context.Context, ownerTable, ownerColumn string, ref *model.ForeignKeyRef) error {
+	if ref == nil || !ref.Multiple {
+		return nil
+	}
+	if !isValidIdentifier(ownerTable) || !isValidIdentifier(ownerColumn) || !isValidIdentifier(ref.Table) || !isValidIdentifier(ref.Column) {
+		return fmt.Errorf("invalid identifiers for many reference join table")
+	}
+	if err := checkReferencedColumnIsUnique(ctx, ref.Table, ref.Column); err != nil {
+		return err
+	}
+	ownerPK, err := getSinglePrimaryKeyColumn(ctx, ownerTable)
+	if err != nil {
+		return err
+	}
+	ownerType, _ := getReferencedColumnDataType(ctx, ownerTable, ownerPK)
+	refType, _ := getReferencedColumnDataType(ctx, ref.Table, ref.Column)
+	joinTable := manyRefJoinTableName(ownerTable, ownerColumn)
+	query := fmt.Sprintf(`
+		CREATE TABLE IF NOT EXISTS %q (
+			owner_value %s NOT NULL REFERENCES %q (%q) ON DELETE CASCADE,
+			ref_value %s NOT NULL REFERENCES %q (%q) ON DELETE CASCADE,
+			UNIQUE (owner_value, ref_value)
+		)
+	`, joinTable, ownerType, ownerTable, ownerPK, refType, ref.Table, ref.Column)
+	if _, err := db.Pool.Exec(ctx, query); err != nil {
+		return fmt.Errorf("create many reference join table: %w", err)
+	}
+	return nil
+}
+
+func dropManyRefJoinTable(ctx context.Context, ownerTable, ownerColumn string) error {
+	joinTable := manyRefJoinTableName(ownerTable, ownerColumn)
+	if _, err := db.Pool.Exec(ctx, fmt.Sprintf("DROP TABLE IF EXISTS %q", joinTable)); err != nil {
+		return fmt.Errorf("drop many reference join table: %w", err)
+	}
+	return nil
+}
+
+func selectOwnerValuesByWhere(ctx context.Context, tableName, ownerPK string, where map[string]any, validCols map[string]model.ColumnInfo) ([]any, error) {
+	if len(where) == 0 {
+		return nil, fmt.Errorf("where must have at least one column")
+	}
+	var parts []string
+	var vals []any
+	argNum := 1
+	for k, v := range where {
+		col, ok := validCols[k]
+		if !ok {
+			return nil, fmt.Errorf("unknown column: %s", k)
+		}
+		if v == nil {
+			parts = append(parts, fmt.Sprintf("%q IS NULL", k))
+			continue
+		}
+		parts = append(parts, fmt.Sprintf("%q = $%d", k, argNum))
+		vals = append(vals, normalizeArrayValue(v, col))
+		argNum++
+	}
+	query := fmt.Sprintf("SELECT %q FROM %q WHERE %s", ownerPK, tableName, strings.Join(parts, " AND "))
+	rows, err := db.Pool.Query(ctx, query, vals...)
+	if err != nil {
+		return nil, fmt.Errorf("select owner values: %w", err)
+	}
+	defer rows.Close()
+	var out []any
+	for rows.Next() {
+		var v any
+		if err := rows.Scan(&v); err != nil {
+			return nil, fmt.Errorf("scan owner value: %w", err)
+		}
+		out = append(out, v)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("read owner values: %w", err)
+	}
+	return out, nil
+}
+
+func normalizeManyRefValues(raw any, refType string) []any {
+	if raw == nil {
+		return nil
+	}
+	var items []any
+	switch v := raw.(type) {
+	case []any:
+		items = v
+	case []string:
+		for _, x := range v {
+			items = append(items, x)
+		}
+	case []int:
+		for _, x := range v {
+			items = append(items, x)
+		}
+	case []int64:
+		for _, x := range v {
+			items = append(items, x)
+		}
+	case []float64:
+		for _, x := range v {
+			items = append(items, x)
+		}
+	default:
+		return nil
+	}
+	refType = strings.ToLower(refType)
+	out := make([]any, 0, len(items))
+	for _, x := range items {
+		switch v := x.(type) {
+		case nil:
+			continue
+		case int64:
+			out = append(out, v)
+		case int:
+			out = append(out, int64(v))
+		case float64:
+			if strings.Contains(refType, "int") || strings.Contains(refType, "serial") {
+				out = append(out, int64(v))
+			} else {
+				out = append(out, v)
+			}
+		case string:
+			if strings.Contains(refType, "int") || strings.Contains(refType, "serial") {
+				if parsed, err := strconv.ParseInt(v, 10, 64); err == nil {
+					out = append(out, parsed)
+					continue
+				}
+			}
+			out = append(out, v)
+		default:
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
+func syncManyRefJoinRows(ctx context.Context, ownerTable, ownerColumn string, ref *model.ForeignKeyRef, ownerValue any, raw any) error {
+	if ref == nil || !ref.Multiple {
+		return nil
+	}
+	if err := ensureManyRefJoinTable(ctx, ownerTable, ownerColumn, ref); err != nil {
+		return err
+	}
+	joinTable := manyRefJoinTableName(ownerTable, ownerColumn)
+	if _, err := db.Pool.Exec(ctx, fmt.Sprintf("DELETE FROM %q WHERE owner_value = $1", joinTable), ownerValue); err != nil {
+		return fmt.Errorf("sync many references (delete): %w", err)
+	}
+	refType, _ := getReferencedColumnDataType(ctx, ref.Table, ref.Column)
+	values := normalizeManyRefValues(raw, refType)
+	if len(values) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{})
+	for _, rv := range values {
+		key := fmt.Sprintf("%v", rv)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		if _, err := db.Pool.Exec(
+			ctx,
+			fmt.Sprintf("INSERT INTO %q (owner_value, ref_value) VALUES ($1, $2)", joinTable),
+			ownerValue,
+			rv,
+		); err != nil {
+			return fmt.Errorf("sync many references (insert): %w", err)
+		}
+	}
+	return nil
+}
+
+func backfillManyRefJoinTableFromArray(ctx context.Context, ownerTable, ownerColumn string, ref *model.ForeignKeyRef) error {
+	if ref == nil || !ref.Multiple {
+		return nil
+	}
+	if err := ensureManyRefJoinTable(ctx, ownerTable, ownerColumn, ref); err != nil {
+		return err
+	}
+	ownerPK, err := getSinglePrimaryKeyColumn(ctx, ownerTable)
+	if err != nil {
+		return err
+	}
+	query := fmt.Sprintf("SELECT %q, %q FROM %q", ownerPK, ownerColumn, ownerTable)
+	rows, err := db.Pool.Query(ctx, query)
+	if err != nil {
+		return fmt.Errorf("backfill many references: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var ownerVal any
+		var raw any
+		if err := rows.Scan(&ownerVal, &raw); err != nil {
+			return fmt.Errorf("backfill many references scan: %w", err)
+		}
+		if err := syncManyRefJoinRows(ctx, ownerTable, ownerColumn, ref, ownerVal, raw); err != nil {
+			return err
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("backfill many references rows: %w", err)
+	}
+	return nil
 }

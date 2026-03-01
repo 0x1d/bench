@@ -57,7 +57,15 @@ func HandleResourceList(w http.ResponseWriter, r *http.Request) {
 		path = "."
 	}
 
-	list, err := resourceSvc.List(rootID, path)
+	recursive := r.URL.Query().Get("recursive") == "true"
+
+	var resp any
+	var err error
+	if recursive {
+		resp, err = resourceSvc.ListTree(rootID, path)
+	} else {
+		resp, err = resourceSvc.List(rootID, path)
+	}
 	if err != nil {
 		switch {
 		case err == resource.ErrRootNotFound:
@@ -74,7 +82,7 @@ func HandleResourceList(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(list)
+	json.NewEncoder(w).Encode(resp)
 }
 
 // HandleResourceDownload streams the file for download.
@@ -94,8 +102,8 @@ func HandleResourceDownload(w http.ResponseWriter, r *http.Request) {
 	rc, info, err := resourceSvc.Download(rootID, path)
 	if err != nil {
 		switch {
-		case err == resource.ErrRootNotFound:
-			http.Error(w, "root not found", http.StatusNotFound)
+		case err == resource.ErrRootNotFound, err == resource.ErrNotFound:
+			http.Error(w, "not found", http.StatusNotFound)
 		case err == resource.ErrNotAFile:
 			http.Error(w, "path is not a file", http.StatusBadRequest)
 		case err == resource.ErrPathTraversal:
@@ -195,6 +203,31 @@ func HandleResourcePatch(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+// HandleResourceMove handles moving a file or folder to a different directory.
+func HandleResourceMove(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req model.MoveRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid JSON body", http.StatusBadRequest)
+		return
+	}
+	if req.Path == "" || req.Destination == "" {
+		http.Error(w, "path and destination are required", http.StatusBadRequest)
+		return
+	}
+
+	err := resourceSvc.Move(req.Root, req.Path, req.Destination)
+	if err != nil {
+		writeResourceError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
 // HandleResourceDelete handles file/folder deletion.
 func HandleResourceDelete(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodDelete {
@@ -225,6 +258,10 @@ func writeResourceError(w http.ResponseWriter, err error) {
 		http.Error(w, "path is not a directory", http.StatusBadRequest)
 	case err == resource.ErrPathTraversal, err == resource.ErrInvalidNewName:
 		http.Error(w, "invalid path or name", http.StatusBadRequest)
+	case err == resource.ErrMoveIntoSelf:
+		http.Error(w, "cannot move a folder into itself", http.StatusBadRequest)
+	case err == resource.ErrNotFound:
+		http.Error(w, "not found", http.StatusNotFound)
 	case err == resource.ErrEmptyName:
 		http.Error(w, "name cannot be empty", http.StatusBadRequest)
 	case err.Error() == "file too large":

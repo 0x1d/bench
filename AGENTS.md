@@ -40,6 +40,18 @@ Starts Vite dev server on `:5173`. The browser always calls `/api`; Vite proxies
 | Build | `go build ./cmd/server` | `pnpm build` |
 | Format | `gofmt -w .` | handled by ESLint |
 
+### Pre-commit quality gate
+
+Before creating any commit, always run lint and build for both services, and only commit when all checks pass:
+
+```bash
+# API
+cd api && go vet ./... && go build ./cmd/server
+
+# UI
+cd ui && pnpm lint && pnpm build
+```
+
 ### Non-obvious caveats
 
 - **esbuild build scripts**: The `ui/package.json` includes `pnpm.onlyBuiltDependencies: ["esbuild"]` to allow esbuild's postinstall script non-interactively. Do not run `pnpm approve-builds` (interactive).

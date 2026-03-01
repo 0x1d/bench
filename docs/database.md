@@ -170,7 +170,7 @@ Supported `dataType` values: `text`, `varchar`, `integer`, `bigint`, `boolean`, 
 ## Foreign Keys
 
 - **Single reference**: One-to-one or many-to-one. Column type matches referenced column (e.g. `integer`, `uuid`).
-- **Multiple reference**: One-to-many. Column type is array (e.g. `integer[]`, `uuid[]`). Enable via the "Many" checkbox when defining the column.
+- **Multiple reference**: One-to-many. Column type is array (e.g. `integer[]`, `uuid[]`) for API/UI compatibility, and Bench also creates an internal join table (`__bench_m2m_<table>_<column>`) with real PostgreSQL foreign key constraints to enforce referential integrity.
 
 ## Setup
 

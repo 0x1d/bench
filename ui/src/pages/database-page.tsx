@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pencil, Plus, Search, Terminal } from 'lucide-react';
+import { Loader2, Pencil, Plus, Search, Terminal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useDatabaseTables, useTableData } from '@/hooks/use-database';
@@ -13,7 +13,7 @@ export function DatabasePage() {
   const [search, setSearch] = useState('');
   const { selectedTable, setSelectedTable, setPanelMode, setAlterTableName } = useDatabaseView();
 
-  const { data: statusData } = useStatus();
+  const { data: statusData, loading: statusLoading } = useStatus();
   const dbConfigured = statusData?.database?.configured ?? false;
 
   const { data: tablesData, error: tablesError, isLoading: tablesLoading } = useDatabaseTables(dbConfigured);
@@ -29,6 +29,20 @@ export function DatabasePage() {
     search.trim(),
     dbConfigured
   );
+
+  if (statusLoading || !statusData) {
+    return (
+      <div className="w-full max-w-xl p-6">
+        <div className="rounded-xl border border-border bg-card p-6">
+          <h2 className="text-lg font-medium tracking-tight">Database</h2>
+          <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="size-4 animate-spin" />
+            <span>Loading database status...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!dbConfigured) {
     return (

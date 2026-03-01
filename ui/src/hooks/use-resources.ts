@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   fetchRoots,
   fetchResourceList,
+  fetchResourceTree,
   downloadFile,
   uploadFile,
   saveFile,
@@ -10,6 +11,7 @@ import {
   deleteResource,
   type ResourceListResponse,
   type RootsResponse,
+  type TreeResponse,
 } from '@/services/api';
 
 export function useRoots() {
@@ -24,6 +26,14 @@ export function useResourceList(root: string | null, path: string) {
     queryKey: ['resources', 'list', root, path],
     queryFn: () => fetchResourceList(root!, path),
     enabled: root != null,
+  });
+}
+
+export function useResourceTree(root: string | null, path: string, enabled: boolean) {
+  return useQuery<TreeResponse>({
+    queryKey: ['resources', 'tree', root, path],
+    queryFn: () => fetchResourceTree(root!, path),
+    enabled: root != null && enabled,
   });
 }
 

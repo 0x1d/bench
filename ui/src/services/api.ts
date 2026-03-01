@@ -91,6 +91,20 @@ export interface ResourceListResponse {
   roots: ResourceRoot[];
 }
 
+export interface TreeEntry {
+  name: string;
+  path: string;
+  isDir: boolean;
+  size?: number;
+  mtime?: number;
+  children?: TreeEntry[];
+}
+
+export interface TreeResponse {
+  entries: TreeEntry[];
+  roots: ResourceRoot[];
+}
+
 export interface RootsResponse {
   roots: ResourceRoot[];
 }
@@ -111,6 +125,18 @@ export async function fetchResourceList(
   const response = await fetch(`${API_BASE}/resources?${params}`);
   if (!response.ok) {
     throw new Error(`Failed to list resources: ${response.status} ${response.statusText}`);
+  }
+  return response.json();
+}
+
+export async function fetchResourceTree(
+  root: string,
+  path: string
+): Promise<TreeResponse> {
+  const params = new URLSearchParams({ root, path: path || '.', recursive: 'true' });
+  const response = await fetch(`${API_BASE}/resources?${params}`);
+  if (!response.ok) {
+    throw new Error(`Failed to list tree: ${response.status} ${response.statusText}`);
   }
   return response.json();
 }

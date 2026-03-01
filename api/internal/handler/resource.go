@@ -57,7 +57,15 @@ func HandleResourceList(w http.ResponseWriter, r *http.Request) {
 		path = "."
 	}
 
-	list, err := resourceSvc.List(rootID, path)
+	recursive := r.URL.Query().Get("recursive") == "true"
+
+	var resp any
+	var err error
+	if recursive {
+		resp, err = resourceSvc.ListTree(rootID, path)
+	} else {
+		resp, err = resourceSvc.List(rootID, path)
+	}
 	if err != nil {
 		switch {
 		case err == resource.ErrRootNotFound:
@@ -74,7 +82,7 @@ func HandleResourceList(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(list)
+	json.NewEncoder(w).Encode(resp)
 }
 
 // HandleResourceDownload streams the file for download.

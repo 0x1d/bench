@@ -12,6 +12,8 @@ import (
 
 const (
 	maxListEntries   = 1000
+	maxTreeEntries   = 5000
+	maxTreeDepth     = 10
 	defaultUploadMax = 500 * 1024 * 1024 // 500MB
 )
 
@@ -123,6 +125,85 @@ func (s *Service) List(rootID, relPath string) (*model.ListResponse, error) {
 		Entries: result,
 		Roots:   s.Roots(),
 	}, nil
+}
+
+// ListTree returns a recursive directory tree for the given root and path.
+func (s *Service) ListTree(rootID, relPath string) (*model.TreeResponse, error) {
+	absPath, _, err := s.resolvePath(rootID, relPath)
+	if err != nil {
+		return nil, err
+	}
+
+	info, err := os.Stat(absPath)
+	if err != nil {
+		return nil, err
+	}
+	if !info.IsDir() {
+		return nil, ErrNotADirectory
+	}
+
+	count := 0
+	entries, err := s.listTreeRecursive(absPath, relPath, 0, &count)
+	if err != nil {
+		return nil, err
+	}
+
+	return &model.TreeResponse{
+		Entries: entries,
+		Roots:   s.Roots(),
+	}, nil
+}
+
+func (s *Service) listTreeRecursive(absDir, relDir string, depth int, count *int) ([]model.TreeEntry, error) {
+	if depth > maxTreeDepth || *count >= maxTreeEntries {
+		return nil, nil
+	}
+
+	dirEntries, err := os.ReadDir(absDir)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]model.TreeEntry, 0, len(dirEntries))
+	for _, e := range dirEntries {
+		if *count >= maxTreeEntries {
+			break
+		}
+		if e.Name() == "." || e.Name() == ".." {
+			continue
+		}
+
+		entryPath := filepath.Join(relDir, e.Name())
+		entry := model.TreeEntry{
+			Name:  e.Name(),
+			Path:  entryPath,
+			IsDir: e.IsDir(),
+		}
+
+		info, infoErr := e.Info()
+		if infoErr == nil {
+			if !entry.IsDir {
+				entry.Size = info.Size()
+			}
+			entry.Mtime = info.ModTime().Unix()
+		}
+
+		*count++
+
+		if e.IsDir() {
+			children, childErr := s.listTreeRecursive(
+				filepath.Join(absDir, e.Name()), entryPath, depth+1, count,
+			)
+			if childErr != nil {
+				return nil, childErr
+			}
+			entry.Children = children
+		}
+
+		result = append(result, entry)
+	}
+
+	return result, nil
 }
 
 // Download opens the file at the given path for reading.

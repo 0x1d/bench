@@ -11,6 +11,7 @@ import {
   HardDrive,
   List,
   LayoutGrid,
+  ListTree,
 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
@@ -50,14 +51,15 @@ import { useFileView } from '@/contexts/file-view-context';
 import { getViewableType } from '@/lib/viewable-types';
 import { cn } from '@/lib/utils';
 import { GalleryGrid } from '@/components/gallery-grid';
+import { ExpandedView } from '@/components/expanded-view';
 
 const VIEW_MODE_KEY = 'bench-resource-view-mode';
-type ViewMode = 'list' | 'gallery';
+type ViewMode = 'list' | 'gallery' | 'expanded';
 
 function loadViewMode(): ViewMode {
   try {
     const v = localStorage.getItem(VIEW_MODE_KEY);
-    if (v === 'list' || v === 'gallery') return v;
+    if (v === 'list' || v === 'gallery' || v === 'expanded') return v;
   } catch {
     /* ignore */
   }
@@ -317,6 +319,23 @@ export function FileBrowser({
               </TooltipTrigger>
               <TooltipContent>Gallery view</TooltipContent>
             </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={viewMode === 'expanded' ? 'secondary' : 'ghost'}
+                  size="sm"
+                  className="h-7 px-2"
+                  onClick={() => {
+                    setViewMode('expanded');
+                    saveViewMode('expanded');
+                  }}
+                  aria-pressed={viewMode === 'expanded'}
+                >
+                  <ListTree className="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Expanded view</TooltipContent>
+            </Tooltip>
           </div>
           <Separator orientation="vertical" className="h-6" />
           <input
@@ -413,8 +432,25 @@ export function FileBrowser({
         </div>
       </TooltipProvider>
 
-      {/* Content: List or Gallery */}
-      {viewMode === 'list' ? (
+      {/* Content: List, Gallery, or Expanded */}
+      {viewMode === 'expanded' ? (
+        <div className="rounded-lg border border-border bg-card p-4">
+          {entries.length > 0 ? (
+            <ExpandedView
+              entries={entries}
+              root={root}
+              hasCache={hasCache}
+              onNavigate={onNavigate}
+              onFileClick={handleFileClick}
+              onRename={openRenameDialog}
+              onDelete={(e) => setDeleteTarget({ path: e.path, name: e.name })}
+              onDownload={(p) => triggerDownload(root, p)}
+            />
+          ) : (
+            <div className="py-8 text-center text-muted-foreground">This folder is empty.</div>
+          )}
+        </div>
+      ) : viewMode === 'list' ? (
         <div
           className={cn(
             'rounded-lg border bg-card overflow-hidden transition-colors',

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Loader2, Pencil, Plus, Search, Terminal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,11 +21,14 @@ export function DatabasePage() {
   const {
     selectedTable,
     setSelectedTable,
+    panelMode,
     setPanelMode,
     setAlterTableName,
+    setEditRowData,
     selectedDatabaseId,
     setSelectedDatabaseId,
   } = useDatabaseView();
+  const previousSelectedTableRef = useRef<string | null>(selectedTable);
 
   const { data: statusData, loading: statusLoading } = useStatus();
   const dbConfigured = statusData?.database?.configured ?? false;
@@ -41,6 +44,21 @@ export function DatabasePage() {
       setSelectedDatabaseId(effectiveDatabaseId);
     }
   }, [effectiveDatabaseId, selectedDatabaseId, setSelectedDatabaseId]);
+
+  useEffect(() => {
+    const previousSelectedTable = previousSelectedTableRef.current;
+    const hasNavigatedToDifferentTable = previousSelectedTable !== selectedTable;
+    const isTableEditorOpen =
+      panelMode === 'alter' || panelMode === 'add-row' || panelMode === 'edit-row';
+
+    if (hasNavigatedToDifferentTable && isTableEditorOpen) {
+      setPanelMode(null);
+      setAlterTableName(null);
+      setEditRowData(null);
+    }
+
+    previousSelectedTableRef.current = selectedTable;
+  }, [panelMode, selectedTable, setAlterTableName, setEditRowData, setPanelMode]);
 
   const { data: tablesData, error: tablesError, isLoading: tablesLoading } = useDatabaseTables(
     effectiveDatabaseId,

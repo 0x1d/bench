@@ -522,11 +522,15 @@ export function ResourcesConfigPage() {
                   </thead>
                   <tbody>
                     {state.filesystem.map((entry, index) => (
-                      <tr key={`fs-${index}`} className="border-b border-border/50 last:border-b-0">
+                      <tr
+                        key={`fs-${index}`}
+                        className="border-b border-border/50 last:border-b-0 cursor-pointer hover:bg-accent/30"
+                        onClick={() => openEditFilesystem(index)}
+                      >
                         <td className="px-4 py-2 font-mono">{entry.id}</td>
                         <td className="px-4 py-2">{entry.label || '—'}</td>
                         <td className="px-4 py-2 font-mono">{entry.path}</td>
-                        <td className="px-2 py-2">
+                        <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-end gap-1">
                             <Button
                               variant="ghost"
@@ -580,13 +584,17 @@ export function ResourcesConfigPage() {
                   </thead>
                   <tbody>
                     {state.databases.map((entry, index) => (
-                      <tr key={`db-${index}`} className="border-b border-border/50 last:border-b-0">
+                      <tr
+                        key={`db-${index}`}
+                        className="border-b border-border/50 last:border-b-0 cursor-pointer hover:bg-accent/30"
+                        onClick={() => openEditDatabase(index)}
+                      >
                         <td className="px-4 py-2 font-mono">{entry.id}</td>
                         <td className="px-4 py-2">{entry.label || '—'}</td>
                         <td className="px-4 py-2 font-mono">{entry.url}</td>
                         <td className="px-4 py-2">{entry.enabled ? 'Yes' : 'No'}</td>
                         <td className="px-4 py-2">{entry.default ? 'Yes' : 'No'}</td>
-                        <td className="px-2 py-2">
+                        <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-end gap-1">
                             <Button
                               variant="ghost"

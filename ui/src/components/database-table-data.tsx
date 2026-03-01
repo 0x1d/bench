@@ -95,9 +95,13 @@ export function DatabaseTableData({
                     <tr
                       key={i}
                       className={cn(
-                        'border-b border-border/50 last:border-b-0',
+                        'border-b border-border/50 last:border-b-0 cursor-pointer',
                         'hover:bg-accent/30'
                       )}
+                      onClick={() => {
+                        setEditRowData({ tableName, row: rowObj });
+                        setPanelMode('edit-row');
+                      }}
                     >
                       {row.map((cell, j) => (
                         <td key={j} className="px-4 py-2">

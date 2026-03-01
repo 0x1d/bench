@@ -1,6 +1,6 @@
-# File System Resource Manager
+# Filesystem Browser
 
-The bench Resource Manager provides a file browser for configured directory roots. It supports listing, downloading, uploading, creating folders, renaming, and deleting files and directories.
+The bench Filesystem page provides a file browser for configured directory roots. It supports listing, downloading, uploading, creating folders, renaming, and deleting files and directories.
 
 ## Overview
 
@@ -25,7 +25,7 @@ resources:
 - **label** — Display name in the UI
 - **path** — Absolute or relative path (relative to the config file location)
 
-If no roots are configured, the Resources page shows a setup message.
+If no roots are configured, the Filesystem page shows a setup message.
 
 ## API Reference
 

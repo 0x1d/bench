@@ -8,7 +8,8 @@ import { DatabasePanel } from '@/components/database-panel';
 import { SidebarLeft } from '@/components/sidebar-left';
 import { SiteHeader } from '@/components/site-header';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
-import { ResourcesPage } from '@/pages/resources-page';
+import { FilesystemPage } from '@/pages/resources-page';
+import { ResourcesConfigPage } from '@/pages/resources-config-page';
 import { StatusPage } from '@/pages/status-page';
 import { DatabasePage } from '@/pages/database-page';
 
@@ -19,7 +20,7 @@ function getHash() {
 function ClearFileViewOnNavigate({ hash }: { hash: string }) {
   const { setViewedFile } = useFileView();
   useEffect(() => {
-    if (hash !== 'resources') {
+    if (hash !== 'filesystem') {
       setViewedFile(null);
     }
   }, [hash, setViewedFile]);
@@ -64,14 +65,15 @@ export function App() {
                 <section
                   id="main"
                   className={
-                    hash === 'resources' || hash === 'database'
+                    hash === 'filesystem' || hash === 'database' || hash === 'resources'
                       ? 'flex min-h-0 flex-1 items-start p-4 md:p-6'
                       : 'flex flex-1 items-start justify-center p-4 md:min-h-min'
                   }
                 >
-                  {hash === 'resources' && <ResourcesPage />}
+                  {hash === 'filesystem' && <FilesystemPage />}
+                  {hash === 'resources' && <ResourcesConfigPage />}
                   {hash === 'database' && <DatabasePage />}
-                  {hash !== 'resources' && hash !== 'database' && <StatusPage />}
+                  {hash !== 'filesystem' && hash !== 'resources' && hash !== 'database' && <StatusPage />}
                 </section>
               </SidebarInset>
               <FileViewer />

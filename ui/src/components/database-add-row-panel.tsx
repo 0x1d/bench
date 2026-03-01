@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useTableSchema, useInsertRow } from '@/hooks/use-database';
 import { ForeignKeyLookup } from '@/components/database-foreign-key-lookup';
+import { useDatabaseView } from '@/contexts/database-view-context';
 
 export interface DatabaseAddRowPanelContentProps {
   tableName: string;
@@ -25,8 +26,13 @@ export function DatabaseAddRowPanelContent({
   tableName,
   onSuccess,
 }: DatabaseAddRowPanelContentProps) {
-  const { data: schema, isLoading, error, refetch, isRefetching } = useTableSchema(tableName, true);
-  const insertMutation = useInsertRow(tableName);
+  const { selectedDatabaseId } = useDatabaseView();
+  const { data: schema, isLoading, error, refetch, isRefetching } = useTableSchema(
+    tableName,
+    selectedDatabaseId,
+    true
+  );
+  const insertMutation = useInsertRow(tableName, selectedDatabaseId);
 
   if (isLoading || (!schema && !error)) {
     return (
@@ -54,6 +60,7 @@ export function DatabaseAddRowPanelContent({
       key={schema.columns.map((c) => c.name).join(',')}
       schema={schema}
       insertMutation={insertMutation}
+      dbId={selectedDatabaseId}
       onSuccess={onSuccess}
     />
   );
@@ -70,10 +77,12 @@ interface SchemaColumn {
 function AddRowForm({
   schema,
   insertMutation,
+  dbId,
   onSuccess,
 }: {
   schema: { columns: SchemaColumn[] };
   insertMutation: ReturnType<typeof useInsertRow>;
+  dbId: string | null;
   onSuccess?: () => void;
 }) {
   const editableColumns = schema.columns.filter((c) => !c.autoIncrement);
@@ -156,65 +165,72 @@ function AddRowForm({
   };
 
   return (
-    <div className="space-y-4">
-      {editableColumns.map((col) => {
-        const inputType = getInputType(col.dataType);
-        const isCheckbox = inputType === 'checkbox';
-        const hasError = validationErrors[col.name];
-        return (
-          <div key={col.name} className="space-y-2">
-            <Label htmlFor={`col-${col.name}`}>
-              {col.name}
-              {col.required && <span className="text-destructive ml-0.5">*</span>}
-              <span className="ml-1 text-muted-foreground font-normal">({col.dataType})</span>
-            </Label>
-            {isCheckbox ? (
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id={`col-${col.name}`}
-                  checked={(values[col.name] as string) === 'true'}
-                  onCheckedChange={(v) => updateValue(col.name, v === true ? 'true' : 'false')}
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="space-y-4 overflow-auto pb-4">
+        {editableColumns.map((col) => {
+          const inputType = getInputType(col.dataType);
+          const isCheckbox = inputType === 'checkbox';
+          const hasError = validationErrors[col.name];
+          return (
+            <div key={col.name} className="space-y-2">
+              <Label htmlFor={`col-${col.name}`}>
+                {col.name}
+                {col.required && <span className="text-destructive ml-0.5">*</span>}
+                <span className="ml-1 text-muted-foreground font-normal">({col.dataType})</span>
+              </Label>
+              {isCheckbox ? (
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id={`col-${col.name}`}
+                    checked={(values[col.name] as string) === 'true'}
+                    onCheckedChange={(v) => updateValue(col.name, v === true ? 'true' : 'false')}
+                  />
+                  <span className="text-sm text-muted-foreground">
+                    {(values[col.name] as string) === 'true' ? 'true' : 'false'}
+                  </span>
+                </div>
+              ) : col.references ? (
+                <ForeignKeyLookup
+                  dbId={dbId}
+                  refTable={col.references.table}
+                  refColumn={col.references.column}
+                  value={col.references.multiple ? (values[col.name] as string[] ?? []) : (values[col.name] as string ?? '')}
+                  onChange={(v) => updateValue(col.name, v)}
+                  placeholder={col.required ? 'Select...' : 'None (NULL)'}
+                  hasError={!!hasError}
+                  multiple={col.references.multiple}
                 />
-                <span className="text-sm text-muted-foreground">
-                  {(values[col.name] as string) === 'true' ? 'true' : 'false'}
-                </span>
-              </div>
-            ) : col.references ? (
-              <ForeignKeyLookup
-                refTable={col.references.table}
-                refColumn={col.references.column}
-                value={col.references.multiple ? (values[col.name] as string[] ?? []) : (values[col.name] as string ?? '')}
-                onChange={(v) => updateValue(col.name, v)}
-                placeholder={col.required ? 'Select...' : 'None (NULL)'}
-                hasError={!!hasError}
-                multiple={col.references.multiple}
-              />
-            ) : (
-              <Input
-                id={`col-${col.name}`}
-                type={inputType}
-                value={(values[col.name] as string) ?? ''}
-                onChange={(e) => updateValue(col.name, e.target.value)}
-                placeholder={col.required ? '' : 'NULL'}
-                className={`font-mono ${hasError ? 'border-destructive' : ''}`}
-                aria-invalid={!!hasError}
-              />
-            )}
-            {hasError && (
-              <p className="text-xs text-destructive">{validationErrors[col.name]}</p>
-            )}
-          </div>
-        );
-      })}
-      {insertMutation.isError && (
-        <p className="text-sm text-destructive">{insertMutation.error?.message}</p>
-      )}
-      <Button
-        onClick={handleSubmit}
-        disabled={insertMutation.isPending}
-      >
-        {insertMutation.isPending ? 'Inserting...' : 'Insert row'}
-      </Button>
+              ) : (
+                <Input
+                  id={`col-${col.name}`}
+                  type={inputType}
+                  value={(values[col.name] as string) ?? ''}
+                  onChange={(e) => updateValue(col.name, e.target.value)}
+                  placeholder={col.required ? '' : 'NULL'}
+                  className={`font-mono ${hasError ? 'border-destructive' : ''}`}
+                  aria-invalid={!!hasError}
+                />
+              )}
+              {hasError && (
+                <p className="text-xs text-destructive">{validationErrors[col.name]}</p>
+              )}
+            </div>
+          );
+        })}
+        {insertMutation.isError && (
+          <p className="text-sm text-destructive">{insertMutation.error?.message}</p>
+        )}
+      </div>
+      <div className="shrink-0 border-t pt-3">
+        <div className="flex justify-end">
+          <Button
+            onClick={handleSubmit}
+            disabled={insertMutation.isPending}
+          >
+            {insertMutation.isPending ? 'Inserting...' : 'Insert row'}
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

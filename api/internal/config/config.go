@@ -2,8 +2,12 @@ package config
 
 import (
 	_ "embed"
+	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"sort"
+	"strings"
 
 	"github.com/0x1d/bench/api/internal/model"
 	"gopkg.in/yaml.v3"
@@ -21,9 +25,28 @@ type FilesystemEntry struct {
 	Path  string `yaml:"path"`
 }
 
+// DatabaseEntry represents one configured database resource.
+type DatabaseEntry struct {
+	ID      string `yaml:"id"`
+	Label   string `yaml:"label"`
+	URL     string `yaml:"url"`
+	Enabled *bool  `yaml:"enabled,omitempty"`
+	Default bool   `yaml:"default,omitempty"`
+}
+
+// IsEnabled returns true when the database entry is enabled.
+// Nil defaults to enabled.
+func (d DatabaseEntry) IsEnabled() bool {
+	if d.Enabled == nil {
+		return true
+	}
+	return *d.Enabled
+}
+
 // ResourcesConfig is the resources section of config.yaml.
 type ResourcesConfig struct {
 	Filesystem []FilesystemEntry `yaml:"filesystem"`
+	Databases  []DatabaseEntry   `yaml:"databases"`
 }
 
 // Config is the top-level config structure.
@@ -59,21 +82,100 @@ func FindConfigPath() string {
 	return ""
 }
 
+var envVarPattern = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}`)
+
+func interpolateEnv(data []byte) ([]byte, error) {
+	matches := envVarPattern.FindAllSubmatch(data, -1)
+	if len(matches) == 0 {
+		return data, nil
+	}
+
+	missingSet := map[string]struct{}{}
+	out := envVarPattern.ReplaceAllStringFunc(string(data), func(match string) string {
+		parts := envVarPattern.FindStringSubmatch(match)
+		if len(parts) != 2 {
+			return match
+		}
+		name := parts[1]
+		if val, ok := os.LookupEnv(name); ok {
+			return val
+		}
+		missingSet[name] = struct{}{}
+		return match
+	})
+
+	if len(missingSet) > 0 {
+		names := make([]string, 0, len(missingSet))
+		for name := range missingSet {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		return nil, fmt.Errorf("missing environment variables: %s", strings.Join(names, ", "))
+	}
+	return []byte(out), nil
+}
+
+func parseConfig(data []byte) (Config, error) {
+	expanded, err := interpolateEnv(data)
+	if err != nil {
+		return Config{}, err
+	}
+	var cfg Config
+	if err := yaml.Unmarshal(expanded, &cfg); err != nil {
+		return Config{}, err
+	}
+	if err := validateConfig(cfg); err != nil {
+		return Config{}, err
+	}
+	return cfg, nil
+}
+
+func validateConfig(cfg Config) error {
+	seenDB := map[string]struct{}{}
+	defaults := 0
+	for i, db := range cfg.Resources.Databases {
+		if db.ID == "" {
+			return fmt.Errorf("resources.databases[%d].id is required", i)
+		}
+		if _, ok := seenDB[db.ID]; ok {
+			return fmt.Errorf("resources.databases contains duplicate id %q", db.ID)
+		}
+		seenDB[db.ID] = struct{}{}
+		if db.URL == "" {
+			return fmt.Errorf("resources.databases[%d].url is required", i)
+		}
+		if db.Default {
+			defaults++
+		}
+	}
+	if defaults > 1 {
+		return fmt.Errorf("resources.databases allows at most one default entry")
+	}
+	return nil
+}
+
+// ReadConfig reads and validates config.yaml and returns parsed config + path.
+func ReadConfig() (*Config, string, error) {
+	path := FindConfigPath()
+	if path == "" {
+		return nil, "", fmt.Errorf("config not found")
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, "", err
+	}
+	cfg, err := parseConfig(data)
+	if err != nil {
+		return nil, "", err
+	}
+	return &cfg, path, nil
+}
+
 // Roots returns all configured roots for resource browsing from config.yaml.
 // Returns empty slice if config is missing or has no filesystem entries.
 func Roots() []model.Root {
-	path := FindConfigPath()
-	if path == "" {
-		return nil
-	}
-
-	data, err := os.ReadFile(path)
+	cfg, path, err := ReadConfig()
 	if err != nil {
-		return nil
-	}
-
-	var cfg Config
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil
 	}
 
@@ -102,11 +204,41 @@ func Roots() []model.Root {
 	return roots
 }
 
+// Databases returns configured database resources from config.yaml.
+func Databases() []DatabaseEntry {
+	out, err := DatabasesWithError()
+	if err != nil {
+		return nil
+	}
+	return out
+}
+
+// DatabasesWithError returns configured database resources and preserves load errors.
+func DatabasesWithError() ([]DatabaseEntry, error) {
+	cfg, _, err := ReadConfig()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]DatabaseEntry, 0, len(cfg.Resources.Databases))
+	for _, e := range cfg.Resources.Databases {
+		if e.ID == "" || e.URL == "" {
+			continue
+		}
+		if e.Label == "" {
+			e.Label = e.ID
+		}
+		out = append(out, e)
+	}
+	return out, nil
+}
+
 // RootStatus represents a filesystem root for status display (includes path).
 type RootStatus struct {
-	ID    string `json:"id"`
-	Label string `json:"label"`
-	Path  string `json:"path"`
+	ID        string `json:"id"`
+	Label     string `json:"label"`
+	Path      string `json:"path"`
+	Available bool   `json:"available"`
+	Error     string `json:"error,omitempty"`
 }
 
 const envConfigWritePath = "BENCH_CONFIG_WRITE"
@@ -127,8 +259,7 @@ func ConfigWritePath() string {
 
 // SaveConfig validates and writes config YAML. Uses existing config path if found, else default write path.
 func SaveConfig(data []byte) error {
-	var cfg Config
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
+	if _, err := parseConfig(data); err != nil {
 		return err
 	}
 	path := FindConfigPath()
@@ -157,12 +288,45 @@ func ReadExampleConfig() ([]byte, error) {
 	return embeddedExampleConfig, nil
 }
 
+// ReadConfigRaw returns config.yaml content if present.
+func ReadConfigRaw() ([]byte, error) {
+	path := FindConfigPath()
+	if path == "" {
+		return nil, os.ErrNotExist
+	}
+	return os.ReadFile(path)
+}
+
 // RootsStatus returns configured roots with paths for status display.
 func RootsStatus() []RootStatus {
 	roots := Roots()
 	out := make([]RootStatus, 0, len(roots))
 	for _, r := range roots {
-		out = append(out, RootStatus{ID: r.ID, Label: r.Label, Path: r.Path})
+		available, checkErr := checkFilesystemRoot(r.Path)
+		status := RootStatus{
+			ID:        r.ID,
+			Label:     r.Label,
+			Path:      r.Path,
+			Available: available,
+		}
+		if checkErr != nil {
+			status.Error = checkErr.Error()
+		}
+		out = append(out, status)
 	}
 	return out
+}
+
+func checkFilesystemRoot(path string) (bool, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return false, err
+	}
+	if !info.IsDir() {
+		return false, fmt.Errorf("path is not a directory")
+	}
+	if _, err := os.ReadDir(path); err != nil {
+		return false, err
+	}
+	return true, nil
 }

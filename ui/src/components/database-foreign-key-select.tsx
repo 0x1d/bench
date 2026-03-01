@@ -15,18 +15,20 @@ export interface ForeignKeyRef {
 }
 
 export function ForeignKeySelect({
+  dbId,
   tables,
   currentTable,
   value,
   onChange,
 }: {
+  dbId: string | null;
   tables: { name: string }[];
   currentTable: string;
   value: ForeignKeyRef | null;
   onChange: (ref: ForeignKeyRef | null) => void;
 }) {
   const refTables = tables.filter((t) => t.name !== currentTable);
-  const { data: refSchema } = useTableSchema(value?.table ?? null, !!value?.table);
+  const { data: refSchema } = useTableSchema(value?.table ?? null, dbId, !!value?.table);
   const refColumns = refSchema?.columns ?? [];
 
   return (

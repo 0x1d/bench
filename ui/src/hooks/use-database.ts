@@ -19,11 +19,11 @@ import {
   type QueryRowsAffectedResponse,
 } from '@/services/api';
 
-export function useDatabaseTables(enabled: boolean) {
+export function useDatabaseTables(dbId: string | null, enabled: boolean) {
   return useQuery({
-    queryKey: ['database', 'tables'],
-    queryFn: fetchDatabaseTables,
-    enabled,
+    queryKey: ['database', dbId, 'tables'],
+    queryFn: () => fetchDatabaseTables(dbId ?? undefined),
+    enabled: enabled && dbId != null,
   });
 }
 
@@ -31,15 +31,16 @@ export function useTableData(
   tableName: string | null,
   page: number,
   search: string,
+  dbId: string | null,
   enabled: boolean
 ) {
   const limit = 20;
   const offset = (page - 1) * limit;
 
   return useQuery<TableDataResponse>({
-    queryKey: ['database', 'table', tableName, page, search],
-    queryFn: () => fetchTableData(tableName!, limit, offset, search),
-    enabled: enabled && tableName != null,
+    queryKey: ['database', dbId, 'table', tableName, page, search],
+    queryFn: () => fetchTableData(tableName!, limit, offset, search, dbId ?? undefined),
+    enabled: enabled && dbId != null && tableName != null,
   });
 }
 
@@ -47,42 +48,43 @@ export function useTableLookup(
   tableName: string | null,
   valueColumn: string,
   search: string,
+  dbId: string | null,
   enabled: boolean
 ) {
   return useQuery({
-    queryKey: ['database', 'lookup', tableName, valueColumn, search],
-    queryFn: () => fetchTableLookup(tableName!, valueColumn, search),
-    enabled: enabled && tableName != null && valueColumn.length > 0,
+    queryKey: ['database', dbId, 'lookup', tableName, valueColumn, search],
+    queryFn: () => fetchTableLookup(tableName!, valueColumn, search, 50, dbId ?? undefined),
+    enabled: enabled && dbId != null && tableName != null && valueColumn.length > 0,
     staleTime: 10_000,
   });
 }
 
-export function useTableSchema(tableName: string | null, enabled: boolean) {
+export function useTableSchema(tableName: string | null, dbId: string | null, enabled: boolean) {
   return useQuery<TableSchemaResponse>({
-    queryKey: ['database', 'schema', tableName],
-    queryFn: () => fetchTableSchema(tableName!),
-    enabled: enabled && tableName != null && tableName.length > 0,
+    queryKey: ['database', dbId, 'schema', tableName],
+    queryFn: () => fetchTableSchema(tableName!, dbId ?? undefined),
+    enabled: enabled && dbId != null && tableName != null && tableName.length > 0,
     retry: 1,
     staleTime: 30_000,
   });
 }
 
-export function useCreateTable() {
+export function useCreateTable(dbId: string | null) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (req: CreateTableRequest) => createTable(req),
+    mutationFn: (req: CreateTableRequest) => createTable(req, dbId ?? undefined),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['database', 'tables'] });
     },
   });
 }
 
-export function useAlterTable(tableName: string | null) {
+export function useAlterTable(tableName: string | null, dbId: string | null) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (req: AlterTableRequest) => alterTable(tableName!, req),
+    mutationFn: (req: AlterTableRequest) => alterTable(tableName!, req, dbId ?? undefined),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['database', 'tables'] });
       if (tableName) {
@@ -93,18 +95,18 @@ export function useAlterTable(tableName: string | null) {
   });
 }
 
-export function useDropTable() {
+export function useDropTable(dbId: string | null) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (tableName: string) => dropTable(tableName),
+    mutationFn: (tableName: string) => dropTable(tableName, dbId ?? undefined),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['database'] });
     },
   });
 }
 
-export function useUpdateRow(tableName: string | null) {
+export function useUpdateRow(tableName: string | null, dbId: string | null) {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -114,7 +116,7 @@ export function useUpdateRow(tableName: string | null) {
     }: {
       where: Record<string, unknown>;
       set: Record<string, unknown>;
-    }) => updateRow(tableName!, where, set),
+    }) => updateRow(tableName!, where, set, dbId ?? undefined),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['database', 'tables'] });
       if (tableName) {
@@ -124,11 +126,11 @@ export function useUpdateRow(tableName: string | null) {
   });
 }
 
-export function useDeleteRow(tableName: string | null) {
+export function useDeleteRow(tableName: string | null, dbId: string | null) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (where: Record<string, unknown>) => deleteRow(tableName!, where),
+    mutationFn: (where: Record<string, unknown>) => deleteRow(tableName!, where, dbId ?? undefined),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['database', 'tables'] });
       if (tableName) {
@@ -138,11 +140,11 @@ export function useDeleteRow(tableName: string | null) {
   });
 }
 
-export function useInsertRow(tableName: string | null) {
+export function useInsertRow(tableName: string | null, dbId: string | null) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (row: Record<string, unknown>) => insertRow(tableName!, row),
+    mutationFn: (row: Record<string, unknown>) => insertRow(tableName!, row, dbId ?? undefined),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['database', 'tables'] });
       if (tableName) {
@@ -152,11 +154,11 @@ export function useInsertRow(tableName: string | null) {
   });
 }
 
-export function useExecuteQuery() {
+export function useExecuteQuery(dbId: string | null) {
   const queryClient = useQueryClient();
 
   return useMutation<QueryResponse | QueryRowsAffectedResponse, Error, string>({
-    mutationFn: executeQuery,
+    mutationFn: (sql: string) => executeQuery(sql, dbId ?? undefined),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['database'] });
     },

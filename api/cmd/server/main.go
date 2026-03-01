@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/0x1d/bench/api/internal/config"
 	"github.com/0x1d/bench/api/internal/db"
 	"github.com/0x1d/bench/api/internal/handler"
 	"github.com/0x1d/bench/api/internal/middleware"
@@ -21,12 +22,32 @@ func main() {
 		log.Fatal("API_TOKEN is required")
 	}
 
-	if connStr := os.Getenv("DATABASE_URL"); connStr != "" {
+	dbEntries, cfgErr := config.DatabasesWithError()
+	if cfgErr != nil && config.FindConfigPath() != "" {
+		log.Printf("config warning: %v", cfgErr)
+	}
+	if len(dbEntries) > 0 {
+		defs := make([]db.Definition, 0, len(dbEntries))
+		for _, entry := range dbEntries {
+			defs = append(defs, db.Definition{
+				ID:      entry.ID,
+				Label:   entry.Label,
+				URL:     entry.URL,
+				Enabled: entry.IsEnabled(),
+				Default: entry.Default,
+			})
+		}
+		if err := db.InitDefinitions(context.Background(), defs); err != nil {
+			log.Fatalf("database init: %v", err)
+		}
+		defer db.Close()
+		log.Printf("database resources loaded (%d configured)", len(db.States()))
+	} else if connStr := os.Getenv("DATABASE_URL"); connStr != "" {
 		if err := db.Init(context.Background(), connStr); err != nil {
 			log.Fatalf("database init: %v", err)
 		}
 		defer db.Close()
-		log.Print("database connected")
+		log.Print("database connected (DATABASE_URL)")
 	}
 
 	mux := http.NewServeMux()

@@ -19,12 +19,12 @@ function getHistoryState(): HistoryState | null {
 }
 
 function pushState(path: string, root: string | null) {
-  const url = `${window.location.pathname}${window.location.search}#resources`;
+  const url = `${window.location.pathname}${window.location.search}#filesystem`;
   history.pushState({ [HISTORY_KEY]: { path, root } }, '', url);
 }
 
 function replaceState(path: string, root: string | null) {
-  const url = `${window.location.pathname}${window.location.search}#resources`;
+  const url = `${window.location.pathname}${window.location.search}#filesystem`;
   history.replaceState({ [HISTORY_KEY]: { path, root } }, '', url);
 }
 

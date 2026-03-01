@@ -12,6 +12,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useDropTable } from '@/hooks/use-database';
+import { useDatabaseView } from '@/contexts/database-view-context';
 import { cn } from '@/lib/utils';
 
 export interface DatabaseTableListProps {
@@ -35,8 +36,9 @@ export function DatabaseTableList({
   isLoading,
   error,
 }: DatabaseTableListProps) {
+  const { selectedDatabaseId } = useDatabaseView();
   const [dropTarget, setDropTarget] = useState<string | null>(null);
-  const dropMutation = useDropTable();
+  const dropMutation = useDropTable(selectedDatabaseId);
 
   const handleConfirmDrop = () => {
     if (dropTarget) {

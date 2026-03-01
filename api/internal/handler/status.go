@@ -15,7 +15,9 @@ type StatusResponse struct {
 		Paths      []config.RootStatus `json:"paths"`
 	} `json:"filesystem"`
 	Database struct {
-		Configured bool `json:"configured"`
+		Configured bool                 `json:"configured"`
+		DefaultID  string               `json:"defaultId,omitempty"`
+		Databases  []db.ConnectionState `json:"databases"`
 	} `json:"database"`
 }
 
@@ -26,6 +28,8 @@ func HandleStatus(w http.ResponseWriter, r *http.Request) {
 	resp.Filesystem.Configured = len(paths) > 0
 	resp.Filesystem.Paths = paths
 	resp.Database.Configured = db.Configured()
+	resp.Database.DefaultID = db.DefaultID()
+	resp.Database.Databases = db.States()
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)

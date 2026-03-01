@@ -1,12 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { X, Save, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
 import { CodeEditor } from '@/components/code-editor';
 import { useFileView } from '@/contexts/file-view-context';
 import { useResourceList, useResourceMutations } from '@/hooks/use-resources';
@@ -516,41 +510,6 @@ export function FileViewer() {
           )}
         </span>
         <div className="flex items-center gap-2">
-          {isTextFile && (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant={hasUnsavedChanges ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={handleSave}
-                    disabled={!hasUnsavedChanges || saveMutation.isPending}
-                    aria-label="Save file"
-                  >
-                    <Save className="size-4" />
-                    Save
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Save file (Ctrl+S)</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  onClick={() => setShowDeleteConfirm(true)}
-                  aria-label="Delete file"
-                  className="text-destructive hover:text-destructive"
-                >
-                  <Trash2 className="size-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Delete file</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
           <Button
             variant="ghost"
             size="icon-xs"
@@ -600,7 +559,7 @@ export function FileViewer() {
                     setTextMode(mode);
                   }
                 }}
-                className="flex h-full flex-col"
+                className="flex min-h-0 flex-1 flex-col"
               >
                 <TabsList variant="line" className="mb-2 shrink-0">
                   {showFormTab && <TabsTrigger value="data">Data</TabsTrigger>}
@@ -624,11 +583,12 @@ export function FileViewer() {
                     )}
                   </TabsContent>
                 )}
-                <TabsContent value="content" className="mt-0 flex-1 overflow-auto">
+                <TabsContent value="content" className="mt-0 min-h-0 flex-1 overflow-auto">
                   <CodeEditor
                     value={editContent ?? ''}
                     onChange={setEditContent}
                     filename={viewedFile.name}
+                    className="h-full min-h-[240px] [&_.cm-editor]:h-full [&_.cm-scroller]:h-full"
                   />
                 </TabsContent>
               </Tabs>
@@ -696,6 +656,35 @@ export function FileViewer() {
           </>
         )}
       </div>
+      {viewedFile && (
+        <div className="shrink-0 border-t border-sidebar-border px-4 py-3">
+          <div className="flex items-center justify-end gap-2">
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => setShowDeleteConfirm(true)}
+              aria-label="Delete file"
+              className="gap-2"
+            >
+              <Trash2 className="size-4" />
+              Delete
+            </Button>
+            {isTextFile && (
+              <Button
+                variant={hasUnsavedChanges ? 'default' : 'outline'}
+                size="sm"
+                onClick={handleSave}
+                disabled={!hasUnsavedChanges || saveMutation.isPending}
+                aria-label="Save file"
+                className="gap-2"
+              >
+                <Save className="size-4" />
+                {saveMutation.isPending ? 'Saving...' : 'Save'}
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
       {/* Image overlay: rendered separately so it stays mounted during image transitions */}
       {imageLightboxOpen && viewedFile?.type === 'image' && objectUrl && (
         <Dialog

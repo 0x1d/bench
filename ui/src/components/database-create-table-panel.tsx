@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/select';
 import { useCreateTable, useDatabaseTables } from '@/hooks/use-database';
 import { ForeignKeySelect, type ForeignKeyRef } from '@/components/database-foreign-key-select';
+import { useDatabaseView } from '@/contexts/database-view-context';
 
 const DATA_TYPES = [
   'text',
@@ -46,13 +47,14 @@ export interface DatabaseCreateTablePanelContentProps {
 export function DatabaseCreateTablePanelContent({
   onSuccess,
 }: DatabaseCreateTablePanelContentProps) {
+  const { selectedDatabaseId } = useDatabaseView();
   const [tableName, setTableName] = useState('');
   const [columns, setColumns] = useState<ColumnDef[]>([
     { name: 'id', dataType: 'bigint', required: false, autoIncrement: true, primaryKey: true, references: null },
   ]);
 
-  const createMutation = useCreateTable();
-  const { data: tablesData } = useDatabaseTables(true);
+  const createMutation = useCreateTable(selectedDatabaseId);
+  const { data: tablesData } = useDatabaseTables(selectedDatabaseId, true);
   const tables = tablesData?.tables ?? [];
 
   const addColumn = () => {
@@ -109,7 +111,8 @@ export function DatabaseCreateTablePanelContent({
   };
 
   return (
-    <div className="space-y-4 w-full min-w-0">
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="space-y-4 w-full min-w-0 overflow-auto pb-4">
           <div className="space-y-2">
             <Label htmlFor="table-name">Table name</Label>
             <Input
@@ -190,6 +193,7 @@ export function DatabaseCreateTablePanelContent({
                     )}
                     {tables.length > 0 && (
                       <ForeignKeySelect
+                        dbId={selectedDatabaseId}
                         tables={tables}
                         currentTable={tableName.trim()}
                         value={col.references}
@@ -204,6 +208,9 @@ export function DatabaseCreateTablePanelContent({
           {createMutation.isError && (
             <p className="text-sm text-destructive">{createMutation.error?.message}</p>
           )}
+      </div>
+      <div className="shrink-0 border-t pt-3">
+        <div className="flex justify-end">
           <Button
             onClick={handleCreateTable}
             disabled={
@@ -214,6 +221,8 @@ export function DatabaseCreateTablePanelContent({
           >
             {createMutation.isPending ? 'Creating...' : 'Create table'}
           </Button>
+        </div>
+      </div>
         </div>
   );
 }

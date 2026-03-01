@@ -6,6 +6,49 @@ import { useHealth } from '@/hooks/use-health';
 import { useStatus } from '@/hooks/use-status';
 import { uploadConfig } from '@/services/api';
 
+type AggregateStatus = 'healthy' | 'degraded' | 'unhealthy' | 'not-configured';
+
+function getAggregateStatus(items: {
+  enabled: boolean;
+  available: boolean;
+}[]): AggregateStatus {
+  const enabledItems = items.filter((item) => item.enabled);
+  if (enabledItems.length === 0) return 'not-configured';
+
+  const availableCount = enabledItems.filter((item) => item.available).length;
+  if (availableCount === enabledItems.length) return 'healthy';
+  if (availableCount > 0) return 'degraded';
+  return 'unhealthy';
+}
+
+function aggregateStatusPresentation(status: AggregateStatus): {
+  label: string;
+  className: string;
+} {
+  switch (status) {
+    case 'healthy':
+      return {
+        label: 'Healthy',
+        className: 'bg-green-500 shadow-[0_0_6px_rgba(74,222,128,0.5)]',
+      };
+    case 'degraded':
+      return {
+        label: 'Degraded',
+        className: 'bg-amber-500 shadow-[0_0_6px_rgba(245,158,11,0.5)]',
+      };
+    case 'unhealthy':
+      return {
+        label: 'Unhealthy',
+        className: 'bg-red-500 shadow-[0_0_6px_rgba(248,113,113,0.5)]',
+      };
+    default:
+      return {
+        label: 'Not configured',
+        className: 'bg-amber-500 shadow-[0_0_6px_rgba(245,158,11,0.5)]',
+      };
+  }
+}
+
 export function StatusPage() {
   const { data, error, loading, refetch } = useHealth();
   const {
@@ -20,6 +63,24 @@ export function StatusPage() {
   const [configUploading, setConfigUploading] = useState(false);
   const [configUploadError, setConfigUploadError] = useState<string | null>(null);
   const [configEditorOpen, setConfigEditorOpen] = useState(false);
+  const databaseStates = statusData?.database?.databases ?? [];
+  const dbAggregate = aggregateStatusPresentation(
+    getAggregateStatus(
+      databaseStates.map((db) => ({
+        enabled: db.enabled,
+        available: db.connected,
+      }))
+    )
+  );
+  const filesystemStates = statusData?.filesystem?.paths ?? [];
+  const filesystemAggregate = aggregateStatusPresentation(
+    getAggregateStatus(
+      filesystemStates.map((path) => ({
+        enabled: true,
+        available: path.available === true,
+      }))
+    )
+  );
 
   const handleConfigUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -75,7 +136,7 @@ export function StatusPage() {
           <div className="mt-3">
             <div className="flex items-center gap-2">
               <span className="h-2.5 w-2.5 rounded-full bg-green-500 shadow-[0_0_6px_rgba(74,222,128,0.5)]" />
-              <span>Online</span>
+              <span>Healthy</span>
             </div>
             <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
               <dt className="text-muted-foreground">Status</dt>
@@ -120,21 +181,46 @@ export function StatusPage() {
           <div className="mt-3">
             <div className="flex items-center gap-2">
               <span
-                className={`h-2.5 w-2.5 rounded-full shadow-[0_0_6px_rgba(74,222,128,0.5)] ${
-                  statusData.database?.configured
-                    ? 'bg-green-500'
-                    : 'bg-amber-500 shadow-[0_0_6px_rgba(245,158,11,0.5)]'
-                }`}
+                className={`h-2.5 w-2.5 rounded-full ${dbAggregate.className}`}
               />
-              <span>
-                {statusData.database?.configured ? 'Connected' : 'Not configured'}
-              </span>
+              <span>{dbAggregate.label}</span>
             </div>
-            {!statusData.database?.configured && (
+            {dbAggregate.label === 'Not configured' && (
               <p className="mt-2 text-sm text-muted-foreground">
-                Set <code className="rounded bg-muted px-1">DATABASE_URL</code> in your
-                environment. For local dev, run <code className="rounded bg-muted px-1">docker compose up</code>.
+                Configure databases in <code className="rounded bg-muted px-1">resources.databases</code> in
+                <code className="rounded bg-muted px-1"> config.yaml </code> (you can use env placeholders like
+                <code className="rounded bg-muted px-1"> ${'{BENCH_DB_MAIN_URL}'} </code>).
               </p>
+            )}
+            {(statusData.database?.databases?.length ?? 0) > 0 && (
+              <ul className="mt-3 space-y-2 text-sm">
+                {statusData.database?.databases?.map((db) => (
+                  <li key={db.id} className="flex flex-col gap-0.5">
+                    <span className="flex items-center gap-2 font-medium text-foreground">
+                      <span
+                        className={`h-2 w-2 rounded-full ${
+                          !db.enabled
+                            ? 'bg-zinc-400'
+                            : db.connected
+                              ? 'bg-green-500'
+                              : 'bg-red-500'
+                        }`}
+                      />
+                      <span>
+                        {db.label}
+                        <span className="text-muted-foreground font-normal">
+                          {' '}
+                          ({db.id})
+                          {db.isDefault ? ' • default' : ''}
+                        </span>
+                      </span>
+                    </span>
+                    <span className="pl-4 text-xs text-muted-foreground">
+                      {!db.enabled ? 'Disabled' : db.connected ? 'Connected' : db.error || 'Unhealthy'}
+                    </span>
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
         )}
@@ -178,30 +264,34 @@ export function StatusPage() {
           <div className="mt-3">
             <div className="flex items-center gap-2">
               <span
-                className={`h-2.5 w-2.5 rounded-full shadow-[0_0_6px_rgba(74,222,128,0.5)] ${
-                  statusData.filesystem.configured
-                    ? 'bg-green-500'
-                    : 'bg-amber-500 shadow-[0_0_6px_rgba(245,158,11,0.5)]'
-                }`}
+                className={`h-2.5 w-2.5 rounded-full ${filesystemAggregate.className}`}
               />
-              <span>
-                {statusData.filesystem.configured ? 'Configured' : 'Not configured'}
-              </span>
+              <span>{filesystemAggregate.label}</span>
             </div>
             {statusData.filesystem.configured ? (
               <ul className="mt-3 space-y-2 text-sm">
                 {statusData.filesystem.paths.map((p) => (
                   <li key={p.id} className="flex flex-col gap-0.5">
-                    <span className="font-medium text-foreground">
-                      {p.label}
-                      <span className="text-muted-foreground font-normal">
-                        {' '}
-                        ({p.id})
+                    <span className="flex items-center gap-2 font-medium text-foreground">
+                      <span
+                        className={`h-2 w-2 rounded-full ${
+                          p.available === true ? 'bg-green-500' : 'bg-red-500'
+                        }`}
+                      />
+                      <span>
+                        {p.label}
+                        <span className="text-muted-foreground font-normal">
+                          {' '}
+                          ({p.id})
+                        </span>
                       </span>
                     </span>
-                    <code className="text-muted-foreground break-all text-xs">
-                      {p.path}
-                    </code>
+                    <code className="pl-4 text-muted-foreground break-all text-xs">{p.path}</code>
+                    {p.available !== true && (
+                      <span className="pl-4 text-xs text-muted-foreground">
+                        {p.error || 'Unhealthy'}
+                      </span>
+                    )}
                   </li>
                 ))}
               </ul>

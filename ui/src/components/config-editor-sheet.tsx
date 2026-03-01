@@ -81,18 +81,8 @@ export function ConfigEditorSheet({
           'flex flex-col p-0 sm:max-w-none w-full sm:w-[min(90vw,640px)]'
         )}
       >
-        <SheetHeader className="shrink-0 flex-row items-center justify-between gap-4 border-b px-4 py-3 pr-14">
+        <SheetHeader className="shrink-0 border-b px-4 py-3 pr-14">
           <SheetTitle>config.yaml</SheetTitle>
-          <Button
-            variant={hasUnsavedChanges ? 'default' : 'outline'}
-            size="sm"
-            onClick={handleSave}
-            disabled={!hasUnsavedChanges || saving}
-            className="gap-2"
-          >
-            <Save className="size-4" />
-            {saving ? 'Saving...' : 'Save'}
-          </Button>
         </SheetHeader>
         <div className="min-h-0 flex-1 overflow-auto p-4">
           {loading && (
@@ -109,6 +99,23 @@ export function ConfigEditorSheet({
               className="h-full min-h-[400px]"
             />
           )}
+        </div>
+        <div className="shrink-0 border-t px-4 py-3">
+          <div className="flex items-center justify-end gap-2">
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant={hasUnsavedChanges ? 'default' : 'outline'}
+              size="sm"
+              onClick={handleSave}
+              disabled={!hasUnsavedChanges || saving}
+              className="gap-2"
+            >
+              <Save className="size-4" />
+              {saving ? 'Saving...' : 'Save'}
+            </Button>
+          </div>
         </div>
       </SheetContent>
     </Sheet>

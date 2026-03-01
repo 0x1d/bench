@@ -46,9 +46,9 @@ export function DatabaseTableData({
   isLoading,
   error,
 }: DatabaseTableDataProps) {
-  const { setEditRowData, setPanelMode } = useDatabaseView();
+  const { setEditRowData, setPanelMode, selectedDatabaseId } = useDatabaseView();
   const [deleteTarget, setDeleteTarget] = useState<Record<string, unknown> | null>(null);
-  const deleteMutation = useDeleteRow(tableName);
+  const deleteMutation = useDeleteRow(tableName, selectedDatabaseId);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 

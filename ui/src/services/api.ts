@@ -9,6 +9,8 @@ export interface FilesystemPath {
   id: string;
   label: string;
   path: string;
+  available?: boolean;
+  error?: string;
 }
 
 export interface StatusResponse {
@@ -18,6 +20,15 @@ export interface StatusResponse {
   };
   database?: {
     configured: boolean;
+    defaultId?: string;
+    databases?: {
+      id: string;
+      label: string;
+      enabled: boolean;
+      isDefault: boolean;
+      connected: boolean;
+      error?: string;
+    }[];
   };
 }
 
@@ -56,6 +67,15 @@ export async function fetchConfigExample(): Promise<string> {
   const response = await fetch(`${API_BASE}/config/example`);
   if (!response.ok) {
     throw new Error(`Failed to fetch example: ${response.status}`);
+  }
+  return response.text();
+}
+
+export async function fetchConfig(): Promise<string> {
+  const response = await fetch(`${API_BASE}/config`);
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Failed to fetch config: ${response.status}`);
   }
   return response.text();
 }
@@ -389,8 +409,8 @@ export interface QueryRowsAffectedResponse {
   rowsAffected: number;
 }
 
-export async function fetchDatabaseTables(): Promise<TablesResponse> {
-  const response = await fetch(`${API_BASE}/database/tables`);
+export async function fetchDatabaseTables(dbId?: string): Promise<TablesResponse> {
+  const response = await fetch(withDbQuery(`${API_BASE}/database/tables`, dbId));
   if (!response.ok) {
     throw new Error(`Failed to fetch tables: ${response.status} ${response.statusText}`);
   }
@@ -407,16 +427,15 @@ export async function fetchTableLookup(
   tableName: string,
   valueColumn: string,
   search: string,
-  limit = 50
+  limit = 50,
+  dbId?: string
 ): Promise<TableLookupResponse> {
   const params = new URLSearchParams({
     column: valueColumn,
     limit: String(limit),
   });
   if (search) params.set('search', search);
-  const response = await fetch(
-    `${API_BASE}/database/tables/${encodeURIComponent(tableName)}/lookup?${params}`
-  );
+  const response = await fetch(withDbParams(`${API_BASE}/database/tables/${encodeURIComponent(tableName)}/lookup`, params, dbId));
   if (!response.ok) {
     const text = await response.text();
     throw new Error(text || `Failed to fetch lookup: ${response.status}`);
@@ -424,8 +443,8 @@ export async function fetchTableLookup(
   return response.json();
 }
 
-export async function fetchTableSchema(tableName: string): Promise<TableSchemaResponse> {
-  const response = await fetch(`${API_BASE}/database/schema/${encodeURIComponent(tableName)}`);
+export async function fetchTableSchema(tableName: string, dbId?: string): Promise<TableSchemaResponse> {
+  const response = await fetch(withDbQuery(`${API_BASE}/database/schema/${encodeURIComponent(tableName)}`, dbId));
   if (!response.ok) {
     const text = await response.text();
     throw new Error(text || `Failed to fetch schema: ${response.status}`);
@@ -433,8 +452,8 @@ export async function fetchTableSchema(tableName: string): Promise<TableSchemaRe
   return response.json();
 }
 
-export async function insertRow(tableName: string, row: Record<string, unknown>): Promise<void> {
-  const response = await fetch(`${API_BASE}/database/tables/${encodeURIComponent(tableName)}/rows`, {
+export async function insertRow(tableName: string, row: Record<string, unknown>, dbId?: string): Promise<void> {
+  const response = await fetch(withDbQuery(`${API_BASE}/database/tables/${encodeURIComponent(tableName)}/rows`, dbId), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ row }),
@@ -449,14 +468,15 @@ export async function fetchTableData(
   tableName: string,
   limit = 20,
   offset = 0,
-  search = ''
+  search = '',
+  dbId?: string
 ): Promise<TableDataResponse> {
   const params = new URLSearchParams({
     limit: String(limit),
     offset: String(offset),
   });
   if (search) params.set('search', search);
-  const response = await fetch(`${API_BASE}/database/tables/${encodeURIComponent(tableName)}?${params}`);
+  const response = await fetch(withDbParams(`${API_BASE}/database/tables/${encodeURIComponent(tableName)}`, params, dbId));
   if (!response.ok) {
     const text = await response.text();
     throw new Error(text || `Failed to fetch table data: ${response.status}`);
@@ -464,8 +484,8 @@ export async function fetchTableData(
   return response.json();
 }
 
-export async function createTable(req: CreateTableRequest): Promise<void> {
-  const response = await fetch(`${API_BASE}/database/tables`, {
+export async function createTable(req: CreateTableRequest, dbId?: string): Promise<void> {
+  const response = await fetch(withDbQuery(`${API_BASE}/database/tables`, dbId), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(req),
@@ -476,8 +496,8 @@ export async function createTable(req: CreateTableRequest): Promise<void> {
   }
 }
 
-export async function alterTable(tableName: string, req: AlterTableRequest): Promise<void> {
-  const response = await fetch(`${API_BASE}/database/tables/${encodeURIComponent(tableName)}`, {
+export async function alterTable(tableName: string, req: AlterTableRequest, dbId?: string): Promise<void> {
+  const response = await fetch(withDbQuery(`${API_BASE}/database/tables/${encodeURIComponent(tableName)}`, dbId), {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(req),
@@ -491,9 +511,10 @@ export async function alterTable(tableName: string, req: AlterTableRequest): Pro
 export async function updateRow(
   tableName: string,
   where: Record<string, unknown>,
-  set: Record<string, unknown>
+  set: Record<string, unknown>,
+  dbId?: string
 ): Promise<void> {
-  const response = await fetch(`${API_BASE}/database/tables/${encodeURIComponent(tableName)}/rows`, {
+  const response = await fetch(withDbQuery(`${API_BASE}/database/tables/${encodeURIComponent(tableName)}/rows`, dbId), {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ where, set }),
@@ -506,9 +527,10 @@ export async function updateRow(
 
 export async function deleteRow(
   tableName: string,
-  where: Record<string, unknown>
+  where: Record<string, unknown>,
+  dbId?: string
 ): Promise<void> {
-  const response = await fetch(`${API_BASE}/database/tables/${encodeURIComponent(tableName)}/rows`, {
+  const response = await fetch(withDbQuery(`${API_BASE}/database/tables/${encodeURIComponent(tableName)}/rows`, dbId), {
     method: 'DELETE',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ where }),
@@ -519,8 +541,8 @@ export async function deleteRow(
   }
 }
 
-export async function dropTable(tableName: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/database/tables/${encodeURIComponent(tableName)}`, {
+export async function dropTable(tableName: string, dbId?: string): Promise<void> {
+  const response = await fetch(withDbQuery(`${API_BASE}/database/tables/${encodeURIComponent(tableName)}`, dbId), {
     method: 'DELETE',
   });
   if (!response.ok) {
@@ -529,8 +551,8 @@ export async function dropTable(tableName: string): Promise<void> {
   }
 }
 
-export async function executeQuery(sql: string): Promise<QueryResponse | QueryRowsAffectedResponse> {
-  const response = await fetch(`${API_BASE}/database/query`, {
+export async function executeQuery(sql: string, dbId?: string): Promise<QueryResponse | QueryRowsAffectedResponse> {
+  const response = await fetch(withDbQuery(`${API_BASE}/database/query`, dbId), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ sql }),
@@ -540,4 +562,17 @@ export async function executeQuery(sql: string): Promise<QueryResponse | QueryRo
     throw new Error(text || `Failed to execute query: ${response.status}`);
   }
   return response.json();
+}
+
+function withDbQuery(url: string, dbId?: string): string {
+  if (!dbId) return url;
+  const params = new URLSearchParams({ db: dbId });
+  return `${url}?${params.toString()}`;
+}
+
+function withDbParams(url: string, params: URLSearchParams, dbId?: string): string {
+  if (dbId) {
+    params.set('db', dbId);
+  }
+  return `${url}?${params.toString()}`;
 }

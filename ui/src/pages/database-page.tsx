@@ -1,7 +1,14 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Loader2, Pencil, Plus, Search, Terminal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useDatabaseTables, useTableData } from '@/hooks/use-database';
 import { useStatus } from '@/hooks/use-status';
 import { useDatabaseView } from '@/contexts/database-view-context';
@@ -11,12 +18,34 @@ import { DatabaseTableData } from '@/components/database-table-data';
 export function DatabasePage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
-  const { selectedTable, setSelectedTable, setPanelMode, setAlterTableName } = useDatabaseView();
+  const {
+    selectedTable,
+    setSelectedTable,
+    setPanelMode,
+    setAlterTableName,
+    selectedDatabaseId,
+    setSelectedDatabaseId,
+  } = useDatabaseView();
 
   const { data: statusData, loading: statusLoading } = useStatus();
   const dbConfigured = statusData?.database?.configured ?? false;
+  const databaseOptions = statusData?.database?.databases?.filter((db) => db.enabled && db.connected) ?? [];
 
-  const { data: tablesData, error: tablesError, isLoading: tablesLoading } = useDatabaseTables(dbConfigured);
+  const effectiveDatabaseId =
+    selectedDatabaseId ??
+    statusData?.database?.defaultId ??
+    databaseOptions[0]?.id ??
+    null;
+  useEffect(() => {
+    if (effectiveDatabaseId && selectedDatabaseId !== effectiveDatabaseId) {
+      setSelectedDatabaseId(effectiveDatabaseId);
+    }
+  }, [effectiveDatabaseId, selectedDatabaseId, setSelectedDatabaseId]);
+
+  const { data: tablesData, error: tablesError, isLoading: tablesLoading } = useDatabaseTables(
+    effectiveDatabaseId,
+    dbConfigured
+  );
   const allTables = tablesData?.tables ?? [];
   const searchLower = search.trim().toLowerCase();
   const tables = searchLower
@@ -27,6 +56,7 @@ export function DatabasePage() {
     selectedTable,
     page,
     search.trim(),
+    effectiveDatabaseId,
     dbConfigured
   );
 
@@ -50,10 +80,23 @@ export function DatabasePage() {
         <div className="rounded-xl border border-border bg-card p-6">
           <h2 className="text-lg font-medium tracking-tight">Database</h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            Database is not configured. Set <code className="rounded bg-muted px-1">DATABASE_URL</code> in your
-            environment to enable the database editor. For local development, run{' '}
-            <code className="rounded bg-muted px-1">docker compose up -d</code> and use{' '}
-            <code className="rounded bg-muted px-1">postgresql://bench:bench@localhost:5432/bench</code>.
+            No database is configured. Add entries under{' '}
+            <code className="rounded bg-muted px-1">resources.databases</code> in{' '}
+            <code className="rounded bg-muted px-1">config.yaml</code> to enable the database editor.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!effectiveDatabaseId) {
+    return (
+      <div className="w-full max-w-xl p-6">
+        <div className="rounded-xl border border-border bg-card p-6">
+          <h2 className="text-lg font-medium tracking-tight">Database</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            No connected databases are available. Configure a database resource in{' '}
+            <code className="rounded bg-muted px-1">resources.databases</code> and refresh status.
           </p>
         </div>
       </div>
@@ -84,6 +127,25 @@ export function DatabasePage() {
 
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 shadow-sm">
+        <Select
+          value={effectiveDatabaseId}
+          onValueChange={(nextId) => {
+            setSelectedDatabaseId(nextId);
+            setSelectedTable(null);
+            setPage(1);
+          }}
+        >
+          <SelectTrigger className="w-full sm:w-[240px]">
+            <SelectValue placeholder="Select database" />
+          </SelectTrigger>
+          <SelectContent>
+            {databaseOptions.map((db) => (
+              <SelectItem key={db.id} value={db.id}>
+                {db.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <div className="relative flex-1 min-w-0 sm:max-w-xs">
           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input

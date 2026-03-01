@@ -308,7 +308,7 @@ export function FileBrowser({
               <Separator orientation="vertical" className="hidden h-5 sm:block" />
               <Select value={root} onValueChange={onRootChange}>
                 <SelectTrigger size="sm" className="w-full sm:w-[220px]">
-                  <SelectValue placeholder="Select resource root" />
+                  <SelectValue placeholder="Select filesystem root" />
                 </SelectTrigger>
                 <SelectContent>
                   {roots.map((r) => (

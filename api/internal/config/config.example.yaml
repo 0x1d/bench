@@ -9,3 +9,9 @@ resources:
     - id: workflows
       label: Workflows
       path: /path/to/workflows
+  databases:
+    - id: main
+      label: Main DB
+      url: ${BENCH_DB_MAIN_URL}
+      enabled: true
+      default: true

@@ -6,6 +6,7 @@ import "net/http"
 func RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/health", HandleHealth)
 	mux.HandleFunc("GET /api/status", HandleStatus)
+	mux.HandleFunc("GET /api/config", HandleConfig)
 	mux.HandleFunc("GET /api/config/example", HandleConfigExample)
 	mux.HandleFunc("POST /api/config/save", HandleConfigSave)
 	mux.HandleFunc("POST /api/config", HandleConfigUpload)

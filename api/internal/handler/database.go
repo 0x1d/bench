@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -11,18 +13,35 @@ import (
 	"github.com/0x1d/bench/api/internal/service/database"
 )
 
+func resolveDatabaseContext(r *http.Request) (context.Context, error) {
+	if !db.Configured() {
+		return nil, fmt.Errorf("database not configured")
+	}
+	dbID := strings.TrimSpace(r.URL.Query().Get("db"))
+	ctx := db.ContextWithDatabaseID(r.Context(), dbID)
+	if _, err := db.PoolFromContext(ctx); err != nil {
+		return nil, err
+	}
+	return ctx, nil
+}
+
 // HandleDatabaseTablesList returns all tables in the public schema.
 func HandleDatabaseTablesList(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if !db.Configured() {
-		http.Error(w, "database not configured", http.StatusServiceUnavailable)
+	ctx, err := resolveDatabaseContext(r)
+	if err != nil {
+		if !db.Configured() {
+			http.Error(w, "database not configured", http.StatusServiceUnavailable)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	tables, err := database.ListTables(r.Context())
+	tables, err := database.ListTables(ctx)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -38,8 +57,13 @@ func HandleDatabaseTableLookup(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if !db.Configured() {
-		http.Error(w, "database not configured", http.StatusServiceUnavailable)
+	ctx, err := resolveDatabaseContext(r)
+	if err != nil {
+		if !db.Configured() {
+			http.Error(w, "database not configured", http.StatusServiceUnavailable)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -61,7 +85,7 @@ func HandleDatabaseTableLookup(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	data, err := database.GetTableLookup(r.Context(), tableName, valueColumn, search, limit)
+	data, err := database.GetTableLookup(ctx, tableName, valueColumn, search, limit)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			http.Error(w, err.Error(), http.StatusNotFound)
@@ -81,8 +105,13 @@ func HandleDatabaseTableData(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if !db.Configured() {
-		http.Error(w, "database not configured", http.StatusServiceUnavailable)
+	ctx, err := resolveDatabaseContext(r)
+	if err != nil {
+		if !db.Configured() {
+			http.Error(w, "database not configured", http.StatusServiceUnavailable)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -106,7 +135,7 @@ func HandleDatabaseTableData(w http.ResponseWriter, r *http.Request) {
 	}
 	search := strings.TrimSpace(r.URL.Query().Get("search"))
 
-	data, err := database.GetTableData(r.Context(), tableName, limit, offset, search)
+	data, err := database.GetTableData(ctx, tableName, limit, offset, search)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			http.Error(w, err.Error(), http.StatusNotFound)
@@ -126,8 +155,13 @@ func HandleDatabaseTablesCreate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if !db.Configured() {
-		http.Error(w, "database not configured", http.StatusServiceUnavailable)
+	ctx, err := resolveDatabaseContext(r)
+	if err != nil {
+		if !db.Configured() {
+			http.Error(w, "database not configured", http.StatusServiceUnavailable)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -137,7 +171,7 @@ func HandleDatabaseTablesCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := database.CreateTable(r.Context(), &req); err != nil {
+	if err := database.CreateTable(ctx, &req); err != nil {
 		if strings.Contains(err.Error(), "invalid") {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -155,8 +189,13 @@ func HandleDatabaseQuery(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if !db.Configured() {
-		http.Error(w, "database not configured", http.StatusServiceUnavailable)
+	ctx, err := resolveDatabaseContext(r)
+	if err != nil {
+		if !db.Configured() {
+			http.Error(w, "database not configured", http.StatusServiceUnavailable)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -166,7 +205,7 @@ func HandleDatabaseQuery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	columns, rows, rowsAffected, err := database.ExecuteQuery(r.Context(), req.SQL)
+	columns, rows, rowsAffected, err := database.ExecuteQuery(ctx, req.SQL)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -186,8 +225,13 @@ func HandleDatabaseTableSchema(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if !db.Configured() {
-		http.Error(w, "database not configured", http.StatusServiceUnavailable)
+	ctx, err := resolveDatabaseContext(r)
+	if err != nil {
+		if !db.Configured() {
+			http.Error(w, "database not configured", http.StatusServiceUnavailable)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -197,7 +241,7 @@ func HandleDatabaseTableSchema(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	schema, err := database.GetTableSchema(r.Context(), tableName)
+	schema, err := database.GetTableSchema(ctx, tableName)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			http.Error(w, err.Error(), http.StatusNotFound)
@@ -217,8 +261,13 @@ func HandleDatabaseTableDrop(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if !db.Configured() {
-		http.Error(w, "database not configured", http.StatusServiceUnavailable)
+	ctx, err := resolveDatabaseContext(r)
+	if err != nil {
+		if !db.Configured() {
+			http.Error(w, "database not configured", http.StatusServiceUnavailable)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -228,7 +277,7 @@ func HandleDatabaseTableDrop(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := database.DropTable(r.Context(), tableName); err != nil {
+	if err := database.DropTable(ctx, tableName); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -242,8 +291,13 @@ func HandleDatabaseTableAlter(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if !db.Configured() {
-		http.Error(w, "database not configured", http.StatusServiceUnavailable)
+	ctx, err := resolveDatabaseContext(r)
+	if err != nil {
+		if !db.Configured() {
+			http.Error(w, "database not configured", http.StatusServiceUnavailable)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -259,7 +313,7 @@ func HandleDatabaseTableAlter(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := database.AlterTable(r.Context(), tableName, &req); err != nil {
+	if err := database.AlterTable(ctx, tableName, &req); err != nil {
 		if strings.Contains(err.Error(), "invalid") {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -277,8 +331,13 @@ func HandleDatabaseTableUpdateRow(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if !db.Configured() {
-		http.Error(w, "database not configured", http.StatusServiceUnavailable)
+	ctx, err := resolveDatabaseContext(r)
+	if err != nil {
+		if !db.Configured() {
+			http.Error(w, "database not configured", http.StatusServiceUnavailable)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -300,7 +359,7 @@ func HandleDatabaseTableUpdateRow(w http.ResponseWriter, r *http.Request) {
 		req.Set = make(map[string]any)
 	}
 
-	if err := database.UpdateRow(r.Context(), tableName, req.Where, req.Set); err != nil {
+	if err := database.UpdateRow(ctx, tableName, req.Where, req.Set); err != nil {
 		if strings.Contains(err.Error(), "invalid") || strings.Contains(err.Error(), "unknown column") || strings.Contains(err.Error(), "no rows matched") {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -318,8 +377,13 @@ func HandleDatabaseTableDeleteRow(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if !db.Configured() {
-		http.Error(w, "database not configured", http.StatusServiceUnavailable)
+	ctx, err := resolveDatabaseContext(r)
+	if err != nil {
+		if !db.Configured() {
+			http.Error(w, "database not configured", http.StatusServiceUnavailable)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -338,7 +402,7 @@ func HandleDatabaseTableDeleteRow(w http.ResponseWriter, r *http.Request) {
 		req.Where = make(map[string]any)
 	}
 
-	if err := database.DeleteRow(r.Context(), tableName, req.Where); err != nil {
+	if err := database.DeleteRow(ctx, tableName, req.Where); err != nil {
 		if strings.Contains(err.Error(), "invalid") || strings.Contains(err.Error(), "unknown column") || strings.Contains(err.Error(), "no rows matched") {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -356,8 +420,13 @@ func HandleDatabaseTableInsert(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if !db.Configured() {
-		http.Error(w, "database not configured", http.StatusServiceUnavailable)
+	ctx, err := resolveDatabaseContext(r)
+	if err != nil {
+		if !db.Configured() {
+			http.Error(w, "database not configured", http.StatusServiceUnavailable)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -376,7 +445,7 @@ func HandleDatabaseTableInsert(w http.ResponseWriter, r *http.Request) {
 		req.Row = make(map[string]any)
 	}
 
-	if err := database.InsertRow(r.Context(), tableName, req.Row); err != nil {
+	if err := database.InsertRow(ctx, tableName, req.Row); err != nil {
 		if strings.Contains(err.Error(), "invalid") || strings.Contains(err.Error(), "unknown column") {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return

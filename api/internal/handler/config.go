@@ -1,10 +1,13 @@
 package handler
 
 import (
+	"context"
 	"io"
 	"net/http"
+	"os"
 
 	"github.com/0x1d/bench/api/internal/config"
+	"github.com/0x1d/bench/api/internal/db"
 )
 
 // HandleConfigExample returns the content of config.example.yaml.
@@ -17,6 +20,28 @@ func HandleConfigExample(w http.ResponseWriter, r *http.Request) {
 	data, err := config.ReadExampleConfig()
 	if err != nil {
 		http.Error(w, "config.example.yaml not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/yaml; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	w.Write(data)
+}
+
+// HandleConfig returns the content of config.yaml if present.
+func HandleConfig(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	data, err := config.ReadConfigRaw()
+	if err != nil {
+		if os.IsNotExist(err) {
+			http.Error(w, "config.yaml not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, "failed to read config.yaml", http.StatusInternalServerError)
 		return
 	}
 
@@ -40,6 +65,10 @@ func HandleConfigSave(w http.ResponseWriter, r *http.Request) {
 
 	if err := config.SaveConfig(data); err != nil {
 		http.Error(w, "invalid config: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := reloadDatabaseRuntime(); err != nil {
+		http.Error(w, "config saved but failed to apply runtime: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -73,6 +102,35 @@ func HandleConfigUpload(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid config: "+err.Error(), http.StatusBadRequest)
 		return
 	}
+	if err := reloadDatabaseRuntime(); err != nil {
+		http.Error(w, "config saved but failed to apply runtime: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
 
 	w.WriteHeader(http.StatusCreated)
+}
+
+func reloadDatabaseRuntime() error {
+	dbEntries, err := config.DatabasesWithError()
+	if err != nil {
+		return err
+	}
+	if len(dbEntries) > 0 {
+		defs := make([]db.Definition, 0, len(dbEntries))
+		for _, entry := range dbEntries {
+			defs = append(defs, db.Definition{
+				ID:      entry.ID,
+				Label:   entry.Label,
+				URL:     entry.URL,
+				Enabled: entry.IsEnabled(),
+				Default: entry.Default,
+			})
+		}
+		return db.InitDefinitions(context.Background(), defs)
+	}
+	if connStr := os.Getenv("DATABASE_URL"); connStr != "" {
+		return db.Init(context.Background(), connStr)
+	}
+	db.Close()
+	return nil
 }

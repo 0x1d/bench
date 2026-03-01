@@ -3,7 +3,7 @@ import { useRoots } from '@/hooks/use-resources';
 import { useFileBrowserHistory } from '@/hooks/use-file-browser-history';
 import { FileBrowser } from '@/components/file-browser';
 
-const RESOURCES_STATE_KEY = 'bench-resources-page';
+const FILESYSTEM_STATE_KEY = 'bench-filesystem-page';
 
 /** Path per root and last selected root. */
 interface PersistedState {
@@ -13,7 +13,7 @@ interface PersistedState {
 
 function loadPersistedState(): PersistedState {
   try {
-    const s = sessionStorage.getItem(RESOURCES_STATE_KEY);
+    const s = sessionStorage.getItem(FILESYSTEM_STATE_KEY);
     if (s) {
       const v = JSON.parse(s) as {
         paths?: Record<string, string>;
@@ -39,13 +39,13 @@ function loadPersistedState(): PersistedState {
 
 function savePersistedState(paths: Record<string, string>, lastRoot: string | null) {
   try {
-    sessionStorage.setItem(RESOURCES_STATE_KEY, JSON.stringify({ paths, lastRoot }));
+    sessionStorage.setItem(FILESYSTEM_STATE_KEY, JSON.stringify({ paths, lastRoot }));
   } catch {
     /* ignore */
   }
 }
 
-export function ResourcesPage() {
+export function FilesystemPage() {
   const { data: rootsData, error: rootsError, isLoading: rootsLoading } = useRoots();
   const initialPersisted = useMemo(() => loadPersistedState(), []);
   const [selectedRoot, setSelectedRoot] = useState<string | null>(initialPersisted.lastRoot);
@@ -106,7 +106,7 @@ export function ResourcesPage() {
     return (
       <div className="w-full max-w-xl p-6">
         <div className="rounded-xl border border-border bg-card p-6">
-          <h2 className="text-lg font-medium tracking-tight">Resources</h2>
+          <h2 className="text-lg font-medium tracking-tight">Filesystem</h2>
           <p className="mt-2 text-sm text-muted-foreground">
             No resource roots configured. Add filesystem entries to <code className="rounded bg-muted px-1">config.yaml</code> to enable file browsing.
           </p>

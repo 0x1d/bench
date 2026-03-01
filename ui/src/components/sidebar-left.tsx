@@ -12,6 +12,7 @@ import {
 const navItems = [
   { title: 'Status', url: '#status', icon: Activity },
   { title: 'Resources', url: '#resources', icon: FolderOpen },
+  { title: 'Filesystem', url: '#filesystem', icon: FolderOpen },
   { title: 'Database', url: '#database', icon: Database },
 ];
 

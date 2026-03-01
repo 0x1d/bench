@@ -1,10 +1,10 @@
 # Database Integration (PostgreSQL)
 
-The bench Database page provides a full-featured PostgreSQL browser, schema editor, and SQL query runner. It works with local PostgreSQL or hosted services such as [Supabase](https://supabase.com).
+The bench Database page provides a full-featured PostgreSQL browser, schema editor, and SQL query runner. It works with local PostgreSQL or hosted services such as [Supabase](https://supabase.com), and supports selecting between multiple configured database resources.
 
 ## Overview
 
-When `DATABASE_URL` is set in the API environment, the Database page enables:
+When at least one `resources.databases` entry is configured in `config.yaml`, the Database page enables:
 
 - **Table browser** — List tables with row counts, browse data with pagination and search
 - **Schema editor** — Create tables, alter columns, add foreign keys, drop tables
@@ -16,6 +16,7 @@ All operations are scoped to the `public` schema.
 ## API Reference
 
 All database endpoints require the `X-API-Token` header. Base path: `/api/database`.
+To target a non-default database, add query parameter `db=<database-id>`.
 
 ### Tables
 
@@ -174,10 +175,27 @@ Supported `dataType` values: `text`, `varchar`, `integer`, `bigint`, `boolean`, 
 
 ## Setup
 
-Set `DATABASE_URL` in the API environment:
+Configure database resources in `config.yaml`:
+
+```yaml
+resources:
+  databases:
+    - id: main
+      label: Main DB
+      url: ${BENCH_DB_MAIN_URL}
+      enabled: true
+      default: true
+    - id: analytics
+      label: Analytics
+      url: ${BENCH_DB_ANALYTICS_URL}
+      enabled: true
+```
+
+Environment placeholders are interpolated at runtime, so keep credentials in env vars:
 
 ```
-DATABASE_URL=postgresql://user:password@host:5432/dbname
+BENCH_DB_MAIN_URL=postgresql://bench:bench@localhost:5432/bench
+BENCH_DB_ANALYTICS_URL=postgresql://bench:bench@localhost:5432/bench_analytics
 ```
 
 For local development with Docker:
@@ -186,10 +204,5 @@ For local development with Docker:
 docker compose up
 ```
 
-Then in `.env`:
-
-```
-DATABASE_URL=postgresql://bench:bench@localhost:5432/bench
-```
-
-If `DATABASE_URL` is not set, the Database page shows a setup message and all database endpoints return 503.
+Legacy fallback: if `resources.databases` is not configured, `DATABASE_URL` is still supported.
+If no database is configured, the Database page shows a setup message and database endpoints return 503.

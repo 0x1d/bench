@@ -40,6 +40,7 @@ function formatDisplayValue(row: unknown[], columns: string[], valueColumn: stri
 }
 
 export interface ForeignKeyLookupProps {
+  dbId: string | null;
   refTable: string;
   refColumn: string;
   value: string | string[];
@@ -54,6 +55,7 @@ export interface ForeignKeyLookupProps {
 const SEARCH_DEBOUNCE_MS = 200;
 
 export function ForeignKeyLookup({
+  dbId,
   refTable,
   refColumn,
   value,
@@ -77,6 +79,7 @@ export function ForeignKeyLookup({
     refTable,
     refColumn,
     debouncedSearch,
+    dbId,
     open
   );
 

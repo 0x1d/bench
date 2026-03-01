@@ -1240,12 +1240,66 @@ func ensureManyRefJoinTable(ctx context.Context, ownerTable, ownerColumn string,
 	query := fmt.Sprintf(`
 		CREATE TABLE IF NOT EXISTS %q (
 			owner_value %s NOT NULL REFERENCES %q (%q) ON DELETE CASCADE,
-			ref_value %s NOT NULL REFERENCES %q (%q) ON DELETE CASCADE,
-			UNIQUE (owner_value, ref_value)
+			ref_value %s NOT NULL REFERENCES %q (%q) ON DELETE CASCADE
 		)
 	`, joinTable, ownerType, ownerTable, ownerPK, refType, ref.Table, ref.Column)
 	if _, err := db.Pool.Exec(ctx, query); err != nil {
 		return fmt.Errorf("create many reference join table: %w", err)
+	}
+	if err := ensureManyRefJoinTablePrimaryKey(ctx, joinTable); err != nil {
+		return err
+	}
+	return nil
+}
+
+func ensureManyRefJoinTablePrimaryKey(ctx context.Context, joinTable string) error {
+	// The canonical key for join rows is the (owner_value, ref_value) pair.
+	var hasExpectedPK bool
+	err := db.Pool.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1
+			FROM pg_constraint c
+			JOIN pg_class t ON t.oid = c.conrelid
+			JOIN pg_namespace n ON n.oid = t.relnamespace
+			WHERE n.nspname = 'public'
+				AND t.relname = $1
+				AND c.contype = 'p'
+				AND (
+					SELECT array_agg(a.attname ORDER BY x.ordinality)
+					FROM unnest(c.conkey) WITH ORDINALITY AS x(attnum, ordinality)
+					JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = x.attnum
+				) = ARRAY['owner_value', 'ref_value']::text[]
+		)
+	`, joinTable).Scan(&hasExpectedPK)
+	if err != nil {
+		return fmt.Errorf("check join table primary key: %w", err)
+	}
+	if hasExpectedPK {
+		return nil
+	}
+
+	var hasAnyPK bool
+	err = db.Pool.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1
+			FROM pg_constraint c
+			JOIN pg_class t ON t.oid = c.conrelid
+			JOIN pg_namespace n ON n.oid = t.relnamespace
+			WHERE n.nspname = 'public'
+				AND t.relname = $1
+				AND c.contype = 'p'
+		)
+	`, joinTable).Scan(&hasAnyPK)
+	if err != nil {
+		return fmt.Errorf("check existing join table primary key: %w", err)
+	}
+	if hasAnyPK {
+		return fmt.Errorf("join table %s has an unexpected PRIMARY KEY; expected (owner_value, ref_value)", joinTable)
+	}
+
+	_, err = db.Pool.Exec(ctx, fmt.Sprintf("ALTER TABLE %q ADD PRIMARY KEY (owner_value, ref_value)", joinTable))
+	if err != nil {
+		return fmt.Errorf("add join table primary key: %w", err)
 	}
 	return nil
 }

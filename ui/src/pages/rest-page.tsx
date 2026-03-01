@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Search } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { fetchRestList, fetchRestSpec } from '@/services/api';
+import { NotConfiguredCard } from '@/components/not-configured-card';
 import { RestClient } from '@/components/rest-client';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
@@ -55,18 +56,10 @@ export function RestPage() {
         <nav className="flex flex-wrap items-center gap-1 text-sm">
           <span className="rounded px-2 py-1 text-muted-foreground">REST</span>
         </nav>
-        <div className="rounded-lg border border-border bg-card p-6 text-center">
-          <h2 className="text-lg font-medium">No REST resources configured</h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Add REST API endpoints in the Resources config page.
-          </p>
-          <a
-            href="#resources"
-            className="mt-4 inline-block text-sm font-medium text-primary hover:underline"
-          >
-            Configure resources
-          </a>
-        </div>
+        <NotConfiguredCard
+          title="No REST resources configured"
+          description="Add REST API endpoints in the Resources config page."
+        />
       </div>
     );
   }

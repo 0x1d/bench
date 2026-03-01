@@ -14,6 +14,7 @@ import { useStatus } from '@/hooks/use-status';
 import { useDatabaseView } from '@/contexts/database-view-context';
 import { DatabaseTableList } from '@/components/database-table-list';
 import { DatabaseTableData } from '@/components/database-table-data';
+import { NotConfiguredCard } from '@/components/not-configured-card';
 
 export function DatabasePage() {
   const [page, setPage] = useState(1);
@@ -94,29 +95,22 @@ export function DatabasePage() {
 
   if (!dbConfigured) {
     return (
-      <div className="w-full max-w-xl p-6">
-        <div className="rounded-xl border border-border bg-card p-6">
-          <h2 className="text-lg font-medium tracking-tight">Database</h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            No database is configured. Add entries under{' '}
-            <code className="rounded bg-muted px-1">resources.databases</code> in{' '}
-            <code className="rounded bg-muted px-1">config.yaml</code> to enable the database editor.
-          </p>
-        </div>
+      <div className="flex w-full min-h-0 flex-1 flex-col gap-4">
+        <NotConfiguredCard
+          title="No database resources configured"
+          description="Add database entries in the Resources config page to enable the database editor."
+        />
       </div>
     );
   }
 
   if (!effectiveDatabaseId) {
     return (
-      <div className="w-full max-w-xl p-6">
-        <div className="rounded-xl border border-border bg-card p-6">
-          <h2 className="text-lg font-medium tracking-tight">Database</h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            No connected databases are available. Configure a database resource in{' '}
-            <code className="rounded bg-muted px-1">resources.databases</code> and refresh status.
-          </p>
-        </div>
+      <div className="flex w-full min-h-0 flex-1 flex-col gap-4">
+        <NotConfiguredCard
+          title="No connected databases available"
+          description="Configure a database resource in the Resources config page and refresh status."
+        />
       </div>
     );
   }

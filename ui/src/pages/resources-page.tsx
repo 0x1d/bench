@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRoots } from '@/hooks/use-resources';
 import { useFileBrowserHistory } from '@/hooks/use-file-browser-history';
 import { FileBrowser } from '@/components/file-browser';
+import { NotConfiguredCard } from '@/components/not-configured-card';
 
 const FILESYSTEM_STATE_KEY = 'bench-filesystem-page';
 
@@ -104,13 +105,11 @@ export function FilesystemPage() {
 
   if (roots.length === 0) {
     return (
-      <div className="w-full max-w-xl p-6">
-        <div className="rounded-xl border border-border bg-card p-6">
-          <h2 className="text-lg font-medium tracking-tight">Filesystem</h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            No resource roots configured. Add filesystem entries to <code className="rounded bg-muted px-1">config.yaml</code> to enable file browsing.
-          </p>
-        </div>
+      <div className="flex w-full min-h-0 flex-1 flex-col gap-4">
+        <NotConfiguredCard
+          title="No filesystem resources configured"
+          description="Add filesystem entries in the Resources config page to enable file browsing."
+        />
       </div>
     );
   }

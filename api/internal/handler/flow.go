@@ -146,9 +146,46 @@ func HandleFlowRun(w http.ResponseWriter, r *http.Request) {
 	flowpipeURL := strings.TrimSuffix(config.FlowpipeURL(), "/")
 	url := flowpipeURL + "/api/v0/pipeline/" + f.ID + "/command"
 
+	// Collect unique database connections used in query steps
+	connArgs := make(map[string]any)
+	for _, step := range f.Steps {
+		if strings.EqualFold(step.Type, "query") {
+			dbID, _ := step.Config["databaseId"].(string)
+			if dbID == "" {
+				// We don't have access to s.defaultDatabaseID() here easily without flowSvc exposure,
+				// but flowSvc.Save ensures steps have databaseId or use defaults.
+				// However, the safest is to look for what generateHCL would have used.
+				// We'll skip empty dbID for now, or use a placeholder if needed.
+			}
+			if dbID != "" {
+				connArgs["conn_"+dbID] = dbID
+			}
+		}
+	}
+
+	// Parse user-provided args from request body
+	userArgs := make(map[string]any)
+	if r.Body != nil {
+		var reqBody struct {
+			Args map[string]any `json:"args"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&reqBody); err == nil && reqBody.Args != nil {
+			userArgs = reqBody.Args
+		}
+	}
+
+	// Merge: user args + connection args (connection args take precedence for conn_ prefixed keys)
+	mergedArgs := make(map[string]any)
+	for k, v := range userArgs {
+		mergedArgs[k] = v
+	}
+	for k, v := range connArgs {
+		mergedArgs[k] = v
+	}
+
 	body := map[string]any{
 		"command": "run",
-		"args":    map[string]any{},
+		"args":    mergedArgs,
 	}
 	bodyBytes, _ := json.Marshal(body)
 
@@ -170,6 +207,70 @@ func HandleFlowRun(w http.ResponseWriter, r *http.Request) {
 	if ct := resp.Header.Get("Content-Type"); ct != "" {
 		w.Header().Set("Content-Type", ct)
 	}
+	w.WriteHeader(resp.StatusCode)
+	_, _ = io.Copy(w, resp.Body)
+}
+
+// HandleFlowProcesses lists recent Flowpipe processes, optionally filtered by pipeline.
+func HandleFlowProcesses(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	flowpipeURL := strings.TrimSuffix(config.FlowpipeURL(), "/")
+	url := flowpipeURL + "/api/v0/process"
+
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, url, nil)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		http.Error(w, "flowpipe request failed: "+err.Error(), http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(resp.StatusCode)
+	_, _ = io.Copy(w, resp.Body)
+}
+
+// HandleFlowExecution returns detailed execution info for a specific process.
+func HandleFlowExecution(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	execID := strings.TrimSpace(r.PathValue("execId"))
+	if execID == "" {
+		http.Error(w, "execution id required", http.StatusBadRequest)
+		return
+	}
+
+	flowpipeURL := strings.TrimSuffix(config.FlowpipeURL(), "/")
+	url := flowpipeURL + "/api/v0/process/" + execID + "/execution"
+
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, url, nil)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		http.Error(w, "flowpipe request failed: "+err.Error(), http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(resp.StatusCode)
 	_, _ = io.Copy(w, resp.Body)
 }

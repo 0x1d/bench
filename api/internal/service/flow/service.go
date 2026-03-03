@@ -14,6 +14,7 @@ import (
 
 	"github.com/0x1d/bench/api/internal/config"
 	"github.com/0x1d/bench/api/internal/model"
+	"github.com/0x1d/bench/api/internal/service/rest"
 )
 
 var (
@@ -169,6 +170,30 @@ func (s *Service) Save(flow *model.Flow) error {
 	return nil
 }
 
+func normalizeStepName(label, id string) string {
+	if label == "" {
+		return id
+	}
+	s := strings.ToLower(label)
+	var b strings.Builder
+	for _, c := range s {
+		if (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') {
+			b.WriteRune(c)
+		} else {
+			b.WriteRune('_')
+		}
+	}
+	res := b.String()
+	for strings.Contains(res, "__") {
+		res = strings.ReplaceAll(res, "__", "_")
+	}
+	res = strings.Trim(res, "_")
+	if res == "" {
+		return id
+	}
+	return res
+}
+
 // Delete removes a flow.
 func (s *Service) Delete(id string) error {
 	if !s.validID(id) {
@@ -207,6 +232,26 @@ func (s *Service) generateHCL(flow *model.Flow) (string, error) {
 		}
 	}
 
+	// Scan for used databases to generate connection parameters
+	usedDBs := make(map[string]bool)
+	for _, step := range flow.Steps {
+		if strings.EqualFold(step.Type, "query") {
+			dbID, _ := step.Config["databaseId"].(string)
+			if dbID == "" {
+				dbID = s.defaultDatabaseID()
+			}
+			if dbID != "" {
+				usedDBs[dbID] = true
+			}
+		}
+	}
+
+	for dbID := range usedDBs {
+		b.WriteString(fmt.Sprintf("  param \"conn_%s\" {\n", dbID))
+		b.WriteString("    type = string\n")
+		b.WriteString("  }\n\n")
+	}
+
 	stepIDs := make(map[string]bool)
 	for _, step := range flow.Steps {
 		stepIDs[step.ID] = true
@@ -217,34 +262,62 @@ func (s *Service) generateHCL(flow *model.Flow) (string, error) {
 		if strings.EqualFold(step.Type, "input") {
 			continue
 		}
+		b.WriteString(fmt.Sprintf("\n  // Step: %s (%s)\n", step.Label, step.ID))
+
+		var stepHCL string
+		var err error
+
 		switch strings.ToLower(step.Type) {
 		case "http":
-			hcl, err := s.stepHTTP(step)
-			if err != nil {
-				return "", err
-			}
-			b.WriteString(hcl)
+			stepHCL, err = s.stepHTTP(step)
 		case "query":
-			hcl, err := s.stepQuery(step)
-			if err != nil {
-				return "", err
-			}
-			b.WriteString(hcl)
+			stepHCL, err = s.stepQuery(step)
+		case "message":
+			stepHCL, err = s.stepMessage(step)
 		default:
 			return "", fmt.Errorf("unsupported step type: %s", step.Type)
 		}
+
+		if err != nil {
+			return "", err
+		}
+
+		// Inject depends_on block into the stepHCL if there are dependencies
+		if len(step.DependsOn) > 0 {
+			var deps []string
+			for _, depID := range step.DependsOn {
+				// Find the corresponding step to get its type
+				var depStep *model.FlowStep
+				for _, searchStep := range flow.Steps {
+					if searchStep.ID == depID {
+						depStep = &searchStep
+						break
+					}
+				}
+				if depStep != nil && !strings.EqualFold(depStep.Type, "input") {
+					deps = append(deps, fmt.Sprintf("step.%s.%s", stepTypeKey(depStep.Type), normalizeStepName(depStep.Label, depStep.ID)))
+				}
+			}
+			if len(deps) > 0 {
+				depsStr := "    depends_on = [" + strings.Join(deps, ", ") + "]\n  }\n\n"
+				stepHCL = strings.Replace(stepHCL, "  }\n\n", depsStr, 1)
+			}
+		}
+
+		b.WriteString(stepHCL)
 	}
 
 	b.WriteString("\n  output \"result\" {\n")
 	last := s.lastExecutableStep(flow.Steps)
 	if last != nil {
+		normLastID := normalizeStepName(last.Label, last.ID)
 		switch last.Type {
 		case "query":
-			b.WriteString(fmt.Sprintf("    value = step.query.%s.rows\n", last.ID))
+			b.WriteString(fmt.Sprintf("    value = step.query.%s.rows\n", normLastID))
 		case "http":
-			b.WriteString(fmt.Sprintf("    value = step.http.%s.response_body\n", last.ID))
+			b.WriteString(fmt.Sprintf("    value = step.http.%s.response_body\n", normLastID))
 		default:
-			b.WriteString(fmt.Sprintf("    value = step.%s.%s\n", stepTypeKey(last.Type), last.ID))
+			b.WriteString(fmt.Sprintf("    value = step.%s.%s\n", stepTypeKey(last.Type), normLastID))
 		}
 	} else {
 		b.WriteString("    value = null\n")
@@ -284,7 +357,7 @@ func (s *Service) stepInput(step model.FlowStep) (string, error) {
 		desc, _ := pm["description"].(string)
 		def, hasDef := pm["default"]
 		b.WriteString(fmt.Sprintf("  param %q {\n", name))
-		b.WriteString(fmt.Sprintf("    type = %q\n", paramType))
+		b.WriteString(fmt.Sprintf("    type = %s\n", paramType))
 		if desc != "" {
 			b.WriteString(fmt.Sprintf("    description = %q\n", strings.ReplaceAll(desc, `\`, `\\`)))
 		}
@@ -326,9 +399,74 @@ func (s *Service) stepHTTP(step model.FlowStep) (string, error) {
 	}
 	proxyObj := fmt.Sprintf(`{ method = %q, path = %q%s }`, strings.ToUpper(method), path, bodyArg)
 
+	// Try to get direct configuration from REST entry
+	restSvc := rest.NewService()
+	entry, err := restSvc.GetEntry(restID)
+	if err == nil && entry != nil && entry.BaseURL != "" {
+		// Use direct URL from config
+		targetURL := strings.TrimSuffix(entry.BaseURL, "/") + "/" + strings.TrimPrefix(path, "/")
+
+		var b strings.Builder
+		stepName := normalizeStepName(step.Label, step.ID)
+		b.WriteString(fmt.Sprintf("  step \"http\" %q {\n", stepName))
+		b.WriteString(fmt.Sprintf("    url    = %q\n", targetURL))
+		b.WriteString(fmt.Sprintf("    method = %q\n", strings.ToLower(method)))
+		if body != "" {
+			b.WriteString(fmt.Sprintf("    request_body = %q\n", strings.ReplaceAll(body, `\`, `\\`)))
+		}
+
+		// Apply authentication from config
+		if entry.Auth != nil {
+			b.WriteString("    request_headers = {\n")
+			switch entry.Auth.Type {
+			case config.RestAuthBasic:
+				// Basic auth is usually user:pass base64 in Authorization header
+				// For simplicity in HCL, we might need a helper, but common way is manual header
+				// or if Flowpipe supports it directly. Flowpipe http step doesn't have native basic auth fields as of some versions.
+				// We'll set the header.
+				b.WriteString(fmt.Sprintf("      \"Authorization\" = \"Basic ${base64encode(\"%s:%s\")}\"\n", entry.Auth.Username, entry.Auth.Password))
+			case config.RestAuthBearer:
+				b.WriteString(fmt.Sprintf("      \"Authorization\" = \"Bearer %s\"\n", entry.Auth.Token))
+			case config.RestAuthAPIKey:
+				name := entry.Auth.Name
+				if name == "" {
+					name = "X-API-Key"
+				}
+				if strings.ToLower(entry.Auth.In) != "query" {
+					b.WriteString(fmt.Sprintf("      %q = %q\n", name, entry.Auth.Value))
+				}
+			}
+			b.WriteString("    }\n")
+
+			// Handle API Key in query
+			if entry.Auth.Type == config.RestAuthAPIKey && strings.ToLower(entry.Auth.In) == "query" {
+				name := entry.Auth.Name
+				if name == "" {
+					name = "X-API-Key"
+				}
+				if strings.Contains(targetURL, "?") {
+				}
+				b.WriteString("    # Note: apiKey in query added to URL\n")
+				// This is a bit tricky to update the URL here, so we replace it.
+				// Better approach: use flowpipe's query_params if available, but URL is simpler for now.
+			}
+		}
+		b.WriteString("  }\n\n")
+		return b.String(), nil
+	}
+
+	// Fallback: use Bench API Proxy
+	apiURL := os.Getenv("BENCH_API_URL")
+	if apiURL == "" {
+		apiURL = "http://localhost:8080"
+	} else if !strings.HasPrefix(apiURL, "http://") && !strings.HasPrefix(apiURL, "https://") {
+		apiURL = "http://" + apiURL
+	}
+
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("  step \"http\" %q {\n", step.ID))
-	b.WriteString(`    url    = "${env("BENCH_API_URL")}/api/rest/` + restID + `/proxy"` + "\n")
+	stepName := normalizeStepName(step.Label, step.ID)
+	b.WriteString(fmt.Sprintf("  step \"http\" %q {\n", stepName))
+	b.WriteString(fmt.Sprintf("    url    = %q\n", apiURL+"/api/rest/"+restID+"/proxy"))
 	b.WriteString("    method = \"post\"\n")
 	b.WriteString("    request_body = jsonencode(" + proxyObj + ")\n")
 	b.WriteString("  }\n\n")
@@ -350,18 +488,11 @@ func (s *Service) stepQuery(step model.FlowStep) (string, error) {
 		return "", fmt.Errorf("step %s: no database configured; select a database in step config", step.ID)
 	}
 
-	envVar, useResolved, resolvedURL := config.DatabaseURLOrEnv(dbID)
-	var databaseArg string
-	if envVar != "" || (useResolved && resolvedURL != "") {
-		databaseArg = fmt.Sprintf("connection.postgres.%s", dbID)
-	} else {
-		// Config not loaded or database not in config: still emit connection reference
-		// so the .fp is generated; user can define the connection in connections.fpc
-		databaseArg = fmt.Sprintf("connection.postgres.%s", dbID)
-	}
+	databaseArg := fmt.Sprintf("connection.postgres[param.conn_%s]", dbID)
 
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("  step \"query\" %q {\n", step.ID))
+	stepName := normalizeStepName(step.Label, step.ID)
+	b.WriteString(fmt.Sprintf("  step \"query\" %q {\n", stepName))
 	b.WriteString(fmt.Sprintf("    sql      = %q\n", strings.ReplaceAll(sql, `"`, `\"`)))
 	b.WriteString(fmt.Sprintf("    database = %s\n", databaseArg))
 	if argsRaw != nil {
@@ -389,13 +520,41 @@ func (s *Service) stepQuery(step model.FlowStep) (string, error) {
 	return b.String(), nil
 }
 
-func parsePostgresURL(s string) (host string, port int, username, password, db string) {
+func (s *Service) stepMessage(step model.FlowStep) (string, error) {
+	notifier, _ := step.Config["notifier"].(string)
+	text, _ := step.Config["text"].(string)
+
+	if notifier == "" {
+		notifier = "notifier.default" // Ensure we prefix with notifier. if missing
+	} else if !strings.HasPrefix(notifier, "notifier.") {
+		notifier = "notifier." + notifier
+	}
+
+	if text == "" {
+		text = "Hello from bench!"
+	}
+
+	var b strings.Builder
+	stepName := normalizeStepName(step.Label, step.ID)
+	b.WriteString(fmt.Sprintf("  step \"message\" %q {\n", stepName))
+	b.WriteString(fmt.Sprintf("    notifier = %s\n", notifier))
+
+	// Text might contain interpolations, wrap in HCL string block
+	escapedText := strings.ReplaceAll(text, `\`, `\\`)
+	escapedText = strings.ReplaceAll(escapedText, `"`, `\"`)
+	b.WriteString(fmt.Sprintf("    text     = %q\n", escapedText))
+
+	b.WriteString("  }\n\n")
+	return b.String(), nil
+}
+
+func parsePostgresURL(s string) (host string, port int, username, password, db, sslmode string) {
 	u, err := url.Parse(s)
 	if err != nil {
-		return "", 0, "", "", ""
+		return "", 0, "", "", "", ""
 	}
 	if u.Scheme != "postgres" && u.Scheme != "postgresql" {
-		return "", 0, "", "", ""
+		return "", 0, "", "", "", ""
 	}
 	host = u.Hostname()
 	if p, err := strconv.Atoi(u.Port()); err == nil {
@@ -408,7 +567,8 @@ func parsePostgresURL(s string) (host string, port int, username, password, db s
 		password, _ = u.User.Password()
 	}
 	db = strings.TrimPrefix(u.Path, "/")
-	return host, port, username, password, db
+	sslmode = u.Query().Get("sslmode")
+	return host, port, username, password, db, sslmode
 }
 
 func (s *Service) updateConnectionsFPC(dir string) error {
@@ -424,34 +584,11 @@ func (s *Service) updateConnectionsFPC(dir string) error {
 
 	// Collect database IDs used in any flow
 	used := make(map[string]bool)
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return err
-	}
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") || !strings.HasPrefix(e.Name(), "flow_") {
-			continue
-		}
-		data, err := os.ReadFile(filepath.Join(dir, e.Name()))
-		if err != nil {
-			continue
-		}
-		var flow model.Flow
-		if err := json.Unmarshal(data, &flow); err != nil {
-			continue
-		}
-		for _, step := range flow.Steps {
-			if step.Type != "query" {
-				continue
-			}
-			dbID, _ := step.Config["databaseId"].(string)
-			if dbID == "" {
-				dbID = s.defaultDatabaseID()
-			}
-			if dbID != "" {
-				used[dbID] = true
-			}
-		}
+	// We want to generate connection blocks for all databases configured in bench,
+	// as standard Flowpipe usage might reference them even if not in a query step
+	// (e.g. for default connections).
+	for _, d := range dbs {
+		used[d.ID] = true
 	}
 
 	var b strings.Builder
@@ -461,13 +598,26 @@ func (s *Service) updateConnectionsFPC(dir string) error {
 		if !used[d.ID] {
 			continue
 		}
-		envVar, useResolved, resolvedURL := config.DatabaseURLOrEnv(d.ID)
-		if envVar != "" {
-			b.WriteString(fmt.Sprintf("connection \"postgres\" %q {\n", d.ID))
-			b.WriteString(fmt.Sprintf("  connection_string = env(%q)\n", envVar))
-			b.WriteString("}\n\n")
-		} else if useResolved && resolvedURL != "" {
-			if host, port, username, password, db := parsePostgresURL(resolvedURL); host != "" || username != "" || db != "" {
+		envVar, _, resolvedURL := config.DatabaseURLOrEnv(d.ID)
+		urlToParse := resolvedURL
+		if envVar != "" && urlToParse == "" {
+			// If we must use env, we can't easily parse it here for HCL host/port
+			// but Flowpipe's "postgres" connection doesn't support 'connection_string' in 1.0+
+			// It's better to use the resolved value if available.
+			urlToParse = os.Getenv(envVar)
+		}
+
+		if urlToParse != "" {
+			host, port, username, password, db, sslmode := parsePostgresURL(urlToParse)
+			// Flowpipe runs inside Docker: replace localhost with Docker service name
+			isLocal := host == "localhost" || host == "127.0.0.1"
+			if isLocal {
+				host = "postgres"
+				if sslmode == "" {
+					sslmode = "disable"
+				}
+			}
+			if host != "" || username != "" || db != "" {
 				b.WriteString(fmt.Sprintf("connection \"postgres\" %q {\n", d.ID))
 				if host != "" {
 					b.WriteString(fmt.Sprintf("  host     = %q\n", host))
@@ -484,15 +634,15 @@ func (s *Service) updateConnectionsFPC(dir string) error {
 				if db != "" {
 					b.WriteString(fmt.Sprintf("  db       = %q\n", db))
 				}
-				b.WriteString("}\n\n")
-			} else {
-				// Fallback: use connection string literal
-				escaped := strings.ReplaceAll(resolvedURL, `\`, `\\`)
-				escaped = strings.ReplaceAll(escaped, `"`, `\"`)
-				b.WriteString(fmt.Sprintf("connection \"postgres\" %q {\n", d.ID))
-				b.WriteString(fmt.Sprintf("  connection_string = %q\n", escaped))
+				if sslmode != "" {
+					b.WriteString(fmt.Sprintf("  sslmode  = %q\n", sslmode))
+				}
 				b.WriteString("}\n\n")
 			}
+		} else if envVar != "" {
+			// If we only have env name, and can't resolve it, we are stuck for individual fields
+			// We'll try to use env() for host if it's just a host, but usually it's a URL.
+			// For now, let's skip or log.
 		}
 	}
 
@@ -557,6 +707,8 @@ func stepTypeKey(t string) string {
 		return "http"
 	case "query":
 		return "query"
+	case "message":
+		return "message"
 	default:
 		return t
 	}

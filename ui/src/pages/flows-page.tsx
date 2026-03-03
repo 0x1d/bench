@@ -8,13 +8,30 @@ import {
   runFlow,
   type Flow,
 } from '@/services/api';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
+import { useFlowView } from '@/contexts/flow-view-context';
 import { cn } from '@/lib/utils';
 
 export function FlowsPage() {
   const [deleteTarget, setDeleteTarget] = useState<Flow | null>(null);
   const [runResult, setRunResult] = useState<string | null>(null);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [newFlowName, setNewFlowName] = useState('New flow');
+  const [runParamsOpen, setRunParamsOpen] = useState(false);
+  const [runParamValues, setRunParamValues] = useState<Record<string, string>>({});
+  const [runTargetFlow, setRunTargetFlow] = useState<Flow | null>(null);
+  const { setExecutionId, setSelectedStep } = useFlowView();
 
   const queryClient = useQueryClient();
   const { data, isLoading, error } = useQuery({
@@ -23,10 +40,10 @@ export function FlowsPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: () => {
+    mutationFn: (name: string) => {
       const inputId = `step_input_${Date.now()}`;
       return createFlow({
-        name: 'New flow',
+        name: name || 'New flow',
         steps: [
           {
             id: inputId,
@@ -38,8 +55,10 @@ export function FlowsPage() {
         edges: [],
       });
     },
-    onSuccess: () => {
+    onSuccess: (newFlow) => {
       queryClient.invalidateQueries({ queryKey: ['flows'] });
+      setCreateDialogOpen(false);
+      window.location.hash = `#flows/${newFlow.id}`;
     },
   });
 
@@ -53,19 +72,50 @@ export function FlowsPage() {
 
   const flows = data?.flows ?? [];
 
+  function getInputParams(flow: Flow) {
+    const inputStep = flow.steps?.find((s) => s.type === 'input');
+    if (!inputStep) return [];
+    const params = (inputStep.config?.params as any[]) || [];
+    return params.filter((p: any) => p?.name);
+  }
+
   async function handleRun(flow: Flow) {
+    const params = getInputParams(flow);
+    if (params.length > 0) {
+      const defaults: Record<string, string> = {};
+      for (const p of params) {
+        defaults[p.name] = p.default ?? '';
+      }
+      setRunParamValues(defaults);
+      setRunTargetFlow(flow);
+      setRunParamsOpen(true);
+      return;
+    }
+    await executeRun(flow);
+  }
+
+  async function executeRun(flow: Flow, args?: Record<string, any>) {
     setRunResult(null);
     try {
-      const resp = await runFlow(flow.id);
-      const text = await resp.text();
-      if (resp.ok) {
-        setRunResult(text || 'Flow completed successfully.');
+      const result = await runFlow(flow.id, args);
+      const execId = result?.flowpipe?.execution_id;
+      if (execId) {
+        setRunResult(`Started: ${execId}`);
+        setSelectedStep(null);
+        setExecutionId(execId);
       } else {
-        setRunResult(`Error: ${text || resp.statusText}`);
+        setRunResult('Flow completed successfully.');
       }
     } catch (e) {
       setRunResult(`Error: ${e instanceof Error ? e.message : 'Unknown error'}`);
     }
+  }
+
+  async function handleRunWithParams() {
+    if (!runTargetFlow) return;
+    setRunParamsOpen(false);
+    await executeRun(runTargetFlow, runParamValues);
+    setRunTargetFlow(null);
   }
 
   if (isLoading) {
@@ -91,7 +141,10 @@ export function FlowsPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => createMutation.mutate()}
+            onClick={() => {
+              setNewFlowName('New flow');
+              setCreateDialogOpen(true);
+            }}
             disabled={createMutation.isPending}
             className="gap-1.5"
           >
@@ -126,7 +179,10 @@ export function FlowsPage() {
               variant="outline"
               size="sm"
               className="mt-4"
-              onClick={() => createMutation.mutate()}
+              onClick={() => {
+                setNewFlowName('New flow');
+                setCreateDialogOpen(true);
+              }}
               disabled={createMutation.isPending}
             >
               <Plus className="size-4 mr-2" />
@@ -212,6 +268,94 @@ export function FlowsPage() {
         onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
         isLoading={deleteMutation.isPending}
       />
+
+      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create new flow</DialogTitle>
+            <DialogDescription>
+              Give your new flow a name to get started.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="name">Name</Label>
+              <Input
+                id="name"
+                value={newFlowName}
+                onChange={(e) => setNewFlowName(e.target.value)}
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    createMutation.mutate(newFlowName);
+                  }
+                }}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setCreateDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => createMutation.mutate(newFlowName)}
+              disabled={createMutation.isPending}
+            >
+              {createMutation.isPending ? 'Creating...' : 'Create Flow'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Run Parameters Dialog */}
+      <Dialog open={runParamsOpen} onOpenChange={(open) => { setRunParamsOpen(open); if (!open) setRunTargetFlow(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Run Parameters</DialogTitle>
+            <DialogDescription>
+              Provide values for the pipeline input parameters.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            {runTargetFlow && getInputParams(runTargetFlow).map((p: any) => (
+              <div key={p.name} className="space-y-1.5">
+                <Label htmlFor={`param-${p.name}`} className="text-xs font-medium flex items-center gap-2">
+                  {p.name}
+                  {p.type && (
+                    <span className="text-[10px] text-muted-foreground font-mono bg-muted px-1.5 py-0.5 rounded">
+                      {p.type}
+                    </span>
+                  )}
+                </Label>
+                {p.description && (
+                  <p className="text-xs text-muted-foreground">{p.description}</p>
+                )}
+                <Input
+                  id={`param-${p.name}`}
+                  value={runParamValues[p.name] ?? ''}
+                  onChange={(e) =>
+                    setRunParamValues((prev) => ({ ...prev, [p.name]: e.target.value }))
+                  }
+                  placeholder={p.default ? `Default: ${p.default}` : `Enter ${p.name}`}
+                  className="font-mono text-sm"
+                />
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setRunParamsOpen(false); setRunTargetFlow(null); }}>
+              Cancel
+            </Button>
+            <Button onClick={handleRunWithParams}>
+              <Play className="size-4 mr-1.5" />
+              Run
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -50,6 +50,7 @@ export function FlowStepPanelContent({
   useEffect(() => {
     setLabel(step.label || step.id);
     setConfig(step.config || {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect
   }, [step.id]);
 
   const handleSave = (finalConfig?: Record<string, unknown>) => {
@@ -88,6 +89,19 @@ export function FlowStepPanelContent({
   if (step.type === 'input') {
     return (
       <InputStepConfig
+        label={label}
+        setLabel={setLabel}
+        config={config}
+        setConfig={setConfig}
+        onSave={() => handleSave()}
+        onClose={onClose}
+      />
+    );
+  }
+
+  if (step.type === 'message') {
+    return (
+      <MessageStepConfig
         label={label}
         setLabel={setLabel}
         config={config}
@@ -362,18 +376,24 @@ function HttpStepConfig({
 
   return (
     <div className="flex flex-col gap-4 overflow-auto">
-      <div>
-        <Label htmlFor="step-label">Label</Label>
+      <div className="space-y-2">
+        <Label htmlFor="step-name">
+          Name
+          <span className="ml-1 text-muted-foreground font-normal">(string)</span>
+        </Label>
         <Input
-          id="step-label"
+          id="step-name"
           value={label}
           onChange={(e) => setLabel(e.target.value)}
-          placeholder="Step label"
+          placeholder="Step name"
         />
       </div>
 
-      <div>
-        <Label htmlFor="rest-id">REST resource</Label>
+      <div className="space-y-2">
+        <Label htmlFor="rest-id">
+          REST resource
+          <span className="ml-1 text-muted-foreground font-normal">(resource)</span>
+        </Label>
         <Select
           value={restId}
           onValueChange={(v) => {
@@ -401,8 +421,11 @@ function HttpStepConfig({
       </div>
 
       {restId && (
-        <div>
-          <Label htmlFor="endpoint">Endpoint</Label>
+        <div className="space-y-2">
+          <Label htmlFor="endpoint">
+            Endpoint
+            <span className="ml-1 text-muted-foreground font-normal">(openapi)</span>
+          </Label>
           <Select
             value={operationKey}
             onValueChange={(v) => {
@@ -575,18 +598,24 @@ function QueryStepConfig({
 }) {
   return (
     <div className="flex flex-col gap-4 overflow-auto">
-      <div>
-        <Label htmlFor="step-label">Label</Label>
+      <div className="space-y-2">
+        <Label htmlFor="step-name">
+          Name
+          <span className="ml-1 text-muted-foreground font-normal">(string)</span>
+        </Label>
         <Input
-          id="step-label"
+          id="step-name"
           value={label}
           onChange={(e) => setLabel(e.target.value)}
-          placeholder="Step label"
+          placeholder="Step name"
         />
       </div>
 
-      <div>
-        <Label htmlFor="database-id">Database</Label>
+      <div className="space-y-2">
+        <Label htmlFor="database-id">
+          Database
+          <span className="ml-1 text-muted-foreground font-normal">(postgres)</span>
+        </Label>
         <Select
           value={(config.databaseId as string) ?? ''}
           onValueChange={(v) =>
@@ -606,8 +635,11 @@ function QueryStepConfig({
         </Select>
       </div>
 
-      <div>
-        <Label htmlFor="sql">SQL</Label>
+      <div className="space-y-2">
+        <Label htmlFor="sql">
+          SQL
+          <span className="ml-1 text-muted-foreground font-normal">(query)</span>
+        </Label>
         <Textarea
           id="sql"
           value={(config.sql as string) ?? ''}
@@ -620,8 +652,11 @@ function QueryStepConfig({
         />
       </div>
 
-      <div>
-        <Label htmlFor="args">Args (param mapping)</Label>
+      <div className="space-y-2">
+        <Label htmlFor="args">
+          Args
+          <span className="ml-1 text-muted-foreground font-normal">(params)</span>
+        </Label>
         <Input
           id="args"
           value={((config.args as string[]) ?? []).join(', ')}
@@ -635,7 +670,7 @@ function QueryStepConfig({
           placeholder="param.user_id, param.limit"
           className="font-mono text-sm"
         />
-        <p className="text-xs text-muted-foreground mt-1">
+        <p className="text-[10px] text-muted-foreground mt-1 px-1">
           Comma-separated param references for $1, $2, etc. (e.g. param.user_id)
         </p>
       </div>
@@ -696,13 +731,16 @@ function InputStepConfig({
 
   return (
     <div className="flex flex-col gap-4 overflow-auto">
-      <div>
-        <Label htmlFor="step-label">Label</Label>
+      <div className="space-y-2">
+        <Label htmlFor="step-name">
+          Name
+          <span className="ml-1 text-muted-foreground font-normal">(string)</span>
+        </Label>
         <Input
-          id="step-label"
+          id="step-name"
           value={label}
           onChange={(e) => setLabel(e.target.value)}
-          placeholder="Step label"
+          placeholder="Step name"
         />
       </div>
 
@@ -760,6 +798,81 @@ function InputStepConfig({
             </div>
           ))}
         </div>
+      </div>
+
+      <div className="flex gap-2 pt-4 border-t border-border">
+        <Button variant="outline" size="sm" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button size="sm" onClick={onSave}>
+          Save
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function MessageStepConfig({
+  label,
+  setLabel,
+  config,
+  setConfig,
+  onSave,
+  onClose,
+}: {
+  label: string;
+  setLabel: (v: string) => void;
+  config: Record<string, unknown>;
+  setConfig: (v: Record<string, unknown>) => void;
+  onSave: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-4 overflow-auto">
+      <div>
+        <Label htmlFor="step-name">Name</Label>
+        <Input
+          id="step-name"
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          placeholder="Step name"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="notifier-id">
+          Notifier
+          <span className="ml-1 text-muted-foreground font-normal">(string)</span>
+        </Label>
+        <Input
+          id="notifier-id"
+          value={(config.notifier as string) ?? 'default'}
+          onChange={(e) =>
+            setConfig({ ...config, notifier: e.target.value })
+          }
+          placeholder="default or slack"
+          className="font-mono text-sm"
+        />
+        <p className="text-[10px] text-muted-foreground mt-1 px-1">
+          Target notifier (auto-prefixed with <code>notifier.</code> if omitted).
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="message-text">
+          Message Text
+          <span className="ml-1 text-muted-foreground font-normal">(interpolated)</span>
+        </Label>
+        <Textarea
+          id="message-text"
+          value={(config.text as string) ?? ''}
+          onChange={(e) =>
+            setConfig({ ...config, text: e.target.value })
+          }
+          placeholder="Hello from bench! or use flowpipe interpolations like ${step.http.req.response_body.id}"
+          rows={6}
+          className="font-mono text-sm"
+        />
       </div>
 
       <div className="flex gap-2 pt-4 border-t border-border">

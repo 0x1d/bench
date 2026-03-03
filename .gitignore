@@ -33,3 +33,5 @@ temp/
 
 # Flowpipe flows (user data)
 flows/
+
+server

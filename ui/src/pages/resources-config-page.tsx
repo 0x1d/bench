@@ -129,14 +129,14 @@ function parseConfigToState(rawConfig: string): ResourceFormState {
     openapiSpec: entry.openapiSpec ?? '',
     auth: entry.auth
       ? {
-          type: (entry.auth.type ?? 'none') as RestAuthConfig['type'],
-          username: entry.auth.username ?? '',
-          password: entry.auth.password ?? '',
-          token: entry.auth.token ?? '',
-          name: entry.auth.name ?? '',
-          in: entry.auth.in ?? 'header',
-          value: entry.auth.value ?? '',
-        }
+        type: (entry.auth.type ?? 'none') as RestAuthConfig['type'],
+        username: entry.auth.username ?? '',
+        password: entry.auth.password ?? '',
+        token: entry.auth.token ?? '',
+        name: entry.auth.name ?? '',
+        in: entry.auth.in ?? 'header',
+        value: entry.auth.value ?? '',
+      }
       : { type: 'none' as const },
   }));
 
@@ -248,10 +248,15 @@ export function ResourcesConfigPage() {
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setError(null);
-    Promise.allSettled([fetchConfig(), fetchConfigExample()])
-      .then(([currentResult, exampleResult]) => {
+
+    const loadConfig = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const [currentResult, exampleResult] = await Promise.allSettled([
+          fetchConfig(),
+          fetchConfigExample(),
+        ]);
         if (cancelled) return;
         const base =
           currentResult.status === 'fulfilled'
@@ -260,15 +265,16 @@ export function ResourcesConfigPage() {
               ? exampleResult.value
               : '';
         setState(parseConfigToState(base));
-      })
-      .catch((err) => {
+      } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : 'Failed to load config');
         }
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) setLoading(false);
-      });
+      }
+    };
+
+    void loadConfig();
 
     return () => {
       cancelled = true;
@@ -382,11 +388,11 @@ export function ResourcesConfigPage() {
         ? { ...prevState, filesystem: [...prevState.filesystem, nextEntry] }
         : panelMode === 'edit-filesystem' && panelIndex != null
           ? {
-              ...prevState,
-              filesystem: prevState.filesystem.map((entry, idx) =>
-                idx === panelIndex ? nextEntry : entry
-              ),
-            }
+            ...prevState,
+            filesystem: prevState.filesystem.map((entry, idx) =>
+              idx === panelIndex ? nextEntry : entry
+            ),
+          }
           : prevState;
 
     if (nextState === prevState) return;
@@ -441,12 +447,12 @@ export function ResourcesConfigPage() {
       panelMode === 'add-database'
         ? applyWithDefaultRule(prevState.databases)
         : applyWithDefaultRule(
-            prevState.databases.map((entry, idx) =>
-              panelMode === 'edit-database' && panelIndex != null && idx === panelIndex
-                ? nextEntry
-                : entry
-            )
-          );
+          prevState.databases.map((entry, idx) =>
+            panelMode === 'edit-database' && panelIndex != null && idx === panelIndex
+              ? nextEntry
+              : entry
+          )
+        );
     const nextState =
       panelMode === 'add-database'
         ? { ...prevState, databases: [...normalized, nextEntry] }
@@ -510,11 +516,11 @@ export function ResourcesConfigPage() {
         ? { ...prevState, rest: [...prevState.rest, nextEntry] }
         : panelMode === 'edit-rest' && panelIndex != null
           ? {
-              ...prevState,
-              rest: prevState.rest.map((entry, idx) =>
-                idx === panelIndex ? nextEntry : entry
-              ),
-            }
+            ...prevState,
+            rest: prevState.rest.map((entry, idx) =>
+              idx === panelIndex ? nextEntry : entry
+            ),
+          }
           : prevState;
 
     if (nextState === prevState) return;
@@ -555,18 +561,18 @@ export function ResourcesConfigPage() {
     const nextState =
       deleteTarget.type === 'filesystem'
         ? {
-            ...prevState,
-            filesystem: prevState.filesystem.filter((_, idx) => idx !== deleteTarget.index),
-          }
+          ...prevState,
+          filesystem: prevState.filesystem.filter((_, idx) => idx !== deleteTarget.index),
+        }
         : deleteTarget.type === 'database'
           ? {
-              ...prevState,
-              databases: prevState.databases.filter((_, idx) => idx !== deleteTarget.index),
-            }
+            ...prevState,
+            databases: prevState.databases.filter((_, idx) => idx !== deleteTarget.index),
+          }
           : {
-              ...prevState,
-              rest: prevState.rest.filter((_, idx) => idx !== deleteTarget.index),
-            };
+            ...prevState,
+            rest: prevState.rest.filter((_, idx) => idx !== deleteTarget.index),
+          };
 
     setState(nextState);
     setDeleteTarget(null);
@@ -585,16 +591,16 @@ export function ResourcesConfigPage() {
       : panelMode === 'edit-filesystem'
         ? 'Edit filesystem resource'
         : panelMode === 'add-database'
-            ? 'Add database resource'
-            : panelMode === 'edit-database'
-              ? 'Edit database resource'
-              : panelMode === 'add-rest'
-                ? 'Add REST resource'
-                : panelMode === 'edit-rest'
-                  ? 'Edit REST resource'
-                  : panelMode === 'edit-flows'
-                    ? 'Configure flows'
-                    : 'Resource';
+          ? 'Add database resource'
+          : panelMode === 'edit-database'
+            ? 'Edit database resource'
+            : panelMode === 'add-rest'
+              ? 'Add REST resource'
+              : panelMode === 'edit-rest'
+                ? 'Edit REST resource'
+                : panelMode === 'edit-flows'
+                  ? 'Configure flows'
+                  : 'Resource';
   const panelDescription = panelMode?.includes('filesystem')
     ? 'Configure filesystem resource fields used for file browsing.'
     : panelMode?.includes('database')

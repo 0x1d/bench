@@ -12,6 +12,8 @@ interface FlowViewContextValue {
   setOnStepSave: (cb: OnStepSave | null) => void;
   onDeleteStep: OnDeleteStep | null;
   setOnDeleteStep: (cb: OnDeleteStep | null) => void;
+  executionId: string | null;
+  setExecutionId: (id: string | null) => void;
 }
 
 const FlowViewContext = createContext<FlowViewContextValue | null>(null);
@@ -20,6 +22,7 @@ export function FlowViewProvider({ children }: { children: React.ReactNode }) {
   const [selectedStep, setSelectedStep] = useState<FlowStep | null>(null);
   const [onStepSave, setOnStepSave] = useState<OnStepSave | null>(null);
   const [onDeleteStep, setOnDeleteStep] = useState<OnDeleteStep | null>(null);
+  const [executionId, setExecutionId] = useState<string | null>(null);
 
   return (
     <FlowViewContext.Provider
@@ -30,6 +33,8 @@ export function FlowViewProvider({ children }: { children: React.ReactNode }) {
         setOnStepSave,
         onDeleteStep,
         setOnDeleteStep,
+        executionId,
+        setExecutionId,
       }}
     >
       {children}

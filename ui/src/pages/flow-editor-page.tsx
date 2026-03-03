@@ -10,16 +10,17 @@ import {
   type Node,
   type Edge,
   type Connection,
-  ConnectionLineType,
   type NodeTypes,
   type Position,
   type OnConnectEnd,
 } from '@xyflow/react';
 import dagre from 'dagre';
 import '@xyflow/react/dist/style.css';
-import { ArrowLeft, Pencil, Plus } from 'lucide-react';
+import { ArrowLeft, Pencil, Plus, LayoutGrid, Rows, Play } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { fetchFlow, updateFlow, type Flow, type FlowStep, type FlowEdge } from '@/services/api';
+import { fetchFlow, updateFlow, runFlow, type Flow, type FlowStep, type FlowEdge } from '@/services/api';
+import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 import { useFlowView } from '@/contexts/flow-view-context';
 import { Button } from '@/components/ui/button';
 import {
@@ -115,14 +116,14 @@ function flowToNodesEdges(flow: Flow): { nodes: Node[]; edges: Edge[] } {
       id: e.id,
       source: e.source,
       target: e.target,
-      type: ConnectionLineType.Straight,
+      type: 'default', // Using Bezier
     })) ??
     flow.steps.flatMap((step) =>
       (step.dependsOn ?? []).map((depId) => ({
         id: `${depId}-${step.id}`,
         source: depId,
         target: step.id,
-        type: ConnectionLineType.Straight,
+        type: 'default', // Using Bezier
       }))
     );
 
@@ -169,99 +170,129 @@ function nodesEdgesToFlow(
   };
 }
 
-function getFlowIdFromHash(): string | null {
-  const hash = window.location.hash.slice(1);
-  if (hash.startsWith('flows/')) {
-    return hash.slice(6) || null;
-  }
-  return null;
-}
-
 const nodeTypes: NodeTypes = {
   flowStep: FlowStepNode,
 };
 
-export function FlowEditorPage() {
-  const flowId = getFlowIdFromHash();
+export default function FlowEditorPage() {
   const queryClient = useQueryClient();
-  const { setSelectedStep, setOnStepSave, setOnDeleteStep } = useFlowView();
+  const flowId = window.location.hash.split('/').pop() || '';
   const [flowName, setFlowName] = useState('');
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameValue, setRenameValue] = useState('');
+  const { setSelectedStep, setOnStepSave, setOnDeleteStep, setExecutionId } = useFlowView();
   const [connectFromSource, setConnectFromSource] = useState<{
     sourceId: string;
     x: number;
     y: number;
   } | null>(null);
+  const [layoutDirection, setLayoutDirection] = useState<'TB' | 'LR'>('TB');
+  const [runParamsOpen, setRunParamsOpen] = useState(false);
+  const [runParamValues, setRunParamValues] = useState<Record<string, string>>({});
 
 
-  const { data: flow, isLoading, error } = useQuery({
-    queryKey: ['flow', flowId ?? ''],
+  const {
+    data: flow,
+    isLoading,
+    error,
+  } = useQuery({
+    queryKey: ['flow', flowId],
     queryFn: () => fetchFlow(flowId!),
     enabled: !!flowId,
   });
 
   const initial = useMemo(() => {
     if (!flow) return { nodes: [], edges: [] };
-    const { nodes, edges } = flowToNodesEdges(flow);
+    const { nodes: untypedNodes, edges } = flowToNodesEdges(flow);
+    const nodes = untypedNodes.map(n => ({
+      ...n, data: {
+        ...n.data, onAddNextStep: (nodeId: string, e: React.MouseEvent) => {
+          setConnectFromSource({ sourceId: nodeId, x: e.clientX, y: e.clientY });
+        }
+      }
+    }));
     if (nodes.length > 0) {
-      return getLayoutedElements(nodes, edges);
+      return getLayoutedElements(nodes, edges, layoutDirection);
     }
     return { nodes, edges };
-  }, [flow?.id]);
+  }, [flow?.id, layoutDirection]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initial.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initial.edges);
 
   useEffect(() => {
     if (flow && initial.nodes.length > 0) {
-      const layouted = getLayoutedElements(initial.nodes, initial.edges);
+      const layouted = getLayoutedElements(initial.nodes, initial.edges, layoutDirection);
       setNodes(layouted.nodes);
       setEdges(layouted.edges);
     }
-  }, [flow?.id]);
+  }, [flow?.id, layoutDirection]);
 
   useEffect(() => {
-    if (flow) {
+    if (flow && !flowName) {
       setFlowName(flow.name || flow.id);
     }
-  }, [flow]);
+    // Clear execution state when switching flows
+    setExecutionId(null);
+    setSelectedStep(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flow?.id]);
 
   const updateMutation = useMutation({
     mutationFn: (f: Flow) => updateFlow(f.id, f),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['flow', flowId ?? ''] });
       queryClient.invalidateQueries({ queryKey: ['flows'] });
+      toast.success('Flow saved successfully');
     },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to save flow');
+    }
+  });
+
+  const runMutation = useMutation({
+    mutationFn: ({ id, args }: { id: string; args?: Record<string, any> }) => runFlow(id, args),
+    onSuccess: (res) => {
+      toast.success('Flow started successfully');
+      const execId = res?.flowpipe?.execution_id;
+      if (execId) {
+        setExecutionId(execId);
+      }
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to run flow');
+    }
   });
 
   const onConnect = useCallback(
     (params: Connection) => {
       setEdges((eds) => {
         const newEdges = addEdge(
-          { ...params, type: ConnectionLineType.Straight },
+          { ...params, type: 'default' },
           eds
         );
-        const layouted = getLayoutedElements(nodes, newEdges);
+        const layouted = getLayoutedElements(nodes, newEdges, layoutDirection);
         setNodes(layouted.nodes);
         return layouted.edges;
       });
     },
-    [nodes, setEdges, setNodes]
+    [nodes, setEdges, setNodes, layoutDirection]
   );
 
   const addStepFromConnection = useCallback(
-    (sourceId: string, stepType: 'http' | 'query' | 'input') => {
+    (sourceId: string, stepType: 'http' | 'query' | 'input' | 'message') => {
       const id = `step_${stepType}_${Date.now()}`;
       const configs: Record<string, Record<string, unknown>> = {
         http: { restId: '', method: 'GET', path: '/' },
         query: { databaseId: '', sql: '' },
         input: { params: [] },
+        message: { notifier: 'default', text: 'Hello from bench!' },
       };
       const labels: Record<string, string> = {
         http: 'HTTP request',
         query: 'Query',
         input: 'Input',
+        message: 'Message',
       };
       const step: FlowStep = {
         id,
@@ -277,22 +308,25 @@ export function FlowEditorPage() {
           stepType: step.type,
           label: step.label || step.id,
           step,
+          onAddNextStep: (nodeId: string, e: React.MouseEvent) => {
+            setConnectFromSource({ sourceId: nodeId, x: e.clientX, y: e.clientY });
+          }
         },
       };
-      const newEdge = {
+      const newEdge: Edge = {
         id: `${sourceId}-${id}`,
         source: sourceId,
         target: id,
-        type: ConnectionLineType.Straight,
+        type: 'default',
       };
       const nextNodes = [...nodes, newNode];
       const nextEdges = [...edges, newEdge];
-      const layouted = getLayoutedElements(nextNodes, nextEdges);
+      const layouted = getLayoutedElements(nextNodes, nextEdges, layoutDirection);
       setNodes(layouted.nodes);
       setEdges(layouted.edges);
       setConnectFromSource(null);
     },
-    [nodes, edges, setNodes, setEdges]
+    [nodes, edges, setNodes, setEdges, layoutDirection]
   );
 
   const onConnectEnd = useCallback<OnConnectEnd>(
@@ -328,19 +362,48 @@ export function FlowEditorPage() {
     updateMutation.mutate(updated);
   }, [flowId, flow, flowName, nodes, edges, updateMutation]);
 
+  // Collect input params from input steps
+  const inputParams = useMemo(() => {
+    if (!flow) return [];
+    const inputStep = flow.steps.find((s) => s.type === 'input');
+    if (!inputStep) return [];
+    const params = (inputStep.config?.params as any[]) || [];
+    return params.filter((p: any) => p?.name);
+  }, [flow]);
+
+  const handleRun = useCallback(() => {
+    if (!flowId) return;
+    if (inputParams.length > 0) {
+      const defaults: Record<string, string> = {};
+      for (const p of inputParams) {
+        defaults[p.name] = p.default ?? '';
+      }
+      setRunParamValues(defaults);
+      setRunParamsOpen(true);
+    } else {
+      runMutation.mutate({ id: flowId });
+    }
+  }, [flowId, inputParams, runMutation]);
+
+  const handleRunWithParams = useCallback(() => {
+    if (!flowId) return;
+    setRunParamsOpen(false);
+    runMutation.mutate({ id: flowId, args: runParamValues });
+  }, [flowId, runParamValues, runMutation]);
+
   useEffect(() => {
     const callback = (updatedStep: FlowStep) => {
       setNodes((nds) =>
         nds.map((n) =>
           n.id === updatedStep.id
             ? {
-                ...n,
-                data: {
-                  ...n.data,
-                  step: updatedStep,
-                  label: updatedStep.label || updatedStep.id,
-                },
-              }
+              ...n,
+              data: {
+                ...n.data,
+                step: updatedStep,
+                label: updatedStep.label || updatedStep.id,
+              },
+            }
             : n
         )
       );
@@ -349,18 +412,43 @@ export function FlowEditorPage() {
     return () => setOnStepSave(null);
   }, [setNodes, setOnStepSave]);
 
+  const onNodesDelete = useCallback(
+    (deleted: Node[]) => {
+      const deletedIds = new Set(deleted.map((n) => n.id));
+      const nextNodes = nodes.filter((n) => !deletedIds.has(n.id));
+      const nextEdges = edges.filter(
+        (e) => !deletedIds.has(e.source) && !deletedIds.has(e.target)
+      );
+      const layouted = getLayoutedElements(nextNodes, nextEdges, layoutDirection);
+      setNodes(layouted.nodes);
+      setEdges(layouted.edges);
+    },
+    [nodes, edges, setNodes, setEdges, layoutDirection]
+  );
+
+  const onEdgesDelete = useCallback(
+    (deleted: Edge[]) => {
+      const deletedIds = new Set(deleted.map((e) => e.id));
+      const nextEdges = edges.filter((e) => !deletedIds.has(e.id));
+      const layouted = getLayoutedElements(nodes, nextEdges, layoutDirection);
+      setNodes(layouted.nodes);
+      setEdges(layouted.edges);
+    },
+    [nodes, edges, setNodes, setEdges, layoutDirection]
+  );
+
   const handleDeleteStep = useCallback(
     (stepId: string) => {
       const nextNodes = nodes.filter((n) => n.id !== stepId);
       const nextEdges = edges.filter(
         (e) => e.source !== stepId && e.target !== stepId
       );
-      const layouted = getLayoutedElements(nextNodes, nextEdges);
+      const layouted = getLayoutedElements(nextNodes, nextEdges, layoutDirection);
       setNodes(layouted.nodes);
       setEdges(layouted.edges);
       setSelectedStep(null);
     },
-    [nodes, edges, setNodes, setEdges, setSelectedStep]
+    [nodes, edges, setNodes, setEdges, setSelectedStep, layoutDirection]
   );
 
   useEffect(() => {
@@ -456,78 +544,94 @@ export function FlowEditorPage() {
           >
             {updateMutation.isPending ? 'Saving…' : 'Save'}
           </Button>
+          <Button
+            size="sm"
+            onClick={handleRun}
+            disabled={runMutation.isPending}
+            className="gap-1.5"
+          >
+            <Play className={cn("size-3", runMutation.isPending && "animate-pulse")} />
+            {runMutation.isPending ? 'Running…' : 'Run'}
+          </Button>
         </div>
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <div className="h-full min-h-[300px] rounded-lg border border-border overflow-hidden">
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
-          onConnectEnd={onConnectEnd}
-          onNodeClick={(_e, node) => {
-            const step = (node.data?.step as FlowStep) ?? {
-              id: node.id,
-              type: (node.data?.stepType as string) ?? 'http',
-              label: (node.data?.label as string) ?? node.id,
-              config: {},
-            };
-            setSelectedStep(step);
-          }}
-          onPaneClick={() => setSelectedStep(null)}
-          nodeTypes={nodeTypes}
-          connectionLineType={ConnectionLineType.Straight}
-          nodesDraggable={false}
-          fitView
-        >
-          <Background />
-          <Controls />
-          <Panel position="top-left">
-            <AddStepButtons
-              hasInputStep={nodes.some(
-                (n) => ((n.data as { step?: FlowStep })?.step?.type ?? '') === 'input'
-              )}
-              onAdd={(step) => {
-                const newNode: Node = {
-                  id: step.id,
-                  type: 'flowStep',
-                  position: { x: 0, y: 0 },
-                  data: {
-                    stepType: step.type,
-                    label: step.label || step.id,
-                    step,
-                  },
-                };
-                const inputNode = nodes.find(
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onNodesDelete={onNodesDelete}
+            onEdgesDelete={onEdgesDelete}
+            onConnect={onConnect}
+            onConnectEnd={onConnectEnd}
+            onNodeClick={(_e, node) => {
+              const step = (node.data?.step as FlowStep) ?? {
+                id: node.id,
+                type: (node.data?.stepType as string) ?? 'http',
+                label: (node.data?.label as string) ?? node.id,
+                config: {},
+              };
+              setSelectedStep(step);
+            }}
+            onPaneClick={() => setSelectedStep(null)}
+            nodeTypes={nodeTypes}
+            nodesDraggable={false}
+            fitView
+          >
+            <Background />
+            <Controls className="bg-card border-border border shadow-sm [&_button]:border-border [&_button]:bg-card [&_button_svg]:fill-foreground hover:[&_button]:bg-accent" />
+            <Panel position="top-left">
+              <AddStepButtons
+                hasInputStep={nodes.some(
                   (n) => ((n.data as { step?: FlowStep })?.step?.type ?? '') === 'input'
-                );
-                let nextEdges = edges;
-                if (
-                  step.type !== 'input' &&
-                  inputNode &&
-                  !edges.some((e) => e.source === inputNode.id && e.target === step.id)
-                ) {
-                  nextEdges = [
-                    ...edges,
-                    {
-                      id: `${inputNode.id}-${step.id}`,
-                      source: inputNode.id,
-                      target: step.id,
-                      type: ConnectionLineType.Straight,
+                )}
+                onAdd={(step) => {
+                  const newNode: Node = {
+                    id: step.id,
+                    type: 'flowStep',
+                    position: { x: 0, y: 0 },
+                    data: {
+                      stepType: step.type,
+                      label: step.label || step.id,
+                      step,
+                      onAddNextStep: (nodeId: string, e: React.MouseEvent) => {
+                        setConnectFromSource({ sourceId: nodeId, x: e.clientX, y: e.clientY });
+                      }
                     },
-                  ];
-                }
-                const nextNodes = [...nodes, newNode];
-                const layouted = getLayoutedElements(nextNodes, nextEdges);
-                setNodes(layouted.nodes);
-                setEdges(layouted.edges);
-              }}
-            />
-          </Panel>
-        </ReactFlow>
+                  };
+                  const nextNodes = [...nodes, newNode];
+                  const layouted = getLayoutedElements(nextNodes, edges, layoutDirection);
+                  setNodes(layouted.nodes);
+                  setEdges(layouted.edges);
+                }}
+              />
+            </Panel>
+            <Panel position="top-right">
+              <div className="flex bg-card border border-border rounded-lg shadow-sm">
+                <Button
+                  variant={layoutDirection === 'TB' ? 'secondary' : 'ghost'}
+                  size="icon-sm"
+                  onClick={() => setLayoutDirection('TB')}
+                  title="Vertical Layout"
+                  className="rounded-r-none"
+                >
+                  <Rows className="size-4" />
+                </Button>
+                <Button
+                  variant={layoutDirection === 'LR' ? 'secondary' : 'ghost'}
+                  size="icon-sm"
+                  onClick={() => setLayoutDirection('LR')}
+                  title="Horizontal Layout"
+                  className="rounded-l-none"
+                >
+                  <LayoutGrid className="size-4" />
+                </Button>
+              </div>
+            </Panel>
+          </ReactFlow>
         </div>
       </div>
 
@@ -542,57 +646,69 @@ export function FlowEditorPage() {
               style={{ left: connectFromSource.x, top: connectFromSource.y }}
             />
           </PopoverAnchor>
-        <PopoverContent
-          className="w-auto p-2"
-          align="start"
-          side="bottom"
-          sideOffset={8}
-        >
-          <p className="text-xs text-muted-foreground mb-2 px-1">Add step</p>
-          <div className="flex gap-1">
-            {!nodes.some(
-              (n) => ((n.data as { step?: FlowStep })?.step?.type ?? '') === 'input'
-            ) && (
+          <PopoverContent
+            className="w-auto p-2"
+            align="start"
+            side="bottom"
+            sideOffset={8}
+          >
+            <p className="text-xs text-muted-foreground mb-2 px-1">Add step</p>
+            <div className="flex gap-1">
+              {!nodes.some(
+                (n) => ((n.data as { step?: FlowStep })?.step?.type ?? '') === 'input'
+              ) && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      connectFromSource &&
+                      addStepFromConnection(connectFromSource.sourceId, 'input')
+                    }
+                    className="gap-1.5"
+                  >
+                    <Plus className="size-4" />
+                    Input
+                  </Button>
+                )}
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() =>
                   connectFromSource &&
-                  addStepFromConnection(connectFromSource.sourceId, 'input')
+                  addStepFromConnection(connectFromSource.sourceId, 'http')
                 }
                 className="gap-1.5"
               >
                 <Plus className="size-4" />
-                Input
+                HTTP
               </Button>
-            )}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                connectFromSource &&
-                addStepFromConnection(connectFromSource.sourceId, 'http')
-              }
-              className="gap-1.5"
-            >
-              <Plus className="size-4" />
-              HTTP
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                connectFromSource &&
-                addStepFromConnection(connectFromSource.sourceId, 'query')
-              }
-              className="gap-1.5"
-            >
-              <Plus className="size-4" />
-              Query
-            </Button>
-          </div>
-        </PopoverContent>
-      </Popover>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  connectFromSource &&
+                  addStepFromConnection(connectFromSource.sourceId, 'query')
+                }
+                className="gap-1.5"
+              >
+                <Plus className="size-4" />
+                Query
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  connectFromSource &&
+                  addStepFromConnection(connectFromSource.sourceId, 'message')
+                }
+                className="gap-1.5"
+              >
+                <Plus className="size-4" />
+                Message
+              </Button>
+            </div>
+          </PopoverContent>
+        </Popover>
       )}
 
       <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
@@ -640,6 +756,53 @@ export function FlowEditorPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Run Parameters Dialog */}
+      <Dialog open={runParamsOpen} onOpenChange={setRunParamsOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Run Parameters</DialogTitle>
+            <DialogDescription>
+              Provide values for the pipeline input parameters.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            {inputParams.map((p: any) => (
+              <div key={p.name} className="space-y-1.5">
+                <Label htmlFor={`param-${p.name}`} className="text-xs font-medium flex items-center gap-2">
+                  {p.name}
+                  {p.type && (
+                    <span className="text-[10px] text-muted-foreground font-mono bg-muted px-1.5 py-0.5 rounded">
+                      {p.type}
+                    </span>
+                  )}
+                </Label>
+                {p.description && (
+                  <p className="text-xs text-muted-foreground">{p.description}</p>
+                )}
+                <Input
+                  id={`param-${p.name}`}
+                  value={runParamValues[p.name] ?? ''}
+                  onChange={(e) =>
+                    setRunParamValues((prev) => ({ ...prev, [p.name]: e.target.value }))
+                  }
+                  placeholder={p.default ? `Default: ${p.default}` : `Enter ${p.name}`}
+                  className="font-mono text-sm"
+                />
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRunParamsOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleRunWithParams} disabled={runMutation.isPending}>
+              <Play className="size-4 mr-1.5" />
+              Run
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -651,17 +814,19 @@ function AddStepButtons({
   hasInputStep: boolean;
   onAdd: (step: FlowStep) => void;
 }) {
-  const addStep = (type: 'http' | 'query' | 'input') => {
+  const addStep = (type: 'http' | 'query' | 'input' | 'message') => {
     const id = `step_${type}_${Date.now()}`;
     const configs: Record<string, Record<string, unknown>> = {
       http: { restId: '', method: 'GET', path: '/' },
       query: { databaseId: '', sql: '' },
       input: { params: [] },
+      message: { notifier: 'default', text: 'Hello from bench!' },
     };
     const labels: Record<string, string> = {
       http: 'HTTP request',
       query: 'Query',
       input: 'Input',
+      message: 'Message',
     };
     onAdd({
       id,
@@ -686,6 +851,10 @@ function AddStepButtons({
       <Button variant="outline" size="sm" onClick={() => addStep('query')} className="gap-1.5">
         <Plus className="size-4" />
         Query
+      </Button>
+      <Button variant="outline" size="sm" onClick={() => addStep('message')} className="gap-1.5">
+        <Plus className="size-4" />
+        Message
       </Button>
     </div>
   );

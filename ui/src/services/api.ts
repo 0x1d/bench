@@ -561,7 +561,7 @@ export async function dropTable(
   const response = await fetch(
     withDbParams(`${API_BASE}/database/tables/${encodeURIComponent(tableName)}`, params, dbId),
     {
-    method: 'DELETE',
+      method: 'DELETE',
     }
   );
   if (!response.ok) {
@@ -736,9 +736,39 @@ export async function deleteFlow(id: string): Promise<void> {
   }
 }
 
-export async function runFlow(id: string): Promise<Response> {
-  const response = await fetch(`${API_BASE}/flows/${encodeURIComponent(id)}/run`, {
+export async function runFlow(id: string, args?: Record<string, any>): Promise<any> {
+  const options: RequestInit = {
     method: 'POST',
-  });
-  return response;
+  };
+  if (args && Object.keys(args).length > 0) {
+    options.headers = { 'Content-Type': 'application/json' };
+    options.body = JSON.stringify({ args });
+  }
+  const response = await fetch(`${API_BASE}/flows/${encodeURIComponent(id)}/run`, options);
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Failed to run flow: ${response.status}`);
+  }
+  // Try to parse JSON, fall back to text
+  const contentType = response.headers.get('content-type') || '';
+  if (contentType.includes('application/json')) {
+    return response.json();
+  }
+  return { output: await response.text() };
+}
+
+export async function fetchFlowProcesses(): Promise<any> {
+  const response = await fetch(`${API_BASE}/flows/processes`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch processes: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function fetchFlowExecution(executionId: string): Promise<any> {
+  const response = await fetch(`${API_BASE}/flows/executions/${encodeURIComponent(executionId)}`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch execution: ${response.status}`);
+  }
+  return response.json();
 }

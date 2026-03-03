@@ -1,11 +1,12 @@
 import { useCallback, useRef, useState } from 'react';
-import { Trash2, X } from 'lucide-react';
+import { Trash2, X, Terminal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useFlowView } from '@/contexts/flow-view-context';
 import { FlowStepPanelContent } from '@/components/flow-step-panel-content';
+import { FlowExecutionLog } from '@/components/flow-execution-log';
 import { useQuery } from '@tanstack/react-query';
 import { fetchStatus, fetchRestList } from '@/services/api';
-import { cn } from '@/lib/utils';
+import { cn, normalizeStepName } from '@/lib/utils';
 
 const STORAGE_KEY = 'bench-flow-step-panel-width';
 const MIN_WIDTH = 280;
@@ -21,13 +22,25 @@ function getInitialWidth(): number {
   return 360;
 }
 
+type PanelTab = 'config' | 'execution';
+
 export function FlowStepPanel() {
-  const { selectedStep, setSelectedStep, onStepSave, onDeleteStep } = useFlowView();
+  const { selectedStep, setSelectedStep, onStepSave, onDeleteStep, executionId, setExecutionId } =
+    useFlowView();
   const [width, setWidth] = useState(getInitialWidth);
+  const [activeTab, setActiveTab] = useState<PanelTab>('config');
   const startXRef = useRef(0);
   const startWidthRef = useRef(0);
 
-  const isExpanded = selectedStep != null;
+  // Show panel when we have a selected step OR an execution to display
+  const isExpanded = selectedStep != null || executionId != null;
+
+  // Auto-switch to execution tab when a new execution starts
+  const prevExecRef = useRef<string | null>(null);
+  if (executionId && executionId !== prevExecRef.current) {
+    prevExecRef.current = executionId;
+    setActiveTab('execution');
+  }
 
   const { data: statusData } = useQuery({
     queryKey: ['status'],
@@ -72,11 +85,20 @@ export function FlowStepPanel() {
 
   const handleClose = () => {
     setSelectedStep(null);
+    setExecutionId(null);
+    setActiveTab('config');
   };
 
-  const panelTitle = selectedStep
-    ? `Configure — ${selectedStep.label || selectedStep.id}`
-    : 'Step';
+  const panelTitle =
+    activeTab === 'execution'
+      ? selectedStep
+        ? `Execution — ${selectedStep.label || selectedStep.id}`
+        : 'Execution Log'
+      : selectedStep
+        ? `Configure — ${selectedStep.label || selectedStep.id}`
+        : 'Step';
+
+  const showTabs = executionId != null;
 
   const panelContent = () => (
     <>
@@ -93,27 +115,30 @@ export function FlowStepPanel() {
       )}
       <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-sidebar-border px-4">
         <span
-          className="truncate text-sm font-medium"
+          className="truncate text-sm font-medium flex items-center gap-2"
           title={panelTitle}
         >
+          {activeTab === 'execution' && <Terminal className="size-4 text-primary" />}
           {panelTitle}
         </span>
         <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            onClick={() => {
-              if (selectedStep && onDeleteStep) {
-                onDeleteStep(selectedStep.id);
-                setSelectedStep(null);
-              }
-            }}
-            disabled={!onDeleteStep}
-            aria-label="Delete step"
-            className="text-destructive hover:text-destructive"
-          >
-            <Trash2 className="size-4" />
-          </Button>
+          {activeTab === 'config' && selectedStep && (
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              onClick={() => {
+                if (selectedStep && onDeleteStep) {
+                  onDeleteStep(selectedStep.id);
+                  setSelectedStep(null);
+                }
+              }}
+              disabled={!onDeleteStep}
+              aria-label="Delete step"
+              className="text-destructive hover:text-destructive"
+            >
+              <Trash2 className="size-4" />
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="icon-xs"
@@ -124,8 +149,38 @@ export function FlowStepPanel() {
           </Button>
         </div>
       </div>
+
+      {/* Tabs */}
+      {showTabs && (
+        <div className="flex border-b border-border shrink-0">
+          <button
+            onClick={() => setActiveTab('config')}
+            className={cn(
+              'flex-1 px-3 py-2 text-xs font-medium transition-colors',
+              activeTab === 'config'
+                ? 'border-b-2 border-primary text-foreground'
+                : 'text-muted-foreground hover:text-foreground'
+            )}
+          >
+            Configure
+          </button>
+          <button
+            onClick={() => setActiveTab('execution')}
+            className={cn(
+              'flex-1 px-3 py-2 text-xs font-medium transition-colors flex items-center justify-center gap-1.5',
+              activeTab === 'execution'
+                ? 'border-b-2 border-primary text-foreground'
+                : 'text-muted-foreground hover:text-foreground'
+            )}
+          >
+            <Terminal className="size-3" />
+            Execution
+          </button>
+        </div>
+      )}
+
       <div className="flex min-h-0 flex-1 flex-col overflow-auto p-4">
-        {selectedStep && (
+        {activeTab === 'config' && selectedStep && (
           <FlowStepPanelContent
             step={selectedStep}
             databases={databases}
@@ -136,6 +191,14 @@ export function FlowStepPanel() {
             }}
             onClose={handleClose}
           />
+        )}
+        {activeTab === 'execution' && executionId && (
+          <FlowExecutionLog executionId={executionId} selectedStepId={selectedStep ? normalizeStepName(selectedStep.label, selectedStep.id) : undefined} />
+        )}
+        {activeTab === 'execution' && !executionId && (
+          <div className="text-sm text-muted-foreground py-8 text-center">
+            No execution running. Click <strong>Run</strong> to start a flow.
+          </div>
         )}
       </div>
     </>

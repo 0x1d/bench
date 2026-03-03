@@ -80,9 +80,16 @@ type ResourcesConfig struct {
 	Rest       []RestEntry       `yaml:"rest"`
 }
 
+// FlowsConfig holds flow-related settings.
+type FlowsConfig struct {
+	Path         string `yaml:"path"`                   // directory for .fp files (default ./flows)
+	FlowpipeURL  string `yaml:"flowpipeUrl,omitempty"`  // Flowpipe server URL (default http://localhost:7103)
+}
+
 // Config is the top-level config structure.
 type Config struct {
 	Resources ResourcesConfig `yaml:"resources"`
+	Flows     *FlowsConfig    `yaml:"flows,omitempty"`
 }
 
 // FindConfigPath returns the path to config.yaml, or empty if none exists.
@@ -114,6 +121,11 @@ func FindConfigPath() string {
 }
 
 var envVarPattern = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}`)
+
+// EnvVarPattern returns the regex for extracting env var names from ${VAR} placeholders.
+func EnvVarPattern() *regexp.Regexp {
+	return envVarPattern
+}
 
 func interpolateEnv(data []byte) ([]byte, error) {
 	matches := envVarPattern.FindAllSubmatch(data, -1)
@@ -377,6 +389,34 @@ func ConfigDir() string {
 		return ""
 	}
 	return filepath.Dir(path)
+}
+
+// FlowsPath returns the absolute path to the flows directory.
+// Defaults to ./flows relative to config dir.
+func FlowsPath() string {
+	cfg, path, err := ReadConfig()
+	if err != nil {
+		return ""
+	}
+	baseDir := filepath.Dir(path)
+	p := "flows"
+	if cfg.Flows != nil && cfg.Flows.Path != "" {
+		p = cfg.Flows.Path
+	}
+	if !filepath.IsAbs(p) {
+		p = filepath.Join(baseDir, p)
+	}
+	abs, _ := filepath.Abs(p)
+	return abs
+}
+
+// FlowpipeURL returns the Flowpipe server URL.
+func FlowpipeURL() string {
+	cfg, _, err := ReadConfig()
+	if err != nil || cfg.Flows == nil || cfg.Flows.FlowpipeURL == "" {
+		return "http://localhost:7103"
+	}
+	return cfg.Flows.FlowpipeURL
 }
 
 // ExampleConfigPath returns the path to config.example.yaml (same dir as config or write path).

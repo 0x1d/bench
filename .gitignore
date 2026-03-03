@@ -30,3 +30,6 @@ coverage/
 api/server
 
 temp/
+
+# Flowpipe flows (user data)
+flows/

@@ -649,3 +649,96 @@ export async function fetchRestProxy(
   });
   return response;
 }
+
+// Flow types and API
+export interface FlowStepPosition {
+  x: number;
+  y: number;
+}
+
+export interface FlowStep {
+  id: string;
+  type: string;
+  label: string;
+  config: Record<string, unknown>;
+  dependsOn?: string[];
+  position?: FlowStepPosition;
+}
+
+export interface FlowEdge {
+  id: string;
+  source: string;
+  target: string;
+}
+
+export interface Flow {
+  id: string;
+  name: string;
+  description?: string;
+  steps: FlowStep[];
+  edges?: FlowEdge[];
+}
+
+export interface FlowListResponse {
+  flows: Flow[];
+}
+
+export async function fetchFlowList(): Promise<FlowListResponse> {
+  const response = await fetch(`${API_BASE}/flows`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch flows: ${response.status} ${response.statusText}`);
+  }
+  return response.json();
+}
+
+export async function fetchFlow(id: string): Promise<Flow> {
+  const response = await fetch(`${API_BASE}/flows/${encodeURIComponent(id)}`);
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Failed to fetch flow: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function createFlow(flow: Partial<Flow>): Promise<Flow> {
+  const response = await fetch(`${API_BASE}/flows`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(flow),
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Failed to create flow: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function updateFlow(id: string, flow: Partial<Flow>): Promise<Flow> {
+  const response = await fetch(`${API_BASE}/flows/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...flow, id }),
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Failed to update flow: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function deleteFlow(id: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/flows/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Failed to delete flow: ${response.status}`);
+  }
+}
+
+export async function runFlow(id: string): Promise<Response> {
+  const response = await fetch(`${API_BASE}/flows/${encodeURIComponent(id)}/run`, {
+    method: 'POST',
+  });
+  return response;
+}

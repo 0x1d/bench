@@ -121,7 +121,7 @@ export function App() {
       </FileViewProvider>
       <UploadProgress />
       <Toaster
-        position="top-right"
+        position="top-center"
         closeButton
         richColors
         theme="dark"

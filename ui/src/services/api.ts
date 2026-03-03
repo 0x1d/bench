@@ -701,8 +701,16 @@ export interface FlowWorkspaceEntry {
   mtime?: number;
 }
 
+export interface FlowWorkspaceTreeEntry extends FlowWorkspaceEntry {
+  children?: FlowWorkspaceTreeEntry[];
+}
+
 export interface FlowWorkspaceEntriesResponse {
   entries: FlowWorkspaceEntry[];
+}
+
+export interface FlowWorkspaceTreeResponse {
+  entries: FlowWorkspaceTreeEntry[];
 }
 
 export async function fetchFlowWorkspaces(): Promise<FlowWorkspacesResponse> {
@@ -721,6 +729,35 @@ export async function fetchFlowEntries(path = '.'): Promise<FlowWorkspaceEntries
     throw new Error(text || `Failed to fetch entries: ${response.status}`);
   }
   return response.json();
+}
+
+export async function fetchFlowTree(path = '.'): Promise<FlowWorkspaceTreeResponse> {
+  const params = new URLSearchParams({ path, recursive: 'true' });
+  const response = await fetch(`${API_BASE}/flows/entries?${params}`);
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Failed to fetch flow tree: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function moveFlow(
+  id: string,
+  fromModule: string,
+  toModule: string
+): Promise<void> {
+  const response = await fetch(`${API_BASE}/flows/${encodeURIComponent(id)}/move`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      fromModule: fromModule || '.',
+      toModule: toModule || '.',
+    }),
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Failed to move flow: ${response.status}`);
+  }
 }
 
 export interface FlowModuleMeta {

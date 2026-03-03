@@ -890,6 +890,12 @@ type WorkspaceDirEntry struct {
 	Mtime  int64  `json:"mtime,omitempty"`
 }
 
+// WorkspaceTreeEntry is a WorkspaceDirEntry with optional children for tree view.
+type WorkspaceTreeEntry struct {
+	WorkspaceDirEntry
+	Children []WorkspaceTreeEntry `json:"children,omitempty"`
+}
+
 // ListEntries returns modules (subdirs) and flows (flow_*.fp) at the given path.
 // Path is relative to flows/ (e.g. "." for root, "foo" for flows/foo/).
 func (s *Service) ListEntries(subpath string) ([]WorkspaceDirEntry, error) {
@@ -956,6 +962,42 @@ func (s *Service) ListEntries(subpath string) ([]WorkspaceDirEntry, error) {
 		}
 	}
 	return result, nil
+}
+
+// ListTree returns a recursive tree of modules and flows.
+func (s *Service) ListTree(subpath string) ([]WorkspaceTreeEntry, error) {
+	entries, err := s.ListEntries(subpath)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]WorkspaceTreeEntry, 0, len(entries))
+	for _, e := range entries {
+		node := WorkspaceTreeEntry{WorkspaceDirEntry: e}
+		if e.Type == "module" {
+			children, childErr := s.ListTree(e.Path)
+			if childErr != nil {
+				return nil, childErr
+			}
+			node.Children = children
+		}
+		result = append(result, node)
+	}
+	return result, nil
+}
+
+// MoveFlow moves a flow from one module to another.
+func (s *Service) MoveFlow(fromModule, toModule, flowID string) error {
+	if fromModule == toModule {
+		return nil
+	}
+	flow, err := s.GetInModule(fromModule, flowID)
+	if err != nil {
+		return err
+	}
+	if err := s.SaveInModule(toModule, flow); err != nil {
+		return err
+	}
+	return s.DeleteInModule(fromModule, flowID)
 }
 
 // CreateModule creates a module subfolder under flows/ and initializes it with mod.fp.

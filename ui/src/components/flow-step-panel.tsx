@@ -111,7 +111,7 @@ export function FlowStepPanel() {
         ? `Configure — ${selectedStep.label || selectedStep.id}`
         : 'Step';
 
-  const showTabs = executionId != null && !moduleEditPath;
+  const showTabs = executionId != null && selectedStep != null && !moduleEditPath;
 
   const panelContent = () => (
     <>

@@ -57,6 +57,10 @@ function ClearFlowViewOnNavigate({ hash }: { hash: string }) {
       setExecutionId(null);
       setModuleEditPath(null);
     }
+    // Close module edit panel when opening a flow in the editor
+    else if (hash.startsWith('flows/')) {
+      setModuleEditPath(null);
+    }
   }, [hash, setSelectedStep, setExecutionId, setModuleEditPath]);
   return null;
 }

@@ -44,6 +44,7 @@ func RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/flows/{id}", HandleFlowGet)
 	mux.HandleFunc("POST /api/flows", HandleFlowCreate)
 	mux.HandleFunc("PUT /api/flows/{id}", HandleFlowUpdate)
+	mux.HandleFunc("PUT /api/flows/{id}/move", HandleFlowMove)
 	mux.HandleFunc("DELETE /api/flows/{id}", HandleFlowDelete)
 	mux.HandleFunc("POST /api/flows/{id}/run", HandleFlowRun)
 	mux.HandleFunc("GET /api/flows/processes", HandleFlowProcesses)

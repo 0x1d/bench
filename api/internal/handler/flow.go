@@ -34,6 +34,7 @@ func HandleFlowWorkspacesList(w http.ResponseWriter, r *http.Request) {
 }
 
 // HandleFlowEntries lists modules and flows at the given path (relative to flows/).
+// Query param recursive=true returns a tree structure.
 func HandleFlowEntries(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -46,6 +47,23 @@ func HandleFlowEntries(w http.ResponseWriter, r *http.Request) {
 	subpath := r.URL.Query().Get("path")
 	if subpath == "" {
 		subpath = "."
+	}
+	recursive := r.URL.Query().Get("recursive") == "true"
+	if recursive {
+		tree, err := flowSvc.ListTree(subpath)
+		if err != nil {
+			if strings.Contains(err.Error(), "not found") {
+				http.Error(w, err.Error(), http.StatusNotFound)
+				return
+			}
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(struct {
+			Entries []flow.WorkspaceTreeEntry `json:"entries"`
+		}{Entries: tree})
+		return
 	}
 	entries, err := flowSvc.ListEntries(subpath)
 	if err != nil {
@@ -253,6 +271,44 @@ func HandleFlowUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(f)
+}
+
+// HandleFlowMove moves a flow from one module to another.
+func HandleFlowMove(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	id := strings.TrimSpace(r.PathValue("id"))
+	if id == "" {
+		http.Error(w, "flow id required", http.StatusBadRequest)
+		return
+	}
+	var body struct {
+		FromModule string `json:"fromModule"`
+		ToModule   string `json:"toModule"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "invalid request body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	fromModule := strings.TrimSpace(body.FromModule)
+	toModule := strings.TrimSpace(body.ToModule)
+	if fromModule == "" {
+		fromModule = "."
+	}
+	if toModule == "" {
+		toModule = "."
+	}
+	if err := flowSvc.MoveFlow(fromModule, toModule, id); err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // HandleFlowDelete deletes a flow. Query param: module (default "." for root).

@@ -17,6 +17,8 @@ interface FlowViewContextValue {
   flowWorkspace: string | null;
   flowModule: string | null;
   setFlowContext: (workspace: string | null, module: string | null) => void;
+  moduleEditPath: string | null;
+  setModuleEditPath: (path: string | null) => void;
 }
 
 const FlowViewContext = createContext<FlowViewContextValue | null>(null);
@@ -28,6 +30,7 @@ export function FlowViewProvider({ children }: { children: React.ReactNode }) {
   const [executionId, setExecutionId] = useState<string | null>(null);
   const [flowWorkspace, setFlowWorkspace] = useState<string | null>(null);
   const [flowModule, setFlowModule] = useState<string | null>(null);
+  const [moduleEditPath, setModuleEditPath] = useState<string | null>(null);
 
   const setFlowContext = useCallback((workspace: string | null, module: string | null) => {
     setFlowWorkspace(workspace);
@@ -48,6 +51,8 @@ export function FlowViewProvider({ children }: { children: React.ReactNode }) {
         flowWorkspace,
         flowModule,
         setFlowContext,
+        moduleEditPath,
+        setModuleEditPath,
       }}
     >
       {children}

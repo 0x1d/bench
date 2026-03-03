@@ -932,7 +932,7 @@ func (s *Service) ListEntries(subpath string) ([]WorkspaceDirEntry, error) {
 				Type:  "module",
 				Mtime: mtime,
 			})
-		} else if strings.HasSuffix(e.Name(), ".fp") {
+		} else if strings.HasSuffix(e.Name(), ".fp") && e.Name() != "mod.fp" {
 			id := strings.TrimSuffix(e.Name(), ".fp")
 			name := id
 			steps := 0
@@ -982,6 +982,83 @@ func (s *Service) CreateModule(moduleName string) error {
 	// Escape double quotes in module name for use inside HCL string
 	descName := strings.ReplaceAll(moduleName, `"`, `\"`)
 	content := fmt.Sprintf(moduleModTemplate, modSlug, moduleName, descName)
+	if err := os.WriteFile(modPath, []byte(content), 0644); err != nil {
+		return err
+	}
+	s.touchRootMod()
+	return nil
+}
+
+// ModuleMeta holds module settings from mod.fp.
+type ModuleMeta struct {
+	Title       string `json:"title"`
+	Description string `json:"description"`
+}
+
+var (
+	titleRe = regexp.MustCompile(`(?m)^\s*title\s*=\s*"((?:[^"\\]|\\.)*)"`)
+	descRe  = regexp.MustCompile(`(?m)^\s*description\s*=\s*"((?:[^"\\]|\\.)*)"`)
+)
+
+func unescapeHCLString(s string) string {
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\\' && i+1 < len(s) {
+			i++
+			b.WriteByte(s[i])
+		} else {
+			b.WriteByte(s[i])
+		}
+	}
+	return b.String()
+}
+
+// GetModule returns module metadata from mod.fp.
+func (s *Service) GetModule(modulePath string) (*ModuleMeta, error) {
+	dir := s.moduleFlowDir(modulePath)
+	if dir == "" {
+		return nil, fmt.Errorf("flows path not configured")
+	}
+	modPath := filepath.Join(dir, "mod.fp")
+	data, err := os.ReadFile(modPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("module not found: %s", modulePath)
+		}
+		return nil, err
+	}
+	content := string(data)
+	meta := &ModuleMeta{}
+	if m := titleRe.FindStringSubmatch(content); len(m) > 1 {
+		meta.Title = unescapeHCLString(m[1])
+	}
+	if m := descRe.FindStringSubmatch(content); len(m) > 1 {
+		meta.Description = unescapeHCLString(m[1])
+	}
+	return meta, nil
+}
+
+// UpdateModule writes module metadata to mod.fp.
+func (s *Service) UpdateModule(modulePath string, meta *ModuleMeta) error {
+	dir := s.moduleFlowDir(modulePath)
+	if dir == "" {
+		return fmt.Errorf("flows path not configured")
+	}
+	modPath := filepath.Join(dir, "mod.fp")
+	data, err := os.ReadFile(modPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("module not found: %s", modulePath)
+		}
+		return err
+	}
+	content := string(data)
+	if meta.Title != "" {
+		content = titleRe.ReplaceAllString(content, fmt.Sprintf(`  title       = %q`, meta.Title))
+	}
+	if meta.Description != "" {
+		content = descRe.ReplaceAllString(content, fmt.Sprintf(`  description = %q`, meta.Description))
+	}
 	if err := os.WriteFile(modPath, []byte(content), 0644); err != nil {
 		return err
 	}

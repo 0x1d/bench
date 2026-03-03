@@ -6,8 +6,8 @@ import {
   Pencil,
   Workflow,
   Folder,
-  ChevronRight,
   FolderPlus,
+  Settings,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -66,7 +66,7 @@ export function FlowsPage() {
   const [runParamsOpen, setRunParamsOpen] = useState(false);
   const [runParamValues, setRunParamValues] = useState<Record<string, string>>({});
   const [runTargetFlow, setRunTargetFlow] = useState<Flow | null>(null);
-  const { setExecutionId, setSelectedStep, setFlowContext } = useFlowView();
+  const { setExecutionId, setSelectedStep, setFlowContext, setModuleEditPath } = useFlowView();
 
   const queryClient = useQueryClient();
 
@@ -182,10 +182,6 @@ export function FlowsPage() {
     }
   }, [currentPath]);
 
-  const handleNavigateUp = useCallback(() => {
-    setCurrentPath('.');
-  }, []);
-
   interface InputParam {
     name: string;
     type?: string;
@@ -286,41 +282,44 @@ export function FlowsPage() {
 
   return (
     <div className="flex w-full min-h-0 flex-1 flex-col gap-4">
+      {/* Breadcrumbs */}
       <nav className="flex flex-wrap items-center gap-1 text-sm">
-        <span className="rounded px-2 py-1 font-medium">Flows</span>
+        <button
+          type="button"
+          onClick={() => setCurrentPath('.')}
+          className="rounded px-2 py-1 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+        >
+          Modules
+        </button>
+        {currentPath !== '.' && (
+          <>
+            <span className="text-muted-foreground">/</span>
+            <span className="rounded px-2 py-1 font-mono">{currentPath}</span>
+          </>
+        )}
       </nav>
 
+      {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 shadow-sm">
-        <div className="flex flex-1 flex-wrap items-center gap-2">
-          <Select
-            value={displayWorkspace ?? ''}
-            onValueChange={(v) => {
-              setSelectedWorkspace(v);
-              handleWorkspaceChange(v);
-            }}
-          >
-            <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="Select profile" />
-            </SelectTrigger>
-            <SelectContent>
-              {workspaces.map((w) => (
-                <SelectItem key={w.id} value={w.id}>
-                  {w.label || w.id}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {currentPath !== '.' && (
-            <>
-              <ChevronRight className="size-4 text-muted-foreground" />
-              <Button variant="ghost" size="sm" onClick={handleNavigateUp}>
-                Modules
-              </Button>
-              <ChevronRight className="size-4 text-muted-foreground" />
-              <span className="text-sm font-medium">{currentPath}</span>
-            </>
-          )}
-        </div>
+        <Select
+          value={displayWorkspace ?? ''}
+          onValueChange={(v) => {
+            setSelectedWorkspace(v);
+            handleWorkspaceChange(v);
+          }}
+        >
+          <SelectTrigger className="w-[200px]">
+            <SelectValue placeholder="Select profile" />
+          </SelectTrigger>
+          <SelectContent>
+            {workspaces.map((w) => (
+              <SelectItem key={w.id} value={w.id}>
+                {w.label || w.id}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <div className="flex flex-1" />
         <div className="flex flex-shrink-0 items-center gap-2">
           {currentPath === '.' && (
             <Button
@@ -332,6 +331,17 @@ export function FlowsPage() {
             >
               <FolderPlus className="size-4" />
               New module
+            </Button>
+          )}
+          {currentPath !== '.' && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setModuleEditPath(currentPath)}
+              className="gap-1.5"
+            >
+              <Settings className="size-4" />
+              Edit module
             </Button>
           )}
           <Button

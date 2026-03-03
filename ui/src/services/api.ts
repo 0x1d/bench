@@ -723,6 +723,38 @@ export async function fetchFlowEntries(path = '.'): Promise<FlowWorkspaceEntries
   return response.json();
 }
 
+export interface FlowModuleMeta {
+  title: string;
+  description: string;
+}
+
+export async function fetchFlowModule(path: string): Promise<FlowModuleMeta> {
+  const params = new URLSearchParams({ path });
+  const response = await fetch(`${API_BASE}/flows/module?${params}`);
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Failed to fetch module: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function updateFlowModule(
+  path: string,
+  meta: FlowModuleMeta
+): Promise<FlowModuleMeta> {
+  const params = new URLSearchParams({ path });
+  const response = await fetch(`${API_BASE}/flows/module?${params}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(meta),
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Failed to update module: ${response.status}`);
+  }
+  return response.json();
+}
+
 export async function createFlowModule(name: string): Promise<void> {
   const response = await fetch(`${API_BASE}/flows/modules`, {
     method: 'POST',

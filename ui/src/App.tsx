@@ -49,14 +49,15 @@ function ClearDatabaseViewOnNavigate({ hash }: { hash: string }) {
 }
 
 function ClearFlowViewOnNavigate({ hash }: { hash: string }) {
-  const { setSelectedStep, setExecutionId } = useFlowView();
+  const { setSelectedStep, setExecutionId, setModuleEditPath } = useFlowView();
   useEffect(() => {
     // Clear when leaving flows entirely, or when going back to flows list from editor
     if (!isFlowsSection(hash) || hash === 'flows') {
       setSelectedStep(null);
       setExecutionId(null);
+      setModuleEditPath(null);
     }
-  }, [hash, setSelectedStep, setExecutionId]);
+  }, [hash, setSelectedStep, setExecutionId, setModuleEditPath]);
   return null;
 }
 

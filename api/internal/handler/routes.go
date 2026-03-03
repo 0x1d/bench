@@ -37,6 +37,8 @@ func RegisterRoutes(mux *http.ServeMux) {
 	// Flow routes (more specific paths first)
 	mux.HandleFunc("GET /api/flows/workspaces", HandleFlowWorkspacesList)
 	mux.HandleFunc("GET /api/flows/entries", HandleFlowEntries)
+	mux.HandleFunc("GET /api/flows/module", HandleFlowGetModule)
+	mux.HandleFunc("PUT /api/flows/module", HandleFlowUpdateModule)
 	mux.HandleFunc("POST /api/flows/modules", HandleFlowCreateModule)
 	mux.HandleFunc("GET /api/flows", HandleFlowList)
 	mux.HandleFunc("GET /api/flows/{id}", HandleFlowGet)

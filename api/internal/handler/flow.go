@@ -62,6 +62,66 @@ func HandleFlowEntries(w http.ResponseWriter, r *http.Request) {
 	}{Entries: entries})
 }
 
+// HandleFlowGetModule returns module metadata from mod.fp.
+func HandleFlowGetModule(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if config.FlowsPath() == "" {
+		http.Error(w, "flows path not configured", http.StatusNotFound)
+		return
+	}
+	modulePath := strings.TrimSpace(r.URL.Query().Get("path"))
+	if modulePath == "" || modulePath == "." {
+		http.Error(w, "path required (module path)", http.StatusBadRequest)
+		return
+	}
+	meta, err := flowSvc.GetModule(modulePath)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(meta)
+}
+
+// HandleFlowUpdateModule updates module metadata in mod.fp.
+func HandleFlowUpdateModule(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if config.FlowsPath() == "" {
+		http.Error(w, "flows path not configured", http.StatusNotFound)
+		return
+	}
+	modulePath := strings.TrimSpace(r.URL.Query().Get("path"))
+	if modulePath == "" || modulePath == "." {
+		http.Error(w, "path required (module path)", http.StatusBadRequest)
+		return
+	}
+	var meta flow.ModuleMeta
+	if err := json.NewDecoder(r.Body).Decode(&meta); err != nil {
+		http.Error(w, "invalid request body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := flowSvc.UpdateModule(modulePath, &meta); err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(meta)
+}
+
 // HandleFlowCreateModule creates a module subfolder under flows/.
 func HandleFlowCreateModule(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {

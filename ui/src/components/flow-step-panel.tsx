@@ -3,6 +3,7 @@ import { Trash2, X, Terminal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useFlowView } from '@/contexts/flow-view-context';
 import { FlowStepPanelContent } from '@/components/flow-step-panel-content';
+import { FlowModulePanelContent } from '@/components/flow-module-panel-content';
 import { FlowExecutionLog } from '@/components/flow-execution-log';
 import { useQuery } from '@tanstack/react-query';
 import { fetchStatus, fetchRestList } from '@/services/api';
@@ -25,15 +26,25 @@ function getInitialWidth(): number {
 type PanelTab = 'config' | 'execution';
 
 export function FlowStepPanel() {
-  const { selectedStep, setSelectedStep, onStepSave, onDeleteStep, executionId, setExecutionId, flowWorkspace } =
-    useFlowView();
+  const {
+    selectedStep,
+    setSelectedStep,
+    onStepSave,
+    onDeleteStep,
+    executionId,
+    setExecutionId,
+    flowWorkspace,
+    moduleEditPath,
+    setModuleEditPath,
+  } = useFlowView();
   const [width, setWidth] = useState(getInitialWidth);
   const [activeTab, setActiveTab] = useState<PanelTab>('config');
   const startXRef = useRef(0);
   const startWidthRef = useRef(0);
 
-  // Show panel when we have a selected step OR an execution to display
-  const isExpanded = selectedStep != null || executionId != null;
+  // Show panel when we have a selected step, execution, or module edit
+  const isExpanded =
+    selectedStep != null || executionId != null || moduleEditPath != null;
 
   // Auto-switch to execution tab when a new execution starts
   const prevExecRef = useRef<string | null>(null);
@@ -86,11 +97,13 @@ export function FlowStepPanel() {
   const handleClose = () => {
     setSelectedStep(null);
     setExecutionId(null);
+    setModuleEditPath(null);
     setActiveTab('config');
   };
 
-  const panelTitle =
-    activeTab === 'execution'
+  const panelTitle = moduleEditPath
+    ? `Edit module — ${moduleEditPath}`
+    : activeTab === 'execution'
       ? selectedStep
         ? `Execution — ${selectedStep.label || selectedStep.id}`
         : 'Execution Log'
@@ -98,7 +111,7 @@ export function FlowStepPanel() {
         ? `Configure — ${selectedStep.label || selectedStep.id}`
         : 'Step';
 
-  const showTabs = executionId != null;
+  const showTabs = executionId != null && !moduleEditPath;
 
   const panelContent = () => (
     <>
@@ -122,7 +135,7 @@ export function FlowStepPanel() {
           {panelTitle}
         </span>
         <div className="flex items-center gap-1">
-          {activeTab === 'config' && selectedStep && (
+          {!moduleEditPath && activeTab === 'config' && selectedStep && (
             <Button
               variant="ghost"
               size="icon-xs"
@@ -180,7 +193,13 @@ export function FlowStepPanel() {
       )}
 
       <div className="flex min-h-0 flex-1 flex-col overflow-auto p-4">
-        {activeTab === 'config' && selectedStep && (
+        {moduleEditPath && (
+          <FlowModulePanelContent
+            modulePath={moduleEditPath}
+            onClose={handleClose}
+          />
+        )}
+        {!moduleEditPath && activeTab === 'config' && selectedStep && (
           <FlowStepPanelContent
             step={selectedStep}
             databases={databases}
@@ -192,10 +211,10 @@ export function FlowStepPanel() {
             onClose={handleClose}
           />
         )}
-        {activeTab === 'execution' && executionId && (
+          {!moduleEditPath && activeTab === 'execution' && executionId && (
           <FlowExecutionLog executionId={executionId} workspace={flowWorkspace ?? undefined} selectedStepId={selectedStep ? normalizeStepName(selectedStep.label, selectedStep.id) : undefined} />
         )}
-        {activeTab === 'execution' && !executionId && (
+          {!moduleEditPath && activeTab === 'execution' && !executionId && (
           <div className="text-sm text-muted-foreground py-8 text-center">
             No execution running. Click <strong>Run</strong> to start a flow.
           </div>

@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { cn } from '@/lib/utils';
+import { useQueryClient } from '@tanstack/react-query';
 import { fetchConfig, fetchConfigExample, saveConfig } from '@/services/api';
 import { useStatus } from '@/hooks/use-status';
 
@@ -44,6 +45,11 @@ interface RestResource {
 
 interface FlowsConfig {
   path: string;
+}
+
+interface WorkspaceResource {
+  id: string;
+  label: string;
   flowpipeUrl: string;
 }
 
@@ -51,6 +57,7 @@ interface ResourceFormState {
   filesystem: FilesystemResource[];
   databases: DatabaseResource[];
   rest: RestResource[];
+  workspaces: WorkspaceResource[];
   flows: FlowsConfig;
 }
 
@@ -61,12 +68,15 @@ type PanelMode =
   | 'edit-database'
   | 'add-rest'
   | 'edit-rest'
+  | 'add-workspace'
+  | 'edit-workspace'
   | 'edit-flows';
 
 type DeleteTarget =
   | { type: 'filesystem'; index: number }
   | { type: 'database'; index: number }
   | { type: 'rest'; index: number }
+  | { type: 'workspace'; index: number }
   | null;
 
 function emptyState(): ResourceFormState {
@@ -74,7 +84,8 @@ function emptyState(): ResourceFormState {
     filesystem: [],
     databases: [],
     rest: [],
-    flows: { path: './flows', flowpipeUrl: 'http://localhost:7103' },
+    workspaces: [],
+    flows: { path: './flows' },
   };
 }
 
@@ -105,7 +116,10 @@ function parseConfigToState(rawConfig: string): ResourceFormState {
         };
       }>;
     };
-    flows?: { path?: string; flowpipeUrl?: string };
+    flows?: {
+      path?: string;
+      workspaces?: Array<{ id?: string; label?: string; flowpipeUrl?: string }>;
+    };
   }) ?? { resources: {} };
 
   const filesystem = (parsed.resources?.filesystem ?? []).map((entry) => ({
@@ -140,13 +154,18 @@ function parseConfigToState(rawConfig: string): ResourceFormState {
       : { type: 'none' as const },
   }));
 
+  const workspaces = (parsed.flows?.workspaces ?? []).map((entry) => ({
+    id: entry.id ?? '',
+    label: entry.label ?? '',
+    flowpipeUrl: entry.flowpipeUrl ?? 'http://localhost:7103',
+  }));
+
   const flowsRaw = parsed.flows;
   const flows: FlowsConfig = {
     path: flowsRaw?.path ?? './flows',
-    flowpipeUrl: flowsRaw?.flowpipeUrl ?? 'http://localhost:7103',
   };
 
-  return { filesystem, databases, rest, flows };
+  return { filesystem, databases, rest, workspaces, flows };
 }
 
 function stateToConfig(state: ResourceFormState): string {
@@ -197,16 +216,26 @@ function stateToConfig(state: ResourceFormState): string {
   };
 
   const output: Record<string, unknown> = { resources };
-  if (state.flows.path.trim() !== '' || state.flows.flowpipeUrl.trim() !== '') {
+
+  const workspacesOut = state.workspaces
+    .filter((entry) => entry.id.trim() !== '')
+    .map((entry) => ({
+      id: entry.id.trim(),
+      label: entry.label.trim() || undefined,
+      flowpipeUrl: entry.flowpipeUrl.trim() || undefined,
+    }));
+
+  if (state.flows.path.trim() !== '' || workspacesOut.length > 0) {
     output.flows = {
       path: state.flows.path.trim() || './flows',
-      flowpipeUrl: state.flows.flowpipeUrl.trim() || 'http://localhost:7103',
+      workspaces: workspacesOut.length > 0 ? workspacesOut : undefined,
     };
   }
   return yaml.dump(output, { noRefs: true, lineWidth: 120 });
 }
 
 export function ResourcesConfigPage() {
+  const queryClient = useQueryClient();
   const { refetch: refetchStatus } = useStatus();
   const [state, setState] = useState<ResourceFormState>(emptyState);
   const [loading, setLoading] = useState(true);
@@ -236,6 +265,10 @@ export function ResourcesConfigPage() {
   });
   const [flowsDraft, setFlowsDraft] = useState<FlowsConfig>({
     path: './flows',
+  });
+  const [workspaceDraft, setWorkspaceDraft] = useState<WorkspaceResource>({
+    id: '',
+    label: '',
     flowpipeUrl: 'http://localhost:7103',
   });
 
@@ -244,6 +277,7 @@ export function ResourcesConfigPage() {
     const nextConfig = stateToConfig(newState);
     await saveConfig(nextConfig);
     await refetchStatus();
+    queryClient.invalidateQueries({ queryKey: ['flows', 'workspaces'] });
   };
 
   useEffect(() => {
@@ -346,6 +380,24 @@ export function ResourcesConfigPage() {
 
   const openRemoveRest = (index: number) => {
     setDeleteTarget({ type: 'rest', index });
+  };
+
+  const openAddWorkspace = () => {
+    setWorkspaceDraft({ id: '', label: '', flowpipeUrl: 'http://localhost:7103' });
+    setPanelIndex(null);
+    setPanelError(null);
+    setPanelMode('add-workspace');
+  };
+
+  const openEditWorkspace = (index: number) => {
+    setWorkspaceDraft(state.workspaces[index]);
+    setPanelIndex(index);
+    setPanelError(null);
+    setPanelMode('edit-workspace');
+  };
+
+  const openRemoveWorkspace = (index: number) => {
+    setDeleteTarget({ type: 'workspace', index });
   };
 
   const openEditFlows = () => {
@@ -537,13 +589,58 @@ export function ResourcesConfigPage() {
 
   const applyFlowsDraft = async () => {
     const path = flowsDraft.path.trim() || './flows';
-    const flowpipeUrl = flowsDraft.flowpipeUrl.trim() || 'http://localhost:7103';
 
     const prevState = state;
     const nextState = {
       ...prevState,
-      flows: { path, flowpipeUrl },
+      flows: { path },
     };
+
+    setState(nextState);
+    try {
+      await persistState(nextState);
+      closePanel();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Save failed');
+      setState(prevState);
+    }
+  };
+
+  const applyWorkspaceDraft = async () => {
+    const id = workspaceDraft.id.trim();
+    if (id === '') {
+      setPanelError('Workspace ID is required.');
+      return;
+    }
+
+    const duplicate = state.workspaces.some(
+      (entry, idx) => idx !== panelIndex && entry.id.trim() === id
+    );
+    if (duplicate) {
+      setPanelError(`Workspace ID "${id}" already exists.`);
+      return;
+    }
+
+    const nextEntry: WorkspaceResource = {
+      id,
+      label: workspaceDraft.label.trim(),
+      flowpipeUrl: workspaceDraft.flowpipeUrl.trim() || 'http://localhost:7103',
+    };
+
+    const prevState = state;
+    const nextState =
+      panelMode === 'add-workspace'
+        ? { ...prevState, workspaces: [...prevState.workspaces, nextEntry] }
+        : panelMode === 'edit-workspace' && panelIndex != null
+          ? {
+              ...prevState,
+              workspaces: prevState.workspaces.map((entry, idx) =>
+                idx === panelIndex ? nextEntry : entry
+              ),
+            }
+          : prevState;
+
+    if (nextState === prevState) return;
 
     setState(nextState);
     try {
@@ -569,10 +666,17 @@ export function ResourcesConfigPage() {
             ...prevState,
             databases: prevState.databases.filter((_, idx) => idx !== deleteTarget.index),
           }
-          : {
-            ...prevState,
-            rest: prevState.rest.filter((_, idx) => idx !== deleteTarget.index),
-          };
+          : deleteTarget.type === 'workspace'
+            ? {
+                ...prevState,
+                workspaces: prevState.workspaces.filter(
+                  (_, idx) => idx !== deleteTarget.index
+                ),
+              }
+            : {
+                ...prevState,
+                rest: prevState.rest.filter((_, idx) => idx !== deleteTarget.index),
+              };
 
     setState(nextState);
     setDeleteTarget(null);
@@ -596,20 +700,26 @@ export function ResourcesConfigPage() {
             ? 'Edit database resource'
             : panelMode === 'add-rest'
               ? 'Add REST resource'
-              : panelMode === 'edit-rest'
-                ? 'Edit REST resource'
-                : panelMode === 'edit-flows'
-                  ? 'Configure flows'
-                  : 'Resource';
+              :     panelMode === 'edit-rest'
+              ? 'Edit REST resource'
+              : panelMode === 'add-workspace'
+                ? 'Add flow workspace'
+                : panelMode === 'edit-workspace'
+                  ? 'Edit flow workspace'
+                  : panelMode === 'edit-flows'
+                    ? 'Configure flows'
+                    : 'Resource';
   const panelDescription = panelMode?.includes('filesystem')
     ? 'Configure filesystem resource fields used for file browsing.'
     : panelMode?.includes('database')
       ? 'Configure database resource fields.'
       : panelMode?.includes('rest')
         ? 'Configure REST API endpoint with optional auth and OpenAPI spec.'
-        : panelMode === 'edit-flows'
-          ? 'Flowpipe integration: flows directory and server URL.'
-          : '';
+        : panelMode?.includes('workspace')
+          ? 'Flowpipe profile: named config for pipeline execution (host, port, etc.). Init adds block to flows/workspaces.fpc.'
+          : panelMode === 'edit-flows'
+            ? 'Flowpipe integration: flows directory and server URL.'
+            : '';
 
   const panelBody = (
     <>
@@ -626,6 +736,45 @@ export function ResourcesConfigPage() {
       </div>
 
       <div className="p-4">
+        {(panelMode === 'add-workspace' || panelMode === 'edit-workspace') && (
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label>ID</Label>
+              <Input
+                value={workspaceDraft.id}
+                onChange={(e) =>
+                  setWorkspaceDraft((prev) => ({ ...prev, id: e.target.value }))
+                }
+                placeholder="default"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>Label</Label>
+              <Input
+                value={workspaceDraft.label}
+                onChange={(e) =>
+                  setWorkspaceDraft((prev) => ({ ...prev, label: e.target.value }))
+                }
+                placeholder="Default"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>Flowpipe URL</Label>
+              <Input
+                value={workspaceDraft.flowpipeUrl}
+                onChange={(e) =>
+                  setWorkspaceDraft((prev) => ({ ...prev, flowpipeUrl: e.target.value }))
+                }
+                placeholder="http://localhost:7103"
+                className="font-mono"
+              />
+              <p className="text-xs text-muted-foreground">
+                Flowpipe server URL. Written as host in flows/workspaces.fpc when profile is initialized.
+              </p>
+            </div>
+          </div>
+        )}
+
         {(panelMode === 'add-filesystem' || panelMode === 'edit-filesystem') && (
           <div className="space-y-3">
             <div className="space-y-1">
@@ -851,20 +1000,6 @@ export function ResourcesConfigPage() {
                 Path to store flow JSON and .fp files. Relative to config directory.
               </p>
             </div>
-            <div className="space-y-1">
-              <Label>Flowpipe server URL</Label>
-              <Input
-                value={flowsDraft.flowpipeUrl}
-                onChange={(e) =>
-                  setFlowsDraft((prev) => ({ ...prev, flowpipeUrl: e.target.value }))
-                }
-                placeholder="http://localhost:7103"
-                className="font-mono"
-              />
-              <p className="text-xs text-muted-foreground">
-                Flowpipe server for running flows.
-              </p>
-            </div>
           </div>
         )}
 
@@ -947,6 +1082,11 @@ export function ResourcesConfigPage() {
           {(panelMode === 'add-rest' || panelMode === 'edit-rest') && (
             <Button onClick={applyRestDraft}>
               {panelMode === 'add-rest' ? 'Add' : 'Save changes'}
+            </Button>
+          )}
+          {(panelMode === 'add-workspace' || panelMode === 'edit-workspace') && (
+            <Button onClick={applyWorkspaceDraft}>
+              {panelMode === 'add-workspace' ? 'Add' : 'Save changes'}
             </Button>
           )}
           {panelMode === 'edit-flows' && (
@@ -1166,19 +1306,78 @@ export function ResourcesConfigPage() {
           <section className="rounded-lg border border-border bg-card p-4">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-medium">Flows</h3>
-              <Button variant="outline" size="sm" onClick={openEditFlows}>
-                <Pencil className="size-4" />
-                Configure
-              </Button>
-            </div>
-            <div className="space-y-2 text-sm">
               <div className="flex gap-2">
-                <span className="text-muted-foreground">Path:</span>
-                <span className="font-mono">{state.flows.path || './flows'}</span>
+                <Button variant="outline" size="sm" onClick={openAddWorkspace}>
+                  <Plus className="size-4" />
+                  Add workspace
+                </Button>
+                <Button variant="outline" size="sm" onClick={openEditFlows}>
+                  <Pencil className="size-4" />
+                  Configure
+                </Button>
               </div>
-              <div className="flex gap-2">
-                <span className="text-muted-foreground">Flowpipe URL:</span>
-                <span className="font-mono">{state.flows.flowpipeUrl || 'http://localhost:7103'}</span>
+            </div>
+            <div className="space-y-4">
+              <div className="space-y-2 text-sm">
+                <div className="flex gap-2">
+                  <span className="text-muted-foreground">Path:</span>
+                  <span className="font-mono">{state.flows.path || './flows'}</span>
+                </div>
+              </div>
+              <div>
+                <h4 className="mb-2 text-sm font-medium">Workspaces</h4>
+                {state.workspaces.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No profiles configured. Add Flowpipe workspace profiles for pipeline execution.
+                  </p>
+                ) : (
+                  <div className="overflow-x-auto rounded-lg border border-border bg-card">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-border bg-muted/30">
+                          <th className="px-4 py-3 text-left font-medium">ID</th>
+                          <th className="px-4 py-3 text-left font-medium">Label</th>
+                          <th className="px-4 py-3 text-left font-medium">Flowpipe URL</th>
+                          <th className="w-28 px-2 py-3" />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {state.workspaces.map((entry, index) => (
+                          <tr
+                            key={`ws-${index}`}
+                            className="border-b border-border/50 last:border-b-0 cursor-pointer hover:bg-accent/30"
+                            onClick={() => openEditWorkspace(index)}
+                          >
+                            <td className="px-4 py-2 font-mono">{entry.id}</td>
+                            <td className="px-4 py-2">{entry.label || '—'}</td>
+                            <td className="px-4 py-2 font-mono text-xs">{entry.flowpipeUrl || '—'}</td>
+                            <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
+                              <div className="flex items-center justify-end gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon-xs"
+                                  onClick={() => openEditWorkspace(index)}
+                                  aria-label={`Edit workspace ${entry.id}`}
+                                >
+                                  <Pencil className="size-3" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon-xs"
+                                  onClick={() => openRemoveWorkspace(index)}
+                                  aria-label={`Remove workspace ${entry.id}`}
+                                  className="text-destructive hover:text-destructive"
+                                >
+                                  <Trash2 className="size-3" />
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             </div>
           </section>
@@ -1215,7 +1414,9 @@ export function ResourcesConfigPage() {
               ? `Remove database resource "${state.databases[deleteTarget.index]?.id}"?`
               : deleteTarget?.type === 'rest'
                 ? `Remove REST resource "${state.rest[deleteTarget.index]?.id}"?`
-                : 'Remove selected resource?'
+                : deleteTarget?.type === 'workspace'
+                  ? `Remove flow profile "${state.workspaces[deleteTarget.index]?.id}"?`
+                  : 'Remove selected resource?'
         }
         onConfirm={confirmRemove}
         confirmLabel="Remove"

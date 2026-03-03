@@ -8,6 +8,7 @@ import (
 
 	"github.com/0x1d/bench/api/internal/config"
 	"github.com/0x1d/bench/api/internal/db"
+	"github.com/0x1d/bench/api/internal/service/flow"
 )
 
 // HandleConfigExample returns the content of config.example.yaml.
@@ -71,6 +72,9 @@ func HandleConfigSave(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "config saved but failed to apply runtime: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+	flowSvc := flow.NewService()
+	_ = flowSvc.EnsureFlowsMod()
+	_ = flowSvc.SyncWorkspacesToFPC()
 
 	w.WriteHeader(http.StatusOK)
 }
@@ -106,6 +110,9 @@ func HandleConfigUpload(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "config saved but failed to apply runtime: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+	flowSvc := flow.NewService()
+	_ = flowSvc.EnsureFlowsMod()
+	_ = flowSvc.SyncWorkspacesToFPC()
 
 	w.WriteHeader(http.StatusCreated)
 }

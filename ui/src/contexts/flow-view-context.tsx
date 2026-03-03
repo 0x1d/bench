@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components -- context exports provider and hook */
-import { createContext, useContext, useState } from 'react';
+import { createContext, useCallback, useContext, useState } from 'react';
 import type { FlowStep } from '@/services/api';
 
 export type OnStepSave = (step: FlowStep) => void;
@@ -14,6 +14,9 @@ interface FlowViewContextValue {
   setOnDeleteStep: (cb: OnDeleteStep | null) => void;
   executionId: string | null;
   setExecutionId: (id: string | null) => void;
+  flowWorkspace: string | null;
+  flowModule: string | null;
+  setFlowContext: (workspace: string | null, module: string | null) => void;
 }
 
 const FlowViewContext = createContext<FlowViewContextValue | null>(null);
@@ -23,6 +26,13 @@ export function FlowViewProvider({ children }: { children: React.ReactNode }) {
   const [onStepSave, setOnStepSave] = useState<OnStepSave | null>(null);
   const [onDeleteStep, setOnDeleteStep] = useState<OnDeleteStep | null>(null);
   const [executionId, setExecutionId] = useState<string | null>(null);
+  const [flowWorkspace, setFlowWorkspace] = useState<string | null>(null);
+  const [flowModule, setFlowModule] = useState<string | null>(null);
+
+  const setFlowContext = useCallback((workspace: string | null, module: string | null) => {
+    setFlowWorkspace(workspace);
+    setFlowModule(module ?? null);
+  }, []);
 
   return (
     <FlowViewContext.Provider
@@ -35,6 +45,9 @@ export function FlowViewProvider({ children }: { children: React.ReactNode }) {
         setOnDeleteStep,
         executionId,
         setExecutionId,
+        flowWorkspace,
+        flowModule,
+        setFlowContext,
       }}
     >
       {children}

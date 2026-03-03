@@ -25,7 +25,7 @@ function getInitialWidth(): number {
 type PanelTab = 'config' | 'execution';
 
 export function FlowStepPanel() {
-  const { selectedStep, setSelectedStep, onStepSave, onDeleteStep, executionId, setExecutionId } =
+  const { selectedStep, setSelectedStep, onStepSave, onDeleteStep, executionId, setExecutionId, flowWorkspace } =
     useFlowView();
   const [width, setWidth] = useState(getInitialWidth);
   const [activeTab, setActiveTab] = useState<PanelTab>('config');
@@ -193,7 +193,7 @@ export function FlowStepPanel() {
           />
         )}
         {activeTab === 'execution' && executionId && (
-          <FlowExecutionLog executionId={executionId} selectedStepId={selectedStep ? normalizeStepName(selectedStep.label, selectedStep.id) : undefined} />
+          <FlowExecutionLog executionId={executionId} workspace={flowWorkspace ?? undefined} selectedStepId={selectedStep ? normalizeStepName(selectedStep.label, selectedStep.id) : undefined} />
         )}
         {activeTab === 'execution' && !executionId && (
           <div className="text-sm text-muted-foreground py-8 text-center">

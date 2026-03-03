@@ -174,13 +174,19 @@ function StepDetail({ exec, defaultExpanded = false }: { exec: StepExecution; de
     );
 }
 
-export function FlowExecutionLog({ executionId, selectedStepId }: { executionId: string; selectedStepId?: string | null }) {
+interface ExecutionData {
+    status?: string;
+    pipeline_executions?: Record<string, unknown>;
+    root_pipelines?: string[];
+    errors?: Array<{ error?: { detail?: string }; message?: string }>;
+}
+
+export function FlowExecutionLog({ executionId, workspace, selectedStepId }: { executionId: string; workspace?: string; selectedStepId?: string | null }) {
     const { data, isLoading, error } = useQuery({
-        queryKey: ['flow-execution', executionId],
-        queryFn: () => fetchFlowExecution(executionId),
+        queryKey: ['flow-execution', executionId, workspace],
+        queryFn: () => fetchFlowExecution(executionId, workspace) as Promise<ExecutionData>,
         refetchInterval: (query) => {
-            // Poll every 2s if still running
-            const d = query.state.data;
+            const d = query.state.data as ExecutionData | undefined;
             if (d && (d.status === 'finished' || d.status === 'failed')) return false;
             return 2000;
         },
@@ -206,8 +212,9 @@ export function FlowExecutionLog({ executionId, selectedStepId }: { executionId:
 
     if (!data) return null;
 
-    const pipelineExecs = data.pipeline_executions || {};
-    const rootPexecId = data.root_pipelines?.[0];
+    const execData = data as ExecutionData;
+    const pipelineExecs = execData.pipeline_executions || {};
+    const rootPexecId = execData.root_pipelines?.[0];
     const pexec = rootPexecId ? pipelineExecs[rootPexecId] : Object.values(pipelineExecs)[0] as any;
 
     if (!pexec) {
@@ -243,7 +250,7 @@ export function FlowExecutionLog({ executionId, selectedStepId }: { executionId:
             {/* Pipeline header — only in full view */}
             {!selectedStepId && (
                 <div className="flex items-center gap-2 pb-2 border-b border-border">
-                    {statusIcon(pexec.status || data.status)}
+                    {statusIcon(pexec.status || execData.status)}
                     <span className="text-sm font-medium flex-1 truncate">{pipelineName}</span>
                     <span className="text-xs text-muted-foreground font-mono">{pipelineDuration}</span>
                 </div>
@@ -260,10 +267,10 @@ export function FlowExecutionLog({ executionId, selectedStepId }: { executionId:
             )}
 
             {/* Errors — only in full view */}
-            {!selectedStepId && data.errors && data.errors.length > 0 && (
+            {!selectedStepId && execData.errors && execData.errors.length > 0 && (
                 <div>
                     <div className="text-xs font-medium text-red-400 mb-1">Errors</div>
-                    {data.errors.map((err: any, i: number) => (
+                    {execData.errors.map((err, i: number) => (
                         <div
                             key={i}
                             className="p-2 rounded bg-red-500/10 border border-red-500/30 font-mono text-xs text-red-400 mb-1"

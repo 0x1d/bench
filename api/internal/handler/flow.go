@@ -14,13 +14,94 @@ import (
 
 var flowSvc = flow.NewService()
 
-// HandleFlowList returns all flows.
+// HandleFlowWorkspacesList returns configured flow workspaces.
+func HandleFlowWorkspacesList(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	workspaces := config.Workspaces()
+	if len(workspaces) == 0 && config.FlowsPath() != "" {
+		// Fallback: default profile when no workspaces configured
+		workspaces = []config.WorkspaceEntry{
+			{ID: "default", Label: "Default"},
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(struct {
+		Workspaces []config.WorkspaceEntry `json:"workspaces"`
+	}{Workspaces: workspaces})
+}
+
+// HandleFlowEntries lists modules and flows at the given path (relative to flows/).
+func HandleFlowEntries(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if config.FlowsPath() == "" {
+		http.Error(w, "flows path not configured", http.StatusNotFound)
+		return
+	}
+	subpath := r.URL.Query().Get("path")
+	if subpath == "" {
+		subpath = "."
+	}
+	entries, err := flowSvc.ListEntries(subpath)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(struct {
+		Entries []flow.WorkspaceDirEntry `json:"entries"`
+	}{Entries: entries})
+}
+
+// HandleFlowCreateModule creates a module subfolder under flows/.
+func HandleFlowCreateModule(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if config.FlowsPath() == "" {
+		http.Error(w, "flows path not configured", http.StatusNotFound)
+		return
+	}
+	var body struct {
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "invalid request body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	moduleName := strings.TrimSpace(body.Name)
+	if moduleName == "" {
+		http.Error(w, "module name required", http.StatusBadRequest)
+		return
+	}
+	if err := flowSvc.CreateModule(moduleName); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.WriteHeader(http.StatusCreated)
+}
+
+// HandleFlowList returns all flows. Query param: module (default "." for root).
 func HandleFlowList(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	flows, err := flowSvc.List()
+	module := strings.TrimSpace(r.URL.Query().Get("module"))
+	if module == "" {
+		module = "."
+	}
+	flows, err := flowSvc.ListInModule(module)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -31,7 +112,7 @@ func HandleFlowList(w http.ResponseWriter, r *http.Request) {
 	}{Flows: flows})
 }
 
-// HandleFlowGet returns a single flow.
+// HandleFlowGet returns a single flow. Query param: module (default "." for root).
 func HandleFlowGet(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -42,7 +123,11 @@ func HandleFlowGet(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "flow id required", http.StatusBadRequest)
 		return
 	}
-	f, err := flowSvc.Get(id)
+	module := strings.TrimSpace(r.URL.Query().Get("module"))
+	if module == "" {
+		module = "."
+	}
+	f, err := flowSvc.GetInModule(module, id)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			http.Error(w, err.Error(), http.StatusNotFound)
@@ -55,7 +140,7 @@ func HandleFlowGet(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(f)
 }
 
-// HandleFlowCreate creates a new flow.
+// HandleFlowCreate creates a new flow. Query param: module (default "." for root).
 func HandleFlowCreate(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -66,7 +151,12 @@ func HandleFlowCreate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	if err := flowSvc.Save(&f); err != nil {
+	module := strings.TrimSpace(r.URL.Query().Get("module"))
+	if module == "" {
+		module = "."
+	}
+	err := flowSvc.SaveInModule(module, &f)
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -75,7 +165,7 @@ func HandleFlowCreate(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(f)
 }
 
-// HandleFlowUpdate updates an existing flow.
+// HandleFlowUpdate updates an existing flow. Query param: module (default "." for root).
 func HandleFlowUpdate(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPut {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -92,7 +182,12 @@ func HandleFlowUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	f.ID = id
-	if err := flowSvc.Save(&f); err != nil {
+	module := strings.TrimSpace(r.URL.Query().Get("module"))
+	if module == "" {
+		module = "."
+	}
+	err := flowSvc.SaveInModule(module, &f)
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -100,7 +195,7 @@ func HandleFlowUpdate(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(f)
 }
 
-// HandleFlowDelete deletes a flow.
+// HandleFlowDelete deletes a flow. Query param: module (default "." for root).
 func HandleFlowDelete(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodDelete {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -111,7 +206,12 @@ func HandleFlowDelete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "flow id required", http.StatusBadRequest)
 		return
 	}
-	if err := flowSvc.Delete(id); err != nil {
+	module := strings.TrimSpace(r.URL.Query().Get("module"))
+	if module == "" {
+		module = "."
+	}
+	err := flowSvc.DeleteInModule(module, id)
+	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			http.Error(w, err.Error(), http.StatusNotFound)
 			return
@@ -123,6 +223,7 @@ func HandleFlowDelete(w http.ResponseWriter, r *http.Request) {
 }
 
 // HandleFlowRun executes a flow on the Flowpipe server.
+// Query params: module (default "."), workspace (profile for execution).
 func HandleFlowRun(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -133,7 +234,11 @@ func HandleFlowRun(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "flow id required", http.StatusBadRequest)
 		return
 	}
-	f, err := flowSvc.Get(id)
+	module := strings.TrimSpace(r.URL.Query().Get("module"))
+	if module == "" {
+		module = "."
+	}
+	f, err := flowSvc.GetInModule(module, id)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			http.Error(w, err.Error(), http.StatusNotFound)
@@ -143,7 +248,11 @@ func HandleFlowRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	flowpipeURL := strings.TrimSuffix(config.FlowpipeURL(), "/")
+	workspace := strings.TrimSpace(r.URL.Query().Get("workspace"))
+	if workspace == "" {
+		workspace = "default"
+	}
+	flowpipeURL := strings.TrimSuffix(config.FlowpipeURLForWorkspace(workspace), "/")
 	url := flowpipeURL + "/api/v0/pipeline/" + f.ID + "/command"
 
 	// Collect unique database connections used in query steps
@@ -195,6 +304,9 @@ func HandleFlowRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if workspace != "" {
+		req.Header.Set("X-Flowpipe-Workspace", workspace)
+	}
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
@@ -211,14 +323,17 @@ func HandleFlowRun(w http.ResponseWriter, r *http.Request) {
 	_, _ = io.Copy(w, resp.Body)
 }
 
-// HandleFlowProcesses lists recent Flowpipe processes, optionally filtered by pipeline.
+// HandleFlowProcesses lists recent Flowpipe processes. Query param: workspace (profile).
 func HandleFlowProcesses(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-
-	flowpipeURL := strings.TrimSuffix(config.FlowpipeURL(), "/")
+	workspace := strings.TrimSpace(r.URL.Query().Get("workspace"))
+	if workspace == "" {
+		workspace = "default"
+	}
+	flowpipeURL := strings.TrimSuffix(config.FlowpipeURLForWorkspace(workspace), "/")
 	url := flowpipeURL + "/api/v0/process"
 
 	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, url, nil)
@@ -241,19 +356,22 @@ func HandleFlowProcesses(w http.ResponseWriter, r *http.Request) {
 }
 
 // HandleFlowExecution returns detailed execution info for a specific process.
+// Query param: workspace (profile).
 func HandleFlowExecution(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-
 	execID := strings.TrimSpace(r.PathValue("execId"))
 	if execID == "" {
 		http.Error(w, "execution id required", http.StatusBadRequest)
 		return
 	}
-
-	flowpipeURL := strings.TrimSuffix(config.FlowpipeURL(), "/")
+	workspace := strings.TrimSpace(r.URL.Query().Get("workspace"))
+	if workspace == "" {
+		workspace = "default"
+	}
+	flowpipeURL := strings.TrimSuffix(config.FlowpipeURLForWorkspace(workspace), "/")
 	url := flowpipeURL + "/api/v0/process/" + execID + "/execution"
 
 	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, url, nil)

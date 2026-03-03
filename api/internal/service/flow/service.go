@@ -18,13 +18,25 @@ import (
 )
 
 var (
-	idChars = regexp.MustCompile(`^[a-z0-9_-]+$`)
+	idChars   = regexp.MustCompile(`^[a-z0-9_-]+$`)
+	slugChars = regexp.MustCompile(`^[a-z0-9_-]+$`)
 )
 
 const (
 	modContent = `mod "bench_flows" {
   title       = "Bench Flows"
   description = "Flows created in Bench"
+}
+`
+
+	workspaceFPCContent = `workspace "default" {
+  # Flowpipe workspace - configure base_url, port, etc. as needed
+}
+`
+
+	moduleModTemplate = `mod %q {
+  title       = %q
+  description = "Flows in module %s"
 }
 `
 )
@@ -61,9 +73,6 @@ func (s *Service) List() ([]model.Flow, error) {
 			continue
 		}
 		id := strings.TrimSuffix(e.Name(), ".json")
-		if !strings.HasPrefix(id, "flow_") {
-			continue
-		}
 		flow, err := s.Get(id)
 		if err != nil {
 			continue
@@ -85,7 +94,7 @@ func (s *Service) SyncFromJSON() error {
 		return err
 	}
 	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") || !strings.HasPrefix(e.Name(), "flow_") {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
 			continue
 		}
 		id := strings.TrimSuffix(e.Name(), ".json")
@@ -126,22 +135,41 @@ func (s *Service) Save(flow *model.Flow) error {
 	if flow == nil {
 		return fmt.Errorf("flow is nil")
 	}
-	if flow.ID == "" {
-		flow.ID = s.generateID()
-	}
-	if !s.validID(flow.ID) {
-		return fmt.Errorf("invalid flow id: %s", flow.ID)
-	}
 	if flow.Name == "" {
-		flow.Name = flow.ID
+		flow.Name = "New flow"
 	}
-
 	dir := config.FlowsPath()
 	if dir == "" {
 		return fmt.Errorf("flows path not configured")
 	}
 	if err := s.ensureDir(dir); err != nil {
 		return err
+	}
+
+	baseSlug := s.slugFromName(flow.Name)
+	if baseSlug == "" {
+		baseSlug = "flow"
+	}
+	if flow.ID == "" {
+		flow.ID = s.uniqueSlugInDir(dir, baseSlug, "")
+	} else {
+		newSlug := s.slugFromName(flow.Name)
+		if newSlug == "" {
+			newSlug = "flow"
+		}
+		if newSlug != flow.ID {
+			newID := s.uniqueSlugInDir(dir, newSlug, flow.ID)
+			if newID != flow.ID {
+				// Rename: remove old files, update id
+				for _, p := range []string{s.jsonPath(flow.ID), s.fpPath(flow.ID)} {
+					_ = os.Remove(p)
+				}
+				flow.ID = newID
+			}
+		}
+	}
+	if !s.validID(flow.ID) {
+		return fmt.Errorf("invalid flow id: %s", flow.ID)
 	}
 
 	// Write JSON
@@ -166,7 +194,7 @@ func (s *Service) Save(flow *model.Flow) error {
 	if err := s.updateConnectionsFPC(dir); err != nil {
 		return err
 	}
-
+	s.touchRootMod()
 	return nil
 }
 
@@ -196,17 +224,16 @@ func normalizeStepName(label, id string) string {
 
 // Delete removes a flow.
 func (s *Service) Delete(id string) error {
-	if !s.validID(id) {
+	if id == "" || !s.validID(id) {
 		return fmt.Errorf("invalid flow id: %s", id)
 	}
-	dir := config.FlowsPath()
 	for _, p := range []string{s.jsonPath(id), s.fpPath(id)} {
 		if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
 			return err
 		}
 	}
-	if dir != "" {
-		_ = s.updateConnectionsFPC(dir)
+	if flowsRoot := flowsBasePath(); flowsRoot != "" {
+		_ = s.updateConnectionsFPC(flowsRoot)
 	}
 	return nil
 }
@@ -214,7 +241,7 @@ func (s *Service) Delete(id string) error {
 // generateHCL produces Flowpipe pipeline HCL from a flow.
 func (s *Service) generateHCL(flow *model.Flow) (string, error) {
 	var b strings.Builder
-	pipelineName := s.pipelineName(flow.ID)
+	pipelineName := s.pipelineName(flow)
 	b.WriteString(fmt.Sprintf("pipeline %q {\n", pipelineName))
 	if flow.Name != "" {
 		b.WriteString(fmt.Sprintf("  title = %q\n\n", flow.Name))
@@ -679,20 +706,91 @@ func (s *Service) ensureDir(dir string) error {
 	return nil
 }
 
+// touchRootMod re-writes the root mod.fp to trigger Flowpipe's file watcher.
+func (s *Service) touchRootMod() {
+	base := flowsBasePath()
+	if base == "" {
+		return
+	}
+	rootMod := filepath.Join(base, "mod.fp")
+	if data, err := os.ReadFile(rootMod); err == nil {
+		_ = os.WriteFile(rootMod, data, 0644)
+	}
+}
+
 func (s *Service) jsonPath(id string) string {
 	return filepath.Join(config.FlowsPath(), id+".json")
 }
 
 func (s *Service) fpPath(id string) string {
-	return filepath.Join(config.FlowsPath(), s.pipelineName(id)+".fp")
+	return filepath.Join(config.FlowsPath(), id+".fp")
 }
 
-func (s *Service) pipelineName(id string) string {
-	return id
+// slugFromName converts a flow name to a valid filename and HCL pipeline identifier.
+func (s *Service) slugFromName(name string) string {
+	if name == "" {
+		return ""
+	}
+	t := strings.ToLower(strings.TrimSpace(name))
+	var b strings.Builder
+	lastUnderscore := false
+	for _, c := range t {
+		if (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') {
+			b.WriteRune(c)
+			lastUnderscore = false
+		} else if (c == ' ' || c == '-' || c == '_') && !lastUnderscore {
+			b.WriteRune('_')
+			lastUnderscore = true
+		}
+	}
+	res := strings.Trim(b.String(), "_")
+	for strings.Contains(res, "__") {
+		res = strings.ReplaceAll(res, "__", "_")
+	}
+	if res == "" {
+		return ""
+	}
+	return res
+}
+
+// uniqueSlugInDir returns a slug that does not collide with existing flow files in dir.
+// excludeID: when updating, the current flow's id so we don't treat our own file as a collision.
+func (s *Service) uniqueSlugInDir(dir, baseSlug, excludeID string) string {
+	if baseSlug == "" {
+		baseSlug = "flow"
+	}
+	if !slugChars.MatchString(baseSlug) {
+		baseSlug = "flow"
+	}
+	candidate := baseSlug
+	for i := 0; ; i++ {
+		jsonPath := filepath.Join(dir, candidate+".json")
+		if candidate == excludeID {
+			return candidate
+		}
+		if _, err := os.Stat(jsonPath); os.IsNotExist(err) {
+			return candidate
+		}
+		if i == 0 {
+			rb := make([]byte, 4)
+			_, _ = rand.Read(rb)
+			candidate = baseSlug + "_" + hex.EncodeToString(rb)
+		} else {
+			candidate = fmt.Sprintf("%s_%d", baseSlug, i+1)
+		}
+	}
+}
+
+func (s *Service) pipelineName(flow *model.Flow) string {
+	slug := s.slugFromName(flow.Name)
+	if slug != "" {
+		return slug
+	}
+	return flow.ID
 }
 
 func (s *Service) validID(id string) bool {
-	return strings.HasPrefix(id, "flow_") && len(id) > 6 && idChars.MatchString(id)
+	return len(id) > 0 && idChars.MatchString(id)
 }
 
 func (s *Service) generateID() string {
@@ -712,4 +810,331 @@ func stepTypeKey(t string) string {
 	default:
 		return t
 	}
+}
+
+func flowsBasePath() string {
+	return config.FlowsPath()
+}
+
+// InitWorkspace adds or updates a workspace block in flows/workspaces.fpc.
+// Writes the profile's flowpipeUrl as host in the workspace block.
+func (s *Service) InitWorkspace(workspaceID string) error {
+	w := config.WorkspaceByID(workspaceID)
+	if w == nil && workspaceID != "default" {
+		return fmt.Errorf("workspace not found: %s", workspaceID)
+	}
+	base := flowsBasePath()
+	if base == "" {
+		return fmt.Errorf("flows path not configured")
+	}
+	if err := os.MkdirAll(base, 0755); err != nil {
+		return err
+	}
+	flowpipeURL := "http://localhost:7103"
+	if w != nil && w.FlowpipeURL != "" {
+		flowpipeURL = w.FlowpipeURL
+	}
+	fpcPath := filepath.Join(base, "workspaces.fpc")
+	content, _ := os.ReadFile(fpcPath)
+	block := fmt.Sprintf(`workspace %q {
+  host = %q
+}
+`, workspaceID, flowpipeURL)
+	contentStr := string(content)
+	// Replace existing block with same ID (matches until closing brace)
+	re := regexp.MustCompile(`(?s)workspace "` + regexp.QuoteMeta(workspaceID) + `" \{[^}]*\}\n*`)
+	if re.MatchString(contentStr) {
+		newContent := re.ReplaceAllString(contentStr, block)
+		return os.WriteFile(fpcPath, []byte(newContent), 0644)
+	}
+	// Append new workspace block
+	if contentStr != "" && !strings.HasSuffix(strings.TrimSpace(contentStr), "\n") {
+		contentStr += "\n"
+	}
+	contentStr += block
+	return os.WriteFile(fpcPath, []byte(contentStr), 0644)
+}
+
+// EnsureFlowsMod initializes the flows directory with mod.fp so Flowpipe recognizes it as a mod.
+// Call when flows are configured (e.g. on config save).
+func (s *Service) EnsureFlowsMod() error {
+	base := flowsBasePath()
+	if base == "" {
+		return nil
+	}
+	return s.ensureDir(base)
+}
+
+// SyncWorkspacesToFPC syncs all configured workspaces from config to flows/workspaces.fpc.
+// Call after config save to keep workspaces.fpc in sync with config.yaml.
+func (s *Service) SyncWorkspacesToFPC() error {
+	workspaces := config.Workspaces()
+	if len(workspaces) == 0 && config.FlowsPath() != "" {
+		// Fallback: ensure default exists
+		return s.InitWorkspace("default")
+	}
+	for _, w := range workspaces {
+		if err := s.InitWorkspace(w.ID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// WorkspaceDirEntry represents a module or flow in a workspace directory listing.
+type WorkspaceDirEntry struct {
+	Name   string `json:"name"`
+	Path   string `json:"path"`
+	Type   string `json:"type"` // "module" or "flow"
+	Steps  int    `json:"steps,omitempty"`
+	Mtime  int64  `json:"mtime,omitempty"`
+}
+
+// ListEntries returns modules (subdirs) and flows (flow_*.fp) at the given path.
+// Path is relative to flows/ (e.g. "." for root, "foo" for flows/foo/).
+func (s *Service) ListEntries(subpath string) ([]WorkspaceDirEntry, error) {
+	base := flowsBasePath()
+	if base == "" {
+		return nil, fmt.Errorf("flows path not configured")
+	}
+	dir := base
+	if subpath != "" && subpath != "." {
+		dir = filepath.Join(base, filepath.Clean(subpath))
+	}
+	info, err := os.Stat(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("path not found: %s", subpath)
+		}
+		return nil, err
+	}
+	if !info.IsDir() {
+		return nil, fmt.Errorf("not a directory: %s", subpath)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	var result []WorkspaceDirEntry
+	for _, e := range entries {
+		if e.IsDir() {
+			// Skip hidden dirs and Flowpipe metadata
+			if strings.HasPrefix(e.Name(), ".") {
+				continue
+			}
+			mtime := int64(0)
+			if fi, _ := e.Info(); fi != nil {
+				mtime = fi.ModTime().Unix()
+			}
+			result = append(result, WorkspaceDirEntry{
+				Name:  e.Name(),
+				Path:  e.Name(),
+				Type:  "module",
+				Mtime: mtime,
+			})
+		} else if strings.HasSuffix(e.Name(), ".fp") {
+			id := strings.TrimSuffix(e.Name(), ".fp")
+			name := id
+			steps := 0
+			if flow, err := s.GetInModule(subpath, id); err == nil {
+				steps = len(flow.Steps)
+				if flow.Name != "" {
+					name = flow.Name
+				}
+			}
+			mtime := int64(0)
+			if fi, _ := e.Info(); fi != nil {
+				mtime = fi.ModTime().Unix()
+			}
+			result = append(result, WorkspaceDirEntry{
+				Name:  name,
+				Path:  id,
+				Type:  "flow",
+				Steps: steps,
+				Mtime: mtime,
+			})
+		}
+	}
+	return result, nil
+}
+
+// CreateModule creates a module subfolder under flows/ and initializes it with mod.fp.
+func (s *Service) CreateModule(moduleName string) error {
+	base := flowsBasePath()
+	if base == "" {
+		return fmt.Errorf("flows path not configured")
+	}
+	if moduleName == "" || strings.Contains(moduleName, "/") || strings.Contains(moduleName, "..") {
+		return fmt.Errorf("invalid module name: %s", moduleName)
+	}
+	modDir := filepath.Join(base, moduleName)
+	if err := os.MkdirAll(modDir, 0755); err != nil {
+		return err
+	}
+	modPath := filepath.Join(modDir, "mod.fp")
+	if _, err := os.Stat(modPath); err == nil {
+		return nil // already exists
+	}
+	modSlug := s.slugFromName(moduleName)
+	if modSlug == "" {
+		modSlug = "local"
+	}
+	// Escape double quotes in module name for use inside HCL string
+	descName := strings.ReplaceAll(moduleName, `"`, `\"`)
+	content := fmt.Sprintf(moduleModTemplate, modSlug, moduleName, descName)
+	if err := os.WriteFile(modPath, []byte(content), 0644); err != nil {
+		return err
+	}
+	s.touchRootMod()
+	return nil
+}
+
+// GetInModule returns a flow from a specific module.
+func (s *Service) GetInModule(modulePath, id string) (*model.Flow, error) {
+	return s.getAtPath(s.moduleFlowDir(modulePath), id)
+}
+
+// ListInModule returns all flows in a module.
+func (s *Service) ListInModule(modulePath string) ([]model.Flow, error) {
+	dir := s.moduleFlowDir(modulePath)
+	if dir == "" {
+		return nil, fmt.Errorf("flows path not configured")
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	var flows []model.Flow
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		if !strings.HasSuffix(e.Name(), ".json") {
+			continue
+		}
+		id := strings.TrimSuffix(e.Name(), ".json")
+		flow, err := s.GetInModule(modulePath, id)
+		if err != nil {
+			continue
+		}
+		flows = append(flows, *flow)
+	}
+	return flows, nil
+}
+
+// SaveInModule persists a flow in a module.
+func (s *Service) SaveInModule(modulePath string, flow *model.Flow) error {
+	if flow == nil {
+		return fmt.Errorf("flow is nil")
+	}
+	dir := s.moduleFlowDir(modulePath)
+	if dir == "" {
+		return fmt.Errorf("flows path not configured")
+	}
+	if flow.Name == "" {
+		flow.Name = "New flow"
+	}
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+	baseSlug := s.slugFromName(flow.Name)
+	if baseSlug == "" {
+		baseSlug = "flow"
+	}
+	if flow.ID == "" {
+		flow.ID = s.uniqueSlugInDir(dir, baseSlug, "")
+	} else {
+		newSlug := s.slugFromName(flow.Name)
+		if newSlug == "" {
+			newSlug = "flow"
+		}
+		if newSlug != flow.ID {
+			newID := s.uniqueSlugInDir(dir, newSlug, flow.ID)
+			if newID != flow.ID {
+				for _, p := range []string{filepath.Join(dir, flow.ID+".json"), filepath.Join(dir, flow.ID+".fp")} {
+					_ = os.Remove(p)
+				}
+				flow.ID = newID
+			}
+		}
+	}
+	if !s.validID(flow.ID) {
+		return fmt.Errorf("invalid flow id: %s", flow.ID)
+	}
+	jsonPath := filepath.Join(dir, flow.ID+".json")
+	fpPath := filepath.Join(dir, flow.ID+".fp")
+	jsonData, err := json.MarshalIndent(flow, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(jsonPath, jsonData, 0644); err != nil {
+		return err
+	}
+	hcl, err := s.generateHCL(flow)
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(fpPath, []byte(hcl), 0644); err != nil {
+		return err
+	}
+	flowsRoot := flowsBasePath()
+	if flowsRoot != "" {
+		_ = s.updateConnectionsFPC(flowsRoot)
+	}
+	s.touchRootMod()
+	return nil
+}
+
+// DeleteInModule removes a flow from a module.
+func (s *Service) DeleteInModule(modulePath, id string) error {
+	if !s.validID(id) {
+		return fmt.Errorf("invalid flow id: %s", id)
+	}
+	dir := s.moduleFlowDir(modulePath)
+	if dir == "" {
+		return fmt.Errorf("flows path not configured")
+	}
+	for _, p := range []string{filepath.Join(dir, id+".json"), filepath.Join(dir, id+".fp")} {
+		if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
+	flowsRoot := flowsBasePath()
+	if flowsRoot != "" {
+		_ = s.updateConnectionsFPC(flowsRoot)
+	}
+	return nil
+}
+
+func (s *Service) moduleFlowDir(modulePath string) string {
+	base := flowsBasePath()
+	if base == "" {
+		return ""
+	}
+	if modulePath == "" || modulePath == "." {
+		return base
+	}
+	return filepath.Join(base, filepath.Clean(modulePath))
+}
+
+func (s *Service) getAtPath(dir, id string) (*model.Flow, error) {
+	if dir == "" {
+		return nil, fmt.Errorf("path not configured")
+	}
+	if !s.validID(id) {
+		return nil, fmt.Errorf("invalid flow id: %s", id)
+	}
+	path := filepath.Join(dir, id+".json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("flow not found: %s", id)
+		}
+		return nil, err
+	}
+	var flow model.Flow
+	if err := json.Unmarshal(data, &flow); err != nil {
+		return nil, err
+	}
+	return &flow, nil
 }

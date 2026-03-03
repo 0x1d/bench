@@ -180,7 +180,14 @@ export default function FlowEditorPage() {
   const [flowName, setFlowName] = useState('');
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameValue, setRenameValue] = useState('');
-  const { setSelectedStep, setOnStepSave, setOnDeleteStep, setExecutionId } = useFlowView();
+  const {
+    setSelectedStep,
+    setOnStepSave,
+    setOnDeleteStep,
+    setExecutionId,
+    flowWorkspace,
+    flowModule,
+  } = useFlowView();
   const [connectFromSource, setConnectFromSource] = useState<{
     sourceId: string;
     x: number;
@@ -196,8 +203,9 @@ export default function FlowEditorPage() {
     isLoading,
     error,
   } = useQuery({
-    queryKey: ['flow', flowId],
-    queryFn: () => fetchFlow(flowId!),
+    queryKey: ['flow', flowId, flowWorkspace, flowModule],
+    queryFn: () =>
+      fetchFlow(flowId!, flowModule ?? undefined),
     enabled: !!flowId,
   });
 
@@ -239,10 +247,17 @@ export default function FlowEditorPage() {
   }, [flow?.id]);
 
   const updateMutation = useMutation({
-    mutationFn: (f: Flow) => updateFlow(f.id, f),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['flow', flowId ?? ''] });
+    mutationFn: (f: Flow) =>
+      updateFlow(flowId!, f, flowModule ?? undefined),
+    onSuccess: (updatedFlow) => {
+      queryClient.invalidateQueries({
+        queryKey: ['flow', flowId ?? '', flowWorkspace, flowModule],
+      });
       queryClient.invalidateQueries({ queryKey: ['flows'] });
+      queryClient.invalidateQueries({ queryKey: ['flows', 'entries'] });
+      if (updatedFlow?.id && updatedFlow.id !== flowId) {
+        window.location.hash = `#flows/${updatedFlow.id}`;
+      }
       toast.success('Flow saved successfully');
     },
     onError: (err) => {
@@ -251,10 +266,14 @@ export default function FlowEditorPage() {
   });
 
   const runMutation = useMutation({
-    mutationFn: ({ id, args }: { id: string; args?: Record<string, any> }) => runFlow(id, args),
+    mutationFn: ({ id, args }: { id: string; args?: Record<string, any> }) =>
+      runFlow(id, args, {
+        workspace: flowWorkspace ?? undefined,
+        module: flowModule ?? undefined,
+      }),
     onSuccess: (res) => {
       toast.success('Flow started successfully');
-      const execId = res?.flowpipe?.execution_id;
+      const execId = (res as { flowpipe?: { execution_id?: string } })?.flowpipe?.execution_id;
       if (execId) {
         setExecutionId(execId);
       }

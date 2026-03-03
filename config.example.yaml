@@ -25,4 +25,7 @@ resources:
 # Flows (Flowpipe integration)
 flows:
   path: ./flows
-  flowpipeUrl: http://localhost:7103
+  workspaces:
+    - id: default
+      label: Default
+      flowpipeUrl: http://localhost:7103

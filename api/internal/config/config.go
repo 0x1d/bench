@@ -73,6 +73,15 @@ func (d DatabaseEntry) IsEnabled() bool {
 	return *d.Enabled
 }
 
+// WorkspaceEntry represents a Flowpipe workspace profile (not a directory).
+// Workspaces are named profiles in workspaces.fpc; switching workspace only
+// changes which profile is used when executing pipelines.
+type WorkspaceEntry struct {
+	ID          string `yaml:"id" json:"id"`
+	Label       string `yaml:"label" json:"label"`
+	FlowpipeURL string `yaml:"flowpipeUrl,omitempty" json:"flowpipeUrl,omitempty"` // Flowpipe server URL (host in workspaces.fpc)
+}
+
 // ResourcesConfig is the resources section of config.yaml.
 type ResourcesConfig struct {
 	Filesystem []FilesystemEntry `yaml:"filesystem"`
@@ -80,10 +89,10 @@ type ResourcesConfig struct {
 	Rest       []RestEntry       `yaml:"rest"`
 }
 
-// FlowsConfig holds flow-related settings.
+// FlowsConfig holds flow-related settings including workspaces.
 type FlowsConfig struct {
-	Path         string `yaml:"path"`                   // directory for .fp files (default ./flows)
-	FlowpipeURL  string `yaml:"flowpipeUrl,omitempty"`  // Flowpipe server URL (default http://localhost:7103)
+	Path       string           `yaml:"path"`         // flows directory (default ./flows)
+	Workspaces []WorkspaceEntry `yaml:"workspaces"`   // Flowpipe workspace profiles (id, label, flowpipeUrl)
 }
 
 // Config is the top-level config structure.
@@ -236,6 +245,19 @@ func validateConfig(cfg Config) error {
 			}
 		}
 	}
+
+	if cfg.Flows != nil {
+		seenWorkspace := map[string]struct{}{}
+		for i, ws := range cfg.Flows.Workspaces {
+			if ws.ID == "" {
+				return fmt.Errorf("flows.workspaces[%d].id is required", i)
+			}
+			if _, ok := seenWorkspace[ws.ID]; ok {
+				return fmt.Errorf("flows.workspaces contains duplicate id %q", ws.ID)
+			}
+			seenWorkspace[ws.ID] = struct{}{}
+		}
+	}
 	return nil
 }
 
@@ -370,6 +392,51 @@ func RestResourcesWithError() ([]RestEntry, error) {
 	return out, nil
 }
 
+// Workspaces returns configured flow workspaces from config.yaml.
+func Workspaces() []WorkspaceEntry {
+	out, _ := WorkspacesWithError()
+	return out
+}
+
+// WorkspacesWithError returns configured Flowpipe workspace profiles.
+func WorkspacesWithError() ([]WorkspaceEntry, error) {
+	cfg, _, err := ReadConfig()
+	if err != nil {
+		return nil, err
+	}
+	workspaces := []WorkspaceEntry{}
+	if cfg.Flows != nil {
+		workspaces = cfg.Flows.Workspaces
+	}
+	out := make([]WorkspaceEntry, 0, len(workspaces))
+	for _, e := range workspaces {
+		if e.ID == "" {
+			continue
+		}
+		label := e.Label
+		if label == "" {
+			label = e.ID
+		}
+		url := e.FlowpipeURL
+		if url == "" {
+			url = "http://localhost:7103"
+		}
+		out = append(out, WorkspaceEntry{ID: e.ID, Label: label, FlowpipeURL: url})
+	}
+	return out, nil
+}
+
+// WorkspaceByID returns the workspace entry for the given ID, or nil if not found.
+func WorkspaceByID(id string) *WorkspaceEntry {
+	for _, w := range Workspaces() {
+		if w.ID == id {
+			return &w
+		}
+	}
+	return nil
+}
+
+
 // RootStatus represents a filesystem root for status display (includes path).
 type RootStatus struct {
 	ID        string `json:"id"`
@@ -444,13 +511,13 @@ func FlowsPath() string {
 	return abs
 }
 
-// FlowpipeURL returns the Flowpipe server URL.
-func FlowpipeURL() string {
-	cfg, _, err := ReadConfig()
-	if err != nil || cfg.Flows == nil || cfg.Flows.FlowpipeURL == "" {
-		return "http://localhost:7103"
+// FlowpipeURLForWorkspace returns the Flowpipe server URL for the given workspace profile.
+func FlowpipeURLForWorkspace(workspaceID string) string {
+	w := WorkspaceByID(workspaceID)
+	if w != nil && w.FlowpipeURL != "" {
+		return w.FlowpipeURL
 	}
-	return cfg.Flows.FlowpipeURL
+	return "http://localhost:7103"
 }
 
 // ExampleConfigPath returns the path to config.example.yaml (same dir as config or write path).

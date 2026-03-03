@@ -683,16 +683,78 @@ export interface FlowListResponse {
   flows: Flow[];
 }
 
-export async function fetchFlowList(): Promise<FlowListResponse> {
-  const response = await fetch(`${API_BASE}/flows`);
+export interface FlowWorkspace {
+  id: string;
+  label: string;
+  path: string;
+}
+
+export interface FlowWorkspacesResponse {
+  workspaces: FlowWorkspace[];
+}
+
+export interface FlowWorkspaceEntry {
+  name: string;
+  path: string;
+  type: 'module' | 'flow';
+  steps?: number;
+  mtime?: number;
+}
+
+export interface FlowWorkspaceEntriesResponse {
+  entries: FlowWorkspaceEntry[];
+}
+
+export async function fetchFlowWorkspaces(): Promise<FlowWorkspacesResponse> {
+  const response = await fetch(`${API_BASE}/flows/workspaces`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch workspaces: ${response.status} ${response.statusText}`);
+  }
+  return response.json();
+}
+
+export async function fetchFlowEntries(path = '.'): Promise<FlowWorkspaceEntriesResponse> {
+  const params = new URLSearchParams({ path });
+  const response = await fetch(`${API_BASE}/flows/entries?${params}`);
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Failed to fetch entries: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function createFlowModule(name: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/flows/modules`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Failed to create module: ${response.status}`);
+  }
+}
+
+export async function fetchFlowList(module?: string): Promise<FlowListResponse> {
+  const params = new URLSearchParams();
+  if (module) params.set('module', module);
+  const qs = params.toString();
+  const url = qs ? `${API_BASE}/flows?${qs}` : `${API_BASE}/flows`;
+  const response = await fetch(url);
   if (!response.ok) {
     throw new Error(`Failed to fetch flows: ${response.status} ${response.statusText}`);
   }
   return response.json();
 }
 
-export async function fetchFlow(id: string): Promise<Flow> {
-  const response = await fetch(`${API_BASE}/flows/${encodeURIComponent(id)}`);
+export async function fetchFlow(id: string, module?: string): Promise<Flow> {
+  const params = new URLSearchParams();
+  if (module) params.set('module', module);
+  const qs = params.toString();
+  const url = qs
+    ? `${API_BASE}/flows/${encodeURIComponent(id)}?${qs}`
+    : `${API_BASE}/flows/${encodeURIComponent(id)}`;
+  const response = await fetch(url);
   if (!response.ok) {
     const text = await response.text();
     throw new Error(text || `Failed to fetch flow: ${response.status}`);
@@ -700,8 +762,15 @@ export async function fetchFlow(id: string): Promise<Flow> {
   return response.json();
 }
 
-export async function createFlow(flow: Partial<Flow>): Promise<Flow> {
-  const response = await fetch(`${API_BASE}/flows`, {
+export async function createFlow(
+  flow: Partial<Flow>,
+  module?: string
+): Promise<Flow> {
+  const params = new URLSearchParams();
+  if (module) params.set('module', module);
+  const qs = params.toString();
+  const url = qs ? `${API_BASE}/flows?${qs}` : `${API_BASE}/flows`;
+  const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(flow),
@@ -713,8 +782,18 @@ export async function createFlow(flow: Partial<Flow>): Promise<Flow> {
   return response.json();
 }
 
-export async function updateFlow(id: string, flow: Partial<Flow>): Promise<Flow> {
-  const response = await fetch(`${API_BASE}/flows/${encodeURIComponent(id)}`, {
+export async function updateFlow(
+  id: string,
+  flow: Partial<Flow>,
+  module?: string
+): Promise<Flow> {
+  const params = new URLSearchParams();
+  if (module) params.set('module', module);
+  const qs = params.toString();
+  const url = qs
+    ? `${API_BASE}/flows/${encodeURIComponent(id)}?${qs}`
+    : `${API_BASE}/flows/${encodeURIComponent(id)}`;
+  const response = await fetch(url, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ ...flow, id }),
@@ -726,8 +805,14 @@ export async function updateFlow(id: string, flow: Partial<Flow>): Promise<Flow>
   return response.json();
 }
 
-export async function deleteFlow(id: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/flows/${encodeURIComponent(id)}`, {
+export async function deleteFlow(id: string, module?: string): Promise<void> {
+  const params = new URLSearchParams();
+  if (module) params.set('module', module);
+  const qs = params.toString();
+  const url = qs
+    ? `${API_BASE}/flows/${encodeURIComponent(id)}?${qs}`
+    : `${API_BASE}/flows/${encodeURIComponent(id)}`;
+  const response = await fetch(url, {
     method: 'DELETE',
   });
   if (!response.ok) {
@@ -736,15 +821,26 @@ export async function deleteFlow(id: string): Promise<void> {
   }
 }
 
-export async function runFlow(id: string, args?: Record<string, any>): Promise<any> {
-  const options: RequestInit = {
+export async function runFlow(
+  id: string,
+  args?: Record<string, unknown>,
+  runOpts?: { workspace?: string; module?: string }
+): Promise<unknown> {
+  const params = new URLSearchParams();
+  if (runOpts?.workspace) params.set('workspace', runOpts.workspace);
+  if (runOpts?.module) params.set('module', runOpts.module);
+  const qs = params.toString();
+  const url = qs
+    ? `${API_BASE}/flows/${encodeURIComponent(id)}/run?${qs}`
+    : `${API_BASE}/flows/${encodeURIComponent(id)}/run`;
+  const fetchOpts: RequestInit = {
     method: 'POST',
   };
   if (args && Object.keys(args).length > 0) {
-    options.headers = { 'Content-Type': 'application/json' };
-    options.body = JSON.stringify({ args });
+    fetchOpts.headers = { 'Content-Type': 'application/json' };
+    fetchOpts.body = JSON.stringify({ args });
   }
-  const response = await fetch(`${API_BASE}/flows/${encodeURIComponent(id)}/run`, options);
+  const response = await fetch(url, fetchOpts);
   if (!response.ok) {
     const text = await response.text();
     throw new Error(text || `Failed to run flow: ${response.status}`);
@@ -757,16 +853,29 @@ export async function runFlow(id: string, args?: Record<string, any>): Promise<a
   return { output: await response.text() };
 }
 
-export async function fetchFlowProcesses(): Promise<any> {
-  const response = await fetch(`${API_BASE}/flows/processes`);
+export async function fetchFlowProcesses(workspace?: string): Promise<unknown> {
+  const params = new URLSearchParams();
+  if (workspace) params.set('workspace', workspace);
+  const qs = params.toString();
+  const url = qs ? `${API_BASE}/flows/processes?${qs}` : `${API_BASE}/flows/processes`;
+  const response = await fetch(url);
   if (!response.ok) {
     throw new Error(`Failed to fetch processes: ${response.status}`);
   }
   return response.json();
 }
 
-export async function fetchFlowExecution(executionId: string): Promise<any> {
-  const response = await fetch(`${API_BASE}/flows/executions/${encodeURIComponent(executionId)}`);
+export async function fetchFlowExecution(
+  executionId: string,
+  workspace?: string
+): Promise<unknown> {
+  const params = new URLSearchParams();
+  if (workspace) params.set('workspace', workspace);
+  const qs = params.toString();
+  const url = qs
+    ? `${API_BASE}/flows/executions/${encodeURIComponent(executionId)}?${qs}`
+    : `${API_BASE}/flows/executions/${encodeURIComponent(executionId)}`;
+  const response = await fetch(url);
   if (!response.ok) {
     throw new Error(`Failed to fetch execution: ${response.status}`);
   }

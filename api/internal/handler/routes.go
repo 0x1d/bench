@@ -34,7 +34,10 @@ func RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/database/tables", HandleDatabaseTablesList)
 	mux.HandleFunc("POST /api/database/tables", HandleDatabaseTablesCreate)
 	mux.HandleFunc("POST /api/database/query", HandleDatabaseQuery)
-	// Flow routes
+	// Flow routes (more specific paths first)
+	mux.HandleFunc("GET /api/flows/workspaces", HandleFlowWorkspacesList)
+	mux.HandleFunc("GET /api/flows/entries", HandleFlowEntries)
+	mux.HandleFunc("POST /api/flows/modules", HandleFlowCreateModule)
 	mux.HandleFunc("GET /api/flows", HandleFlowList)
 	mux.HandleFunc("GET /api/flows/{id}", HandleFlowGet)
 	mux.HandleFunc("POST /api/flows", HandleFlowCreate)

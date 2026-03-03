@@ -317,6 +317,31 @@ func DatabasesWithError() ([]DatabaseEntry, error) {
 	return out, nil
 }
 
+// DatabasesFromRawConfig returns database entries from config without env interpolation.
+// Use when ReadConfig fails (e.g. missing env vars) but we still need to generate
+// connection blocks for flows. DatabaseURLOrEnv can resolve env var names or raw URLs.
+func DatabasesFromRawConfig() ([]DatabaseEntry, error) {
+	rawData, err := ReadConfigRaw()
+	if err != nil {
+		return nil, err
+	}
+	cfg, err := parseConfigRaw(rawData)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]DatabaseEntry, 0, len(cfg.Resources.Databases))
+	for _, e := range cfg.Resources.Databases {
+		if e.ID == "" || e.URL == "" {
+			continue
+		}
+		if e.Label == "" {
+			e.Label = e.ID
+		}
+		out = append(out, e)
+	}
+	return out, nil
+}
+
 // RestResources returns configured REST resources from config.yaml.
 func RestResources() []RestEntry {
 	out, err := RestResourcesWithError()
@@ -393,19 +418,28 @@ func ConfigDir() string {
 
 // FlowsPath returns the absolute path to the flows directory.
 // Defaults to ./flows relative to config dir.
+// When ReadConfig fails (e.g. missing env vars), falls back to ./flows relative to config file.
 func FlowsPath() string {
 	cfg, path, err := ReadConfig()
-	if err != nil {
+	if err == nil {
+		baseDir := filepath.Dir(path)
+		p := "flows"
+		if cfg.Flows != nil && cfg.Flows.Path != "" {
+			p = cfg.Flows.Path
+		}
+		if !filepath.IsAbs(p) {
+			p = filepath.Join(baseDir, p)
+		}
+		abs, _ := filepath.Abs(p)
+		return abs
+	}
+	// Fallback when ReadConfig fails (e.g. missing env vars): use ./flows relative to config
+	configPath := FindConfigPath()
+	if configPath == "" {
 		return ""
 	}
-	baseDir := filepath.Dir(path)
-	p := "flows"
-	if cfg.Flows != nil && cfg.Flows.Path != "" {
-		p = cfg.Flows.Path
-	}
-	if !filepath.IsAbs(p) {
-		p = filepath.Join(baseDir, p)
-	}
+	baseDir := filepath.Dir(configPath)
+	p := filepath.Join(baseDir, "flows")
 	abs, _ := filepath.Abs(p)
 	return abs
 }
@@ -445,6 +479,51 @@ func ReadConfigRaw() ([]byte, error) {
 		return nil, os.ErrNotExist
 	}
 	return os.ReadFile(path)
+}
+
+// parseConfigRaw parses config YAML without env interpolation.
+// Used when we need to extract env var names from URLs (e.g. for flow HCL generation).
+func parseConfigRaw(data []byte) (Config, error) {
+	var cfg Config
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return Config{}, err
+	}
+	if err := validateConfig(cfg); err != nil {
+		return Config{}, err
+	}
+	return cfg, nil
+}
+
+// DatabaseURLOrEnv returns either the env var name (if URL contains ${VAR}) or the URL.
+// When the raw URL has ${VAR}, returns envVar and useResolved=false.
+// When the raw URL has no ${VAR}, returns useResolved=true and the URL (from interpolated config if available, else raw).
+func DatabaseURLOrEnv(dbID string) (envVar string, useResolved bool, resolvedURL string) {
+	rawData, err := ReadConfigRaw()
+	if err != nil {
+		return "", false, ""
+	}
+	rawCfg, err := parseConfigRaw(rawData)
+	if err != nil {
+		return "", false, ""
+	}
+	for _, d := range rawCfg.Resources.Databases {
+		if d.ID == dbID {
+			matches := EnvVarPattern().FindStringSubmatch(d.URL)
+			if len(matches) >= 2 {
+				return matches[1], false, ""
+			}
+			// No env var: use URL. Prefer interpolated (in case of other ${VAR} in URL), else raw.
+			if interpCfg, _, err := ReadConfig(); err == nil {
+				for _, ic := range interpCfg.Resources.Databases {
+					if ic.ID == dbID {
+						return "", true, ic.URL
+					}
+				}
+			}
+			return "", true, d.URL
+		}
+	}
+	return "", false, ""
 }
 
 // RootsStatus returns configured roots with paths for status display.

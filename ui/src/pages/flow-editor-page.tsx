@@ -12,28 +12,47 @@ import {
   type Connection,
   ConnectionLineType,
   type NodeTypes,
+  type Position,
+  type OnConnectEnd,
 } from '@xyflow/react';
 import dagre from 'dagre';
 import '@xyflow/react/dist/style.css';
-import { ArrowLeft, LayoutGrid, Plus } from 'lucide-react';
+import { ArrowLeft, Pencil, Plus } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import {
-  fetchFlow,
-  fetchStatus,
-  fetchRestList,
-  updateFlow,
-  type Flow,
-  type FlowStep,
-  type FlowEdge,
-} from '@/services/api';
+import { fetchFlow, updateFlow, type Flow, type FlowStep, type FlowEdge } from '@/services/api';
+import { useFlowView } from '@/contexts/flow-view-context';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { FlowStepNode } from '@/components/flow-step-node';
-import { FlowStepConfigSheet } from '@/components/flow-step-config-sheet';
+import {
+  Popover,
+  PopoverAnchor,
+  PopoverContent,
+} from '@/components/ui/popover';
 
 const NODE_WIDTH = 200;
 const NODE_HEIGHT = 56;
 
 const dagreGraph = new dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
+
+function sortNodesInputFirst(nodes: Node[]): Node[] {
+  return [...nodes].sort((a, b) => {
+    const aStep = (a.data as { step?: FlowStep })?.step;
+    const bStep = (b.data as { step?: FlowStep })?.step;
+    if (aStep?.type === 'input') return -1;
+    if (bStep?.type === 'input') return 1;
+    return 0;
+  });
+}
 
 function getLayoutedElements(
   nodes: Node[],
@@ -41,9 +60,14 @@ function getLayoutedElements(
   direction: 'TB' | 'LR' = 'TB'
 ): { nodes: Node[]; edges: Edge[] } {
   const isHorizontal = direction === 'LR';
-  dagreGraph.setGraph({ rankdir: direction });
+  const sortedNodes = sortNodesInputFirst(nodes);
+  dagreGraph.setGraph({
+    rankdir: direction,
+    ranksep: 60,
+    nodesep: 40,
+  });
 
-  nodes.forEach((node) => {
+  sortedNodes.forEach((node) => {
     dagreGraph.setNode(node.id, {
       width: NODE_WIDTH,
       height: NODE_HEIGHT,
@@ -56,12 +80,12 @@ function getLayoutedElements(
 
   dagre.layout(dagreGraph);
 
-  const layoutedNodes = nodes.map((node) => {
+  const layoutedNodes: Node[] = sortedNodes.map((node) => {
     const nodeWithPosition = dagreGraph.node(node.id);
     return {
       ...node,
-      targetPosition: (isHorizontal ? 'left' : 'top') as const,
-      sourcePosition: (isHorizontal ? 'right' : 'bottom') as const,
+      targetPosition: (isHorizontal ? 'left' : 'top') as Position,
+      sourcePosition: (isHorizontal ? 'right' : 'bottom') as Position,
       position: {
         x: nodeWithPosition.x - NODE_WIDTH / 2,
         y: nodeWithPosition.y - NODE_HEIGHT / 2,
@@ -91,14 +115,14 @@ function flowToNodesEdges(flow: Flow): { nodes: Node[]; edges: Edge[] } {
       id: e.id,
       source: e.source,
       target: e.target,
-      type: ConnectionLineType.SmoothStep,
+      type: ConnectionLineType.Straight,
     })) ??
     flow.steps.flatMap((step) =>
       (step.dependsOn ?? []).map((depId) => ({
         id: `${depId}-${step.id}`,
         source: depId,
         target: step.id,
-        type: ConnectionLineType.SmoothStep,
+        type: ConnectionLineType.Straight,
       }))
     );
 
@@ -160,7 +184,16 @@ const nodeTypes: NodeTypes = {
 export function FlowEditorPage() {
   const flowId = getFlowIdFromHash();
   const queryClient = useQueryClient();
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const { setSelectedStep, setOnStepSave, setOnDeleteStep } = useFlowView();
+  const [flowName, setFlowName] = useState('');
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [renameValue, setRenameValue] = useState('');
+  const [connectFromSource, setConnectFromSource] = useState<{
+    sourceId: string;
+    x: number;
+    y: number;
+  } | null>(null);
+
 
   const { data: flow, isLoading, error } = useQuery({
     queryKey: ['flow', flowId ?? ''],
@@ -171,10 +204,7 @@ export function FlowEditorPage() {
   const initial = useMemo(() => {
     if (!flow) return { nodes: [], edges: [] };
     const { nodes, edges } = flowToNodesEdges(flow);
-    const hasPositions = nodes.every(
-      (n) => n.position.x !== 0 || n.position.y !== 0
-    );
-    if (!hasPositions && nodes.length > 0) {
+    if (nodes.length > 0) {
       return getLayoutedElements(nodes, edges);
     }
     return { nodes, edges };
@@ -185,10 +215,17 @@ export function FlowEditorPage() {
 
   useEffect(() => {
     if (flow && initial.nodes.length > 0) {
-      setNodes(initial.nodes);
-      setEdges(initial.edges);
+      const layouted = getLayoutedElements(initial.nodes, initial.edges);
+      setNodes(layouted.nodes);
+      setEdges(layouted.edges);
     }
   }, [flow?.id]);
+
+  useEffect(() => {
+    if (flow) {
+      setFlowName(flow.name || flow.id);
+    }
+  }, [flow]);
 
   const updateMutation = useMutation({
     mutationFn: (f: Flow) => updateFlow(f.id, f),
@@ -199,60 +236,137 @@ export function FlowEditorPage() {
   });
 
   const onConnect = useCallback(
-    (params: Connection) =>
-      setEdges((eds) =>
-        addEdge(
-          { ...params, type: ConnectionLineType.SmoothStep },
+    (params: Connection) => {
+      setEdges((eds) => {
+        const newEdges = addEdge(
+          { ...params, type: ConnectionLineType.Straight },
           eds
-        )
-      ),
-    [setEdges]
+        );
+        const layouted = getLayoutedElements(nodes, newEdges);
+        setNodes(layouted.nodes);
+        return layouted.edges;
+      });
+    },
+    [nodes, setEdges, setNodes]
   );
 
-  const onLayout = useCallback(
-    (direction: 'TB' | 'LR' = 'TB') => {
-      const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
-        nodes,
-        edges,
-        direction
-      );
-      setNodes([...layoutedNodes]);
-      setEdges([...layoutedEdges]);
+  const addStepFromConnection = useCallback(
+    (sourceId: string, stepType: 'http' | 'query' | 'input') => {
+      const id = `step_${stepType}_${Date.now()}`;
+      const configs: Record<string, Record<string, unknown>> = {
+        http: { restId: '', method: 'GET', path: '/' },
+        query: { databaseId: '', sql: '' },
+        input: { params: [] },
+      };
+      const labels: Record<string, string> = {
+        http: 'HTTP request',
+        query: 'Query',
+        input: 'Input',
+      };
+      const step: FlowStep = {
+        id,
+        type: stepType,
+        label: labels[stepType],
+        config: configs[stepType],
+      };
+      const newNode: Node = {
+        id,
+        type: 'flowStep',
+        position: { x: 0, y: 0 },
+        data: {
+          stepType: step.type,
+          label: step.label || step.id,
+          step,
+        },
+      };
+      const newEdge = {
+        id: `${sourceId}-${id}`,
+        source: sourceId,
+        target: id,
+        type: ConnectionLineType.Straight,
+      };
+      const nextNodes = [...nodes, newNode];
+      const nextEdges = [...edges, newEdge];
+      const layouted = getLayoutedElements(nextNodes, nextEdges);
+      setNodes(layouted.nodes);
+      setEdges(layouted.edges);
+      setConnectFromSource(null);
     },
     [nodes, edges, setNodes, setEdges]
+  );
+
+  const onConnectEnd = useCallback<OnConnectEnd>(
+    (event, connectionState) => {
+      if (
+        connectionState.isValid !== false ||
+        !connectionState.fromNode ||
+        !event
+      )
+        return;
+      const { clientX, clientY } =
+        'changedTouches' in event
+          ? (event as TouchEvent).changedTouches[0]
+          : (event as MouseEvent);
+      setConnectFromSource({
+        sourceId: connectionState.fromNode.id,
+        x: clientX,
+        y: clientY,
+      });
+    },
+    []
   );
 
   const handleSave = useCallback(() => {
     if (!flowId || !flow) return;
     const updated = nodesEdgesToFlow(
       flowId,
-      flow.name,
+      flowName.trim() || flow.id,
       flow.description ?? '',
       nodes,
       edges
     );
     updateMutation.mutate(updated);
-  }, [flowId, flow, nodes, edges, updateMutation]);
+  }, [flowId, flow, flowName, nodes, edges, updateMutation]);
 
-  const selectedNode = selectedNodeId
-    ? nodes.find((n) => n.id === selectedNodeId)
-    : null;
+  useEffect(() => {
+    const callback = (updatedStep: FlowStep) => {
+      setNodes((nds) =>
+        nds.map((n) =>
+          n.id === updatedStep.id
+            ? {
+                ...n,
+                data: {
+                  ...n.data,
+                  step: updatedStep,
+                  label: updatedStep.label || updatedStep.id,
+                },
+              }
+            : n
+        )
+      );
+    };
+    setOnStepSave(() => callback);
+    return () => setOnStepSave(null);
+  }, [setNodes, setOnStepSave]);
 
-  const { data: statusData } = useQuery({
-    queryKey: ['status'],
-    queryFn: () => fetchStatus(),
-  });
-  const { data: restData } = useQuery({
-    queryKey: ['rest', 'list'],
-    queryFn: () => fetchRestList(),
-  });
+  const handleDeleteStep = useCallback(
+    (stepId: string) => {
+      const nextNodes = nodes.filter((n) => n.id !== stepId);
+      const nextEdges = edges.filter(
+        (e) => e.source !== stepId && e.target !== stepId
+      );
+      const layouted = getLayoutedElements(nextNodes, nextEdges);
+      setNodes(layouted.nodes);
+      setEdges(layouted.edges);
+      setSelectedStep(null);
+    },
+    [nodes, edges, setNodes, setEdges, setSelectedStep]
+  );
 
-  const databases =
-    statusData?.database?.databases?.map((d) => ({
-      id: d.id,
-      label: d.label,
-    })) ?? [];
-  const restResources = restData?.resources ?? [];
+  useEffect(() => {
+    setOnDeleteStep(() => handleDeleteStep);
+    return () => setOnDeleteStep(null);
+  }, [setOnDeleteStep, handleDeleteStep]);
 
   if (!flowId) {
     return (
@@ -293,113 +407,284 @@ export function FlowEditorPage() {
   }
 
   return (
-    <div className="flex w-full h-[calc(100vh-8rem)] flex-col gap-2">
-      <div className="flex items-center justify-between gap-2 shrink-0">
-        <Button
-          variant="ghost"
-          size="sm"
+    <div className="flex h-full min-h-0 w-full flex-1 flex-col gap-4">
+      <nav className="flex flex-wrap items-center gap-1 text-sm">
+        <button
+          type="button"
           onClick={() => (window.location.hash = '#flows')}
+          className="rounded px-2 py-1 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
         >
-          <ArrowLeft className="size-4 mr-2" />
-          Back
-        </Button>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => onLayout('TB')}>
-            <LayoutGrid className="size-4 mr-2" />
-            Auto layout
-          </Button>
+          Flows
+        </button>
+        <span className="text-muted-foreground">/</span>
+        <span className="rounded px-2 py-1 font-mono truncate max-w-[200px]">
+          {flowName || flow.id}
+        </span>
+      </nav>
+
+      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 shadow-sm">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="font-medium truncate max-w-[200px]">
+            {flowName || flow.id}
+          </span>
           <Button
+            variant="ghost"
+            size="icon-xs"
+            onClick={() => {
+              setRenameValue(flowName || flow.id);
+              setRenameOpen(true);
+            }}
+            aria-label="Rename flow"
+          >
+            <Pencil className="size-3" />
+          </Button>
+        </div>
+        <div className="ml-auto flex flex-shrink-0 items-center gap-2">
+          {updateMutation.isError && (
+            <span className="text-sm text-destructive">
+              {updateMutation.error instanceof Error
+                ? updateMutation.error.message
+                : 'Save failed'}
+            </span>
+          )}
+          <Button
+            variant="outline"
             size="sm"
             onClick={handleSave}
             disabled={updateMutation.isPending}
+            className="gap-1.5"
           >
-            Save
+            {updateMutation.isPending ? 'Saving…' : 'Save'}
           </Button>
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 rounded-lg border border-border overflow-hidden">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div className="h-full min-h-[300px] rounded-lg border border-border overflow-hidden">
         <ReactFlow
           nodes={nodes}
           edges={edges}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
-          onNodeClick={(_e, node) => setSelectedNodeId(node.id)}
-          onPaneClick={() => setSelectedNodeId(null)}
+          onConnectEnd={onConnectEnd}
+          onNodeClick={(_e, node) => {
+            const step = (node.data?.step as FlowStep) ?? {
+              id: node.id,
+              type: (node.data?.stepType as string) ?? 'http',
+              label: (node.data?.label as string) ?? node.id,
+              config: {},
+            };
+            setSelectedStep(step);
+          }}
+          onPaneClick={() => setSelectedStep(null)}
           nodeTypes={nodeTypes}
-          connectionLineType={ConnectionLineType.SmoothStep}
+          connectionLineType={ConnectionLineType.Straight}
+          nodesDraggable={false}
           fitView
         >
           <Background />
           <Controls />
           <Panel position="top-left">
             <AddStepButtons
+              hasInputStep={nodes.some(
+                (n) => ((n.data as { step?: FlowStep })?.step?.type ?? '') === 'input'
+              )}
               onAdd={(step) => {
                 const newNode: Node = {
                   id: step.id,
                   type: 'flowStep',
-                  position: { x: 100, y: 100 + nodes.length * 80 },
+                  position: { x: 0, y: 0 },
                   data: {
                     stepType: step.type,
                     label: step.label || step.id,
                     step,
                   },
                 };
-                setNodes((nds) => [...nds, newNode]);
+                const inputNode = nodes.find(
+                  (n) => ((n.data as { step?: FlowStep })?.step?.type ?? '') === 'input'
+                );
+                let nextEdges = edges;
+                if (
+                  step.type !== 'input' &&
+                  inputNode &&
+                  !edges.some((e) => e.source === inputNode.id && e.target === step.id)
+                ) {
+                  nextEdges = [
+                    ...edges,
+                    {
+                      id: `${inputNode.id}-${step.id}`,
+                      source: inputNode.id,
+                      target: step.id,
+                      type: ConnectionLineType.Straight,
+                    },
+                  ];
+                }
+                const nextNodes = [...nodes, newNode];
+                const layouted = getLayoutedElements(nextNodes, nextEdges);
+                setNodes(layouted.nodes);
+                setEdges(layouted.edges);
               }}
             />
           </Panel>
         </ReactFlow>
+        </div>
       </div>
 
-      <FlowStepConfigSheet
-        node={selectedNode}
-        open={!!selectedNode}
-        onOpenChange={(open) => !open && setSelectedNodeId(null)}
-        databases={databases}
-        restResources={restResources}
-        onSave={(updatedStep) => {
-          setNodes((nds) =>
-            nds.map((n) =>
-              n.id === updatedStep.id
-                ? {
-                    ...n,
-                    data: {
-                      ...n.data,
-                      step: updatedStep,
-                      label: updatedStep.label || updatedStep.id,
-                    },
-                  }
-                : n
-            )
-          );
-          setSelectedNodeId(null);
-        }}
-      />
+      {connectFromSource && (
+        <Popover
+          open={!!connectFromSource}
+          onOpenChange={(open) => !open && setConnectFromSource(null)}
+        >
+          <PopoverAnchor asChild>
+            <div
+              className="fixed w-px h-px"
+              style={{ left: connectFromSource.x, top: connectFromSource.y }}
+            />
+          </PopoverAnchor>
+        <PopoverContent
+          className="w-auto p-2"
+          align="start"
+          side="bottom"
+          sideOffset={8}
+        >
+          <p className="text-xs text-muted-foreground mb-2 px-1">Add step</p>
+          <div className="flex gap-1">
+            {!nodes.some(
+              (n) => ((n.data as { step?: FlowStep })?.step?.type ?? '') === 'input'
+            ) && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  connectFromSource &&
+                  addStepFromConnection(connectFromSource.sourceId, 'input')
+                }
+                className="gap-1.5"
+              >
+                <Plus className="size-4" />
+                Input
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                connectFromSource &&
+                addStepFromConnection(connectFromSource.sourceId, 'http')
+              }
+              className="gap-1.5"
+            >
+              <Plus className="size-4" />
+              HTTP
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                connectFromSource &&
+                addStepFromConnection(connectFromSource.sourceId, 'query')
+              }
+              className="gap-1.5"
+            >
+              <Plus className="size-4" />
+              Query
+            </Button>
+          </div>
+        </PopoverContent>
+      </Popover>
+      )}
+
+      <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rename flow</DialogTitle>
+            <DialogDescription>
+              Enter a new name for this flow.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2">
+            <Label htmlFor="rename-flow" className="sr-only">
+              Flow name
+            </Label>
+            <Input
+              id="rename-flow"
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  setFlowName(renameValue.trim() || flow.id);
+                  setRenameOpen(false);
+                }
+              }}
+              placeholder="Flow name"
+              autoFocus
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setRenameOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                setFlowName(renameValue.trim() || flow.id);
+                setRenameOpen(false);
+              }}
+              disabled={!renameValue.trim()}
+            >
+              Rename
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
-function AddStepButtons({ onAdd }: { onAdd: (step: FlowStep) => void }) {
-  const addStep = (type: 'http' | 'query') => {
+function AddStepButtons({
+  hasInputStep,
+  onAdd,
+}: {
+  hasInputStep: boolean;
+  onAdd: (step: FlowStep) => void;
+}) {
+  const addStep = (type: 'http' | 'query' | 'input') => {
     const id = `step_${type}_${Date.now()}`;
+    const configs: Record<string, Record<string, unknown>> = {
+      http: { restId: '', method: 'GET', path: '/' },
+      query: { databaseId: '', sql: '' },
+      input: { params: [] },
+    };
+    const labels: Record<string, string> = {
+      http: 'HTTP request',
+      query: 'Query',
+      input: 'Input',
+    };
     onAdd({
       id,
       type,
-      label: type === 'http' ? 'HTTP request' : 'Query',
-      config: type === 'http' ? { restId: '', method: 'GET', path: '/' } : { databaseId: '', sql: '' },
+      label: labels[type],
+      config: configs[type],
     });
   };
 
   return (
-    <div className="flex gap-2 rounded-lg border border-border bg-card p-2 shadow-sm">
-      <Button variant="outline" size="sm" onClick={() => addStep('http')}>
-        <Plus className="size-4 mr-1" />
+    <div className="flex gap-2 rounded-lg border border-border bg-card px-4 py-3 shadow-sm">
+      {!hasInputStep && (
+        <Button variant="outline" size="sm" onClick={() => addStep('input')} className="gap-1.5">
+          <Plus className="size-4" />
+          Input
+        </Button>
+      )}
+      <Button variant="outline" size="sm" onClick={() => addStep('http')} className="gap-1.5">
+        <Plus className="size-4" />
         HTTP
       </Button>
-      <Button variant="outline" size="sm" onClick={() => addStep('query')}>
-        <Plus className="size-4 mr-1" />
+      <Button variant="outline" size="sm" onClick={() => addStep('query')} className="gap-1.5">
+        <Plus className="size-4" />
         Query
       </Button>
     </div>

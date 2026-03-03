@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Play, Trash2, Pencil } from 'lucide-react';
+import { Plus, Play, Trash2, Pencil, Workflow } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   fetchFlowList,
@@ -9,16 +9,7 @@ import {
   type Flow,
 } from '@/services/api';
 import { Button } from '@/components/ui/button';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { cn } from '@/lib/utils';
 
 export function FlowsPage() {
@@ -32,8 +23,21 @@ export function FlowsPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: () =>
-      createFlow({ name: 'New flow', steps: [], edges: [] }),
+    mutationFn: () => {
+      const inputId = `step_input_${Date.now()}`;
+      return createFlow({
+        name: 'New flow',
+        steps: [
+          {
+            id: inputId,
+            type: 'input',
+            label: 'Input',
+            config: { params: [] },
+          },
+        ],
+        edges: [],
+      });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['flows'] });
     },
@@ -83,21 +87,26 @@ export function FlowsPage() {
       </nav>
 
       <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 shadow-sm">
-        <Button
-          onClick={() => createMutation.mutate()}
-          disabled={createMutation.isPending}
-        >
-          <Plus className="size-4 mr-2" />
-          New flow
-        </Button>
+        <div className="ml-auto flex flex-shrink-0 items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => createMutation.mutate()}
+            disabled={createMutation.isPending}
+            className="gap-1.5"
+          >
+            <Plus className="size-4" />
+            New flow
+          </Button>
+        </div>
       </div>
 
       {runResult && (
         <div
           className={cn(
-            'rounded-lg border px-4 py-3 shadow-sm',
+            'rounded-lg border px-4 py-3',
             runResult.startsWith('Error')
-              ? 'border-destructive bg-destructive/10 text-destructive'
+              ? 'border-destructive/50 bg-destructive/10 text-destructive'
               : 'border-border bg-card'
           )}
         >
@@ -105,78 +114,104 @@ export function FlowsPage() {
         </div>
       )}
 
-      {flows.length === 0 ? (
-        <p className="text-muted-foreground">No flows yet. Create one to get started.</p>
-      ) : (
-        <div className="flex flex-col gap-2">
-          {flows.map((flow) => (
-            <div
-              key={flow.id}
-              className="flex items-center justify-between gap-4 rounded-lg border border-border bg-card px-4 py-3 shadow-sm"
+      <div className="flex-1 min-w-0 overflow-auto">
+        {flows.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-border p-8 text-center">
+            <Workflow className="mx-auto size-10 text-muted-foreground" />
+            <p className="mt-2 text-sm text-muted-foreground">No flows yet</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Create a flow to get started
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-4"
+              onClick={() => createMutation.mutate()}
+              disabled={createMutation.isPending}
             >
-              <div className="min-w-0 flex-1">
-                <h3 className="font-medium truncate">{flow.name || flow.id}</h3>
-                {flow.description && (
-                  <p className="text-sm text-muted-foreground truncate">
-                    {flow.description}
-                  </p>
-                )}
-                <p className="text-xs text-muted-foreground mt-1">
-                  {flow.steps.length} step{flow.steps.length !== 1 ? 's' : ''}
-                </p>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleRun(flow)}
-                  title="Run flow"
-                >
-                  <Play className="size-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => (window.location.hash = `#flows/${flow.id}`)}
-                  title="Edit flow"
-                >
-                  <Pencil className="size-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setDeleteTarget(flow)}
-                  title="Delete flow"
-                  className="text-destructive hover:text-destructive"
-                >
-                  <Trash2 className="size-4" />
-                </Button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+              <Plus className="size-4 mr-2" />
+              New flow
+            </Button>
+          </div>
+        ) : (
+          <div className="overflow-x-auto rounded-lg border border-border bg-card">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-muted/30">
+                  <th className="px-4 py-3 text-left font-medium">Name</th>
+                  <th className="px-4 py-3 text-left font-medium">Description</th>
+                  <th className="px-4 py-3 text-left font-medium">Steps</th>
+                  <th className="w-28 px-2 py-3" />
+                </tr>
+              </thead>
+              <tbody>
+                {flows.map((flow) => (
+                  <tr
+                    key={flow.id}
+                    onClick={() => (window.location.hash = `#flows/${flow.id}`)}
+                    className="border-b border-border/50 last:border-b-0 cursor-pointer transition-colors hover:bg-accent/30"
+                  >
+                    <td className="px-4 py-2 font-medium">{flow.name || flow.id}</td>
+                    <td className="px-4 py-2 text-muted-foreground truncate max-w-[200px]">
+                      {flow.description || '—'}
+                    </td>
+                    <td className="px-4 py-2 text-muted-foreground">
+                      {flow.steps.length} step{flow.steps.length !== 1 ? 's' : ''}
+                    </td>
+                    <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-end gap-1 whitespace-nowrap">
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRun(flow);
+                          }}
+                          aria-label="Run flow"
+                        >
+                          <Play className="size-3" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            window.location.hash = `#flows/${flow.id}`;
+                          }}
+                          aria-label="Edit flow"
+                        >
+                          <Pencil className="size-3" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeleteTarget(flow);
+                          }}
+                          aria-label="Delete flow"
+                          className="text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="size-3" />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
 
-      <AlertDialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete flow</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete &quot;{deleteTarget?.name || deleteTarget?.id}&quot;?
-              This cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmDeleteDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title="Delete flow"
+        description={`Are you sure you want to delete "${deleteTarget?.name || deleteTarget?.id}"? This cannot be undone.`}
+        onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+        isLoading={deleteMutation.isPending}
+      />
     </div>
   );
 }

@@ -5,9 +5,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/0x1d/bench/api/internal/config"
@@ -68,6 +70,34 @@ func (s *Service) List() ([]model.Flow, error) {
 		flows = append(flows, *flow)
 	}
 	return flows, nil
+}
+
+// SyncFromJSON regenerates .fp files from existing .json files.
+// Call on startup to fix stale .fp when JSON was edited outside the API.
+func (s *Service) SyncFromJSON() error {
+	dir := config.FlowsPath()
+	if dir == "" {
+		return nil
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") || !strings.HasPrefix(e.Name(), "flow_") {
+			continue
+		}
+		id := strings.TrimSuffix(e.Name(), ".json")
+		flow, err := s.Get(id)
+		if err != nil {
+			continue
+		}
+		if err := s.Save(flow); err != nil {
+			// Log but don't fail; other flows may still sync
+			continue
+		}
+	}
+	return nil
 }
 
 // Get returns a flow by ID.
@@ -131,6 +161,11 @@ func (s *Service) Save(flow *model.Flow) error {
 		return err
 	}
 
+	// Update connections.fpc with connection blocks for databases used in flows
+	if err := s.updateConnectionsFPC(dir); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -139,10 +174,14 @@ func (s *Service) Delete(id string) error {
 	if !s.validID(id) {
 		return fmt.Errorf("invalid flow id: %s", id)
 	}
+	dir := config.FlowsPath()
 	for _, p := range []string{s.jsonPath(id), s.fpPath(id)} {
 		if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
 			return err
 		}
+	}
+	if dir != "" {
+		_ = s.updateConnectionsFPC(dir)
 	}
 	return nil
 }
@@ -156,13 +195,29 @@ func (s *Service) generateHCL(flow *model.Flow) (string, error) {
 		b.WriteString(fmt.Sprintf("  title = %q\n\n", flow.Name))
 	}
 
+	// Emit param blocks from input steps (defines pipeline parameters).
+	// Input is virtual: it only contributes params to the pipeline, not a step block.
+	for _, step := range flow.Steps {
+		if strings.EqualFold(step.Type, "input") {
+			hcl, err := s.stepInput(step)
+			if err != nil {
+				return "", err
+			}
+			b.WriteString(hcl)
+		}
+	}
+
 	stepIDs := make(map[string]bool)
 	for _, step := range flow.Steps {
 		stepIDs[step.ID] = true
 	}
 
 	for _, step := range flow.Steps {
-		switch step.Type {
+		// Input is virtual: it only contributes param blocks (emitted above), not step blocks.
+		if strings.EqualFold(step.Type, "input") {
+			continue
+		}
+		switch strings.ToLower(step.Type) {
 		case "http":
 			hcl, err := s.stepHTTP(step)
 			if err != nil {
@@ -181,8 +236,8 @@ func (s *Service) generateHCL(flow *model.Flow) (string, error) {
 	}
 
 	b.WriteString("\n  output \"result\" {\n")
-	if len(flow.Steps) > 0 {
-		last := flow.Steps[len(flow.Steps)-1]
+	last := s.lastExecutableStep(flow.Steps)
+	if last != nil {
 		switch last.Type {
 		case "query":
 			b.WriteString(fmt.Sprintf("    value = step.query.%s.rows\n", last.ID))
@@ -198,6 +253,56 @@ func (s *Service) generateHCL(flow *model.Flow) (string, error) {
 	return b.String(), nil
 }
 
+func (s *Service) lastExecutableStep(steps []model.FlowStep) *model.FlowStep {
+	for i := len(steps) - 1; i >= 0; i-- {
+		if !strings.EqualFold(steps[i].Type, "input") {
+			return &steps[i]
+		}
+	}
+	return nil
+}
+
+func (s *Service) stepInput(step model.FlowStep) (string, error) {
+	params, _ := step.Config["params"].([]any)
+	if len(params) == 0 {
+		return "", nil
+	}
+	var b strings.Builder
+	for _, p := range params {
+		pm, ok := p.(map[string]any)
+		if !ok {
+			continue
+		}
+		name, _ := pm["name"].(string)
+		if name == "" {
+			continue
+		}
+		paramType, _ := pm["type"].(string)
+		if paramType == "" {
+			paramType = "any"
+		}
+		desc, _ := pm["description"].(string)
+		def, hasDef := pm["default"]
+		b.WriteString(fmt.Sprintf("  param %q {\n", name))
+		b.WriteString(fmt.Sprintf("    type = %q\n", paramType))
+		if desc != "" {
+			b.WriteString(fmt.Sprintf("    description = %q\n", strings.ReplaceAll(desc, `\`, `\\`)))
+		}
+		if hasDef && def != nil && def != "" {
+			switch v := def.(type) {
+			case string:
+				b.WriteString(fmt.Sprintf("    default = %q\n", strings.ReplaceAll(v, `\`, `\\`)))
+			case float64:
+				b.WriteString(fmt.Sprintf("    default = %v\n", v))
+			case bool:
+				b.WriteString(fmt.Sprintf("    default = %v\n", v))
+			}
+		}
+		b.WriteString("  }\n\n")
+	}
+	return b.String(), nil
+}
+
 func (s *Service) stepHTTP(step model.FlowStep) (string, error) {
 	restID, _ := step.Config["restId"].(string)
 	method, _ := step.Config["method"].(string)
@@ -205,7 +310,7 @@ func (s *Service) stepHTTP(step model.FlowStep) (string, error) {
 	body, _ := step.Config["body"].(string)
 
 	if restID == "" {
-		return "", fmt.Errorf("step %s: restId required for http step", step.ID)
+		restID = "__unconfigured__"
 	}
 	if method == "" {
 		method = "GET"
@@ -233,43 +338,184 @@ func (s *Service) stepHTTP(step model.FlowStep) (string, error) {
 func (s *Service) stepQuery(step model.FlowStep) (string, error) {
 	sql, _ := step.Config["sql"].(string)
 	dbID, _ := step.Config["databaseId"].(string)
+	argsRaw, _ := step.Config["args"]
 
 	if sql == "" {
-		return "", fmt.Errorf("step %s: sql required for query step", step.ID)
+		sql = "SELECT 1"
 	}
 	if dbID == "" {
-		return "", fmt.Errorf("step %s: databaseId required for query step", step.ID)
+		dbID = s.defaultDatabaseID()
+	}
+	if dbID == "" {
+		return "", fmt.Errorf("step %s: no database configured; select a database in step config", step.ID)
 	}
 
-	envVar := s.databaseEnvVar(dbID)
-	if envVar == "" {
-		return "", fmt.Errorf("step %s: database %s has no env var in URL", step.ID, dbID)
+	envVar, useResolved, resolvedURL := config.DatabaseURLOrEnv(dbID)
+	var databaseArg string
+	if envVar != "" || (useResolved && resolvedURL != "") {
+		databaseArg = fmt.Sprintf("connection.postgres.%s", dbID)
+	} else {
+		// Config not loaded or database not in config: still emit connection reference
+		// so the .fp is generated; user can define the connection in connections.fpc
+		databaseArg = fmt.Sprintf("connection.postgres.%s", dbID)
 	}
 
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf("  step \"query\" %q {\n", step.ID))
 	b.WriteString(fmt.Sprintf("    sql      = %q\n", strings.ReplaceAll(sql, `"`, `\"`)))
-	b.WriteString(fmt.Sprintf("    database = env(%q)\n", envVar))
+	b.WriteString(fmt.Sprintf("    database = %s\n", databaseArg))
+	if argsRaw != nil {
+		if args, ok := argsRaw.([]any); ok && len(args) > 0 {
+			argStrs := make([]string, 0, len(args))
+			for _, a := range args {
+				s, ok := a.(string)
+				if !ok {
+					continue
+				}
+				if strings.HasPrefix(s, "param.") || strings.HasPrefix(s, "step.") {
+					argStrs = append(argStrs, s)
+				} else {
+					escaped := strings.ReplaceAll(s, `\`, `\\`)
+					escaped = strings.ReplaceAll(escaped, `"`, `\"`)
+					argStrs = append(argStrs, fmt.Sprintf("%q", escaped))
+				}
+			}
+			if len(argStrs) > 0 {
+				b.WriteString("    args     = [" + strings.Join(argStrs, ", ") + "]\n")
+			}
+		}
+	}
 	b.WriteString("  }\n\n")
 	return b.String(), nil
 }
 
-func (s *Service) databaseEnvVar(dbID string) string {
-	dbs, err := config.DatabasesWithError()
+func parsePostgresURL(s string) (host string, port int, username, password, db string) {
+	u, err := url.Parse(s)
 	if err != nil {
+		return "", 0, "", "", ""
+	}
+	if u.Scheme != "postgres" && u.Scheme != "postgresql" {
+		return "", 0, "", "", ""
+	}
+	host = u.Hostname()
+	if p, err := strconv.Atoi(u.Port()); err == nil {
+		port = p
+	} else if u.Port() == "" {
+		port = 5432
+	}
+	if u.User != nil {
+		username = u.User.Username()
+		password, _ = u.User.Password()
+	}
+	db = strings.TrimPrefix(u.Path, "/")
+	return host, port, username, password, db
+}
+
+func (s *Service) updateConnectionsFPC(dir string) error {
+	dbs, err := config.DatabasesWithError()
+	if err != nil || len(dbs) == 0 {
+		// Fallback: use raw config when ReadConfig fails (e.g. missing env vars).
+		// This allows generating connection blocks so flows with database steps can save.
+		dbs, err = config.DatabasesFromRawConfig()
+		if err != nil || len(dbs) == 0 {
+			return nil
+		}
+	}
+
+	// Collect database IDs used in any flow
+	used := make(map[string]bool)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") || !strings.HasPrefix(e.Name(), "flow_") {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(dir, e.Name()))
+		if err != nil {
+			continue
+		}
+		var flow model.Flow
+		if err := json.Unmarshal(data, &flow); err != nil {
+			continue
+		}
+		for _, step := range flow.Steps {
+			if step.Type != "query" {
+				continue
+			}
+			dbID, _ := step.Config["databaseId"].(string)
+			if dbID == "" {
+				dbID = s.defaultDatabaseID()
+			}
+			if dbID != "" {
+				used[dbID] = true
+			}
+		}
+	}
+
+	var b strings.Builder
+	b.WriteString("# Auto-generated by Bench. Maps bench database resources to Flowpipe connections.\n")
+	b.WriteString("# Uses connection_string when available; otherwise individual host/port/user/db args from parsed URL.\n\n")
+	for _, d := range dbs {
+		if !used[d.ID] {
+			continue
+		}
+		envVar, useResolved, resolvedURL := config.DatabaseURLOrEnv(d.ID)
+		if envVar != "" {
+			b.WriteString(fmt.Sprintf("connection \"postgres\" %q {\n", d.ID))
+			b.WriteString(fmt.Sprintf("  connection_string = env(%q)\n", envVar))
+			b.WriteString("}\n\n")
+		} else if useResolved && resolvedURL != "" {
+			if host, port, username, password, db := parsePostgresURL(resolvedURL); host != "" || username != "" || db != "" {
+				b.WriteString(fmt.Sprintf("connection \"postgres\" %q {\n", d.ID))
+				if host != "" {
+					b.WriteString(fmt.Sprintf("  host     = %q\n", host))
+				}
+				if port > 0 {
+					b.WriteString(fmt.Sprintf("  port     = %d\n", port))
+				}
+				if username != "" {
+					b.WriteString(fmt.Sprintf("  username = %q\n", username))
+				}
+				if password != "" {
+					b.WriteString(fmt.Sprintf("  password = %q\n", strings.ReplaceAll(password, `\`, `\\`)))
+				}
+				if db != "" {
+					b.WriteString(fmt.Sprintf("  db       = %q\n", db))
+				}
+				b.WriteString("}\n\n")
+			} else {
+				// Fallback: use connection string literal
+				escaped := strings.ReplaceAll(resolvedURL, `\`, `\\`)
+				escaped = strings.ReplaceAll(escaped, `"`, `\"`)
+				b.WriteString(fmt.Sprintf("connection \"postgres\" %q {\n", d.ID))
+				b.WriteString(fmt.Sprintf("  connection_string = %q\n", escaped))
+				b.WriteString("}\n\n")
+			}
+		}
+	}
+
+	fpcPath := filepath.Join(dir, "connections.fpc")
+	if b.Len() <= 100 {
+		// No connections to write
+		_ = os.Remove(fpcPath)
+		return nil
+	}
+	return os.WriteFile(fpcPath, []byte(strings.TrimSuffix(b.String(), "\n\n")+"\n"), 0644)
+}
+
+func (s *Service) defaultDatabaseID() string {
+	dbs, err := config.DatabasesWithError()
+	if err != nil || len(dbs) == 0 {
 		return ""
 	}
 	for _, d := range dbs {
-		if d.ID == dbID {
-			// Extract ${VAR} from URL
-			matches := config.EnvVarPattern().FindStringSubmatch(d.URL)
-			if len(matches) >= 2 {
-				return matches[1]
-			}
-			return ""
+		if d.Default {
+			return d.ID
 		}
 	}
-	return ""
+	return dbs[0].ID
 }
 
 func (s *Service) ensureDir(dir string) error {

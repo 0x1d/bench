@@ -1,11 +1,12 @@
 import { memo } from 'react';
 import { type NodeProps, Handle, Position } from '@xyflow/react';
-import { Globe, Database } from 'lucide-react';
+import { Globe, Database, LogIn } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const icons: Record<string, React.ComponentType<{ className?: string }>> = {
   http: Globe,
   query: Database,
+  input: LogIn,
 };
 
 export const FlowStepNode = memo(function FlowStepNode({
@@ -19,7 +20,7 @@ export const FlowStepNode = memo(function FlowStepNode({
   return (
     <div
       className={cn(
-        'flex items-center gap-2 rounded-lg border-2 px-3 py-2 min-w-[160px] bg-card shadow-sm',
+        'flex items-center gap-2 rounded-lg border-2 px-3 py-2 w-[200px] h-[56px] bg-card shadow-sm box-border',
         selected
           ? 'border-primary'
           : 'border-border hover:border-muted-foreground/50'
@@ -27,8 +28,8 @@ export const FlowStepNode = memo(function FlowStepNode({
     >
       <Handle type="target" position={Position.Top} className="!bg-primary" />
       <Icon className="size-4 shrink-0 text-muted-foreground" />
-      <span className="truncate text-sm font-medium">{label}</span>
-      <span className="text-xs text-muted-foreground font-mono">{stepType}</span>
+      <span className="truncate text-sm font-medium min-w-0">{label}</span>
+      <span className="text-xs text-muted-foreground font-mono shrink-0">{stepType}</span>
       <Handle type="source" position={Position.Bottom} className="!bg-primary" />
     </div>
   );

@@ -5,16 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { cn } from '@/lib/utils';
 import { fetchConfig, fetchConfigExample, saveConfig } from '@/services/api';
 import { useStatus } from '@/hooks/use-status';
@@ -51,10 +42,16 @@ interface RestResource {
   auth?: RestAuthConfig;
 }
 
+interface FlowsConfig {
+  path: string;
+  flowpipeUrl: string;
+}
+
 interface ResourceFormState {
   filesystem: FilesystemResource[];
   databases: DatabaseResource[];
   rest: RestResource[];
+  flows: FlowsConfig;
 }
 
 type PanelMode =
@@ -63,7 +60,8 @@ type PanelMode =
   | 'add-database'
   | 'edit-database'
   | 'add-rest'
-  | 'edit-rest';
+  | 'edit-rest'
+  | 'edit-flows';
 
 type DeleteTarget =
   | { type: 'filesystem'; index: number }
@@ -72,7 +70,12 @@ type DeleteTarget =
   | null;
 
 function emptyState(): ResourceFormState {
-  return { filesystem: [], databases: [], rest: [] };
+  return {
+    filesystem: [],
+    databases: [],
+    rest: [],
+    flows: { path: './flows', flowpipeUrl: 'http://localhost:7103' },
+  };
 }
 
 function parseConfigToState(rawConfig: string): ResourceFormState {
@@ -102,6 +105,7 @@ function parseConfigToState(rawConfig: string): ResourceFormState {
         };
       }>;
     };
+    flows?: { path?: string; flowpipeUrl?: string };
   }) ?? { resources: {} };
 
   const filesystem = (parsed.resources?.filesystem ?? []).map((entry) => ({
@@ -136,7 +140,13 @@ function parseConfigToState(rawConfig: string): ResourceFormState {
       : { type: 'none' as const },
   }));
 
-  return { filesystem, databases, rest };
+  const flowsRaw = parsed.flows;
+  const flows: FlowsConfig = {
+    path: flowsRaw?.path ?? './flows',
+    flowpipeUrl: flowsRaw?.flowpipeUrl ?? 'http://localhost:7103',
+  };
+
+  return { filesystem, databases, rest, flows };
 }
 
 function stateToConfig(state: ResourceFormState): string {
@@ -186,7 +196,14 @@ function stateToConfig(state: ResourceFormState): string {
       }),
   };
 
-  return yaml.dump({ resources }, { noRefs: true, lineWidth: 120 });
+  const output: Record<string, unknown> = { resources };
+  if (state.flows.path.trim() !== '' || state.flows.flowpipeUrl.trim() !== '') {
+    output.flows = {
+      path: state.flows.path.trim() || './flows',
+      flowpipeUrl: state.flows.flowpipeUrl.trim() || 'http://localhost:7103',
+    };
+  }
+  return yaml.dump(output, { noRefs: true, lineWidth: 120 });
 }
 
 export function ResourcesConfigPage() {
@@ -216,6 +233,10 @@ export function ResourcesConfigPage() {
     baseUrl: '',
     openapiSpec: '',
     auth: { type: 'none' },
+  });
+  const [flowsDraft, setFlowsDraft] = useState<FlowsConfig>({
+    path: './flows',
+    flowpipeUrl: 'http://localhost:7103',
   });
 
   const persistState = async (newState: ResourceFormState) => {
@@ -319,6 +340,12 @@ export function ResourcesConfigPage() {
 
   const openRemoveRest = (index: number) => {
     setDeleteTarget({ type: 'rest', index });
+  };
+
+  const openEditFlows = () => {
+    setFlowsDraft(state.flows);
+    setPanelError(null);
+    setPanelMode('edit-flows');
   };
 
   const closePanel = () => {
@@ -502,6 +529,26 @@ export function ResourcesConfigPage() {
     }
   };
 
+  const applyFlowsDraft = async () => {
+    const path = flowsDraft.path.trim() || './flows';
+    const flowpipeUrl = flowsDraft.flowpipeUrl.trim() || 'http://localhost:7103';
+
+    const prevState = state;
+    const nextState = {
+      ...prevState,
+      flows: { path, flowpipeUrl },
+    };
+
+    setState(nextState);
+    try {
+      await persistState(nextState);
+      closePanel();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Save failed');
+      setState(prevState);
+    }
+  };
+
   const confirmRemove = async () => {
     if (!deleteTarget) return;
     const prevState = state;
@@ -545,14 +592,18 @@ export function ResourcesConfigPage() {
                 ? 'Add REST resource'
                 : panelMode === 'edit-rest'
                   ? 'Edit REST resource'
-                  : 'Resource';
+                  : panelMode === 'edit-flows'
+                    ? 'Configure flows'
+                    : 'Resource';
   const panelDescription = panelMode?.includes('filesystem')
     ? 'Configure filesystem resource fields used for file browsing.'
     : panelMode?.includes('database')
       ? 'Configure database resource fields.'
       : panelMode?.includes('rest')
         ? 'Configure REST API endpoint with optional auth and OpenAPI spec.'
-        : '';
+        : panelMode === 'edit-flows'
+          ? 'Flowpipe integration: flows directory and server URL.'
+          : '';
 
   const panelBody = (
     <>
@@ -778,6 +829,39 @@ export function ResourcesConfigPage() {
           </div>
         )}
 
+        {panelMode === 'edit-flows' && (
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label>Flows directory</Label>
+              <Input
+                value={flowsDraft.path}
+                onChange={(e) =>
+                  setFlowsDraft((prev) => ({ ...prev, path: e.target.value }))
+                }
+                placeholder="./flows"
+                className="font-mono"
+              />
+              <p className="text-xs text-muted-foreground">
+                Path to store flow JSON and .fp files. Relative to config directory.
+              </p>
+            </div>
+            <div className="space-y-1">
+              <Label>Flowpipe server URL</Label>
+              <Input
+                value={flowsDraft.flowpipeUrl}
+                onChange={(e) =>
+                  setFlowsDraft((prev) => ({ ...prev, flowpipeUrl: e.target.value }))
+                }
+                placeholder="http://localhost:7103"
+                className="font-mono"
+              />
+              <p className="text-xs text-muted-foreground">
+                Flowpipe server for running flows.
+              </p>
+            </div>
+          </div>
+        )}
+
         {(panelMode === 'add-database' || panelMode === 'edit-database') && (
           <div className="space-y-3">
             <div className="space-y-1">
@@ -859,6 +943,9 @@ export function ResourcesConfigPage() {
               {panelMode === 'add-rest' ? 'Add' : 'Save changes'}
             </Button>
           )}
+          {panelMode === 'edit-flows' && (
+            <Button onClick={applyFlowsDraft}>Save changes</Button>
+          )}
         </div>
       </div>
     </>
@@ -880,7 +967,7 @@ export function ResourcesConfigPage() {
           <div className="rounded-lg border border-border bg-card p-4">
             <h2 className="text-lg font-medium tracking-tight">Resources</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Configure filesystem roots, database resources, and REST API endpoints.
+              Configure filesystem roots, database resources, REST API endpoints, and flows (Flowpipe).
             </p>
           </div>
 
@@ -1070,6 +1157,26 @@ export function ResourcesConfigPage() {
             )}
           </section>
 
+          <section className="rounded-lg border border-border bg-card p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-base font-medium">Flows</h3>
+              <Button variant="outline" size="sm" onClick={openEditFlows}>
+                <Pencil className="size-4" />
+                Configure
+              </Button>
+            </div>
+            <div className="space-y-2 text-sm">
+              <div className="flex gap-2">
+                <span className="text-muted-foreground">Path:</span>
+                <span className="font-mono">{state.flows.path || './flows'}</span>
+              </div>
+              <div className="flex gap-2">
+                <span className="text-muted-foreground">Flowpipe URL:</span>
+                <span className="font-mono">{state.flows.flowpipeUrl || 'http://localhost:7103'}</span>
+              </div>
+            </div>
+          </section>
+
           {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
       </div>
@@ -1091,32 +1198,22 @@ export function ResourcesConfigPage() {
         {panelBody}
       </div>
 
-      <AlertDialog open={deleteTarget != null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Remove resource</AlertDialogTitle>
-            <AlertDialogDescription>
-              {deleteTarget?.type === 'filesystem'
-                ? `Remove filesystem resource "${state.filesystem[deleteTarget.index]?.id}"?`
-                : deleteTarget?.type === 'database'
-                  ? `Remove database resource "${state.databases[deleteTarget.index]?.id}"?`
-                  : deleteTarget?.type === 'rest'
-                    ? `Remove REST resource "${state.rest[deleteTarget.index]?.id}"?`
-                    : 'Remove selected resource?'}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel asChild>
-              <Button variant="outline">Cancel</Button>
-            </AlertDialogCancel>
-            <AlertDialogAction asChild>
-              <Button variant="destructive" onClick={confirmRemove}>
-                Remove
-              </Button>
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmDeleteDialog
+        open={deleteTarget != null}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title="Remove resource"
+        description={
+          deleteTarget?.type === 'filesystem'
+            ? `Remove filesystem resource "${state.filesystem[deleteTarget.index]?.id}"?`
+            : deleteTarget?.type === 'database'
+              ? `Remove database resource "${state.databases[deleteTarget.index]?.id}"?`
+              : deleteTarget?.type === 'rest'
+                ? `Remove REST resource "${state.rest[deleteTarget.index]?.id}"?`
+                : 'Remove selected resource?'
+        }
+        onConfirm={confirmRemove}
+        confirmLabel="Remove"
+      />
     </div>
   );
 }

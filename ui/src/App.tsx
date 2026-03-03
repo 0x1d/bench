@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { FileViewProvider, useFileView } from '@/contexts/file-view-context';
 import { DatabaseViewProvider, useDatabaseView } from '@/contexts/database-view-context';
+import { FlowViewProvider } from '@/contexts/flow-view-context';
 import { UploadProvider } from '@/contexts/upload-context';
 import { UploadProgress } from '@/components/upload-progress';
 import { FileViewer } from '@/components/file-viewer';
 import { DatabasePanel } from '@/components/database-panel';
+import { FlowStepPanel } from '@/components/flow-step-panel';
 import { SidebarLeft } from '@/components/sidebar-left';
 import { SiteHeader } from '@/components/site-header';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
@@ -15,6 +17,7 @@ import { StatusPage } from '@/pages/status-page';
 import { DatabasePage } from '@/pages/database-page';
 import { FlowsPage } from '@/pages/flows-page';
 import { FlowEditorPage } from '@/pages/flow-editor-page';
+import { cn } from '@/lib/utils';
 
 function getHash() {
   return window.location.hash.slice(1) || 'status';
@@ -58,6 +61,7 @@ export function App() {
     <UploadProvider>
     <FileViewProvider>
       <DatabaseViewProvider>
+      <FlowViewProvider>
         <ClearFileViewOnNavigate hash={hash} />
         <ClearDatabaseViewOnNavigate hash={hash} />
         <div className="[--header-height:calc(--spacing(14))] h-svh overflow-hidden flex flex-col">
@@ -68,12 +72,17 @@ export function App() {
                 currentHash={hash}
                 className="top-[var(--header-height)] h-[calc(100svh-var(--header-height))]"
               />
-              <SidebarInset className="min-h-0 overflow-auto">
+              <SidebarInset
+                className={cn(
+                  'min-h-0',
+                  hash.startsWith('flows/') ? 'overflow-hidden' : 'overflow-auto'
+                )}
+              >
                 <section
                   id="main"
                   className={
                     hash === 'filesystem' || hash === 'database' || hash === 'resources' || hash === 'rest' || isFlowsSection(hash)
-                      ? 'flex min-h-0 flex-1 items-start p-4 md:p-6'
+                      ? 'flex min-h-0 flex-1 flex-col items-stretch p-4 md:p-6'
                       : 'flex flex-1 items-start justify-center p-4 md:min-h-min'
                   }
                 >
@@ -88,9 +97,11 @@ export function App() {
               </SidebarInset>
               <FileViewer />
               {hash === 'database' && <DatabasePanel />}
+              {hash.startsWith('flows/') && <FlowStepPanel />}
             </div>
           </SidebarProvider>
         </div>
+      </FlowViewProvider>
       </DatabaseViewProvider>
     </FileViewProvider>
     <UploadProgress />

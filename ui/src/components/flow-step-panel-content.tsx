@@ -1,0 +1,775 @@
+import { useState, useEffect } from 'react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { useQuery } from '@tanstack/react-query';
+import { fetchRestSpec } from '@/services/api';
+import {
+  getRequestBodySchema,
+  parseOpenAPIOperationsGrouped,
+  resolvePathTemplate,
+} from '@/lib/openapi';
+import { useMemo } from 'react';
+import { Plus, Trash2 } from 'lucide-react';
+import type { FlowStep, RestResource } from '@/services/api';
+import type { ResolvedSchemaProperty } from '@/lib/openapi';
+
+interface DatabaseOption {
+  id: string;
+  label: string;
+}
+
+interface FlowStepPanelContentProps {
+  step: FlowStep;
+  databases: DatabaseOption[];
+  restResources: RestResource[];
+  onSave: (step: FlowStep) => void;
+  onClose: () => void;
+}
+
+export function FlowStepPanelContent({
+  step,
+  databases,
+  restResources,
+  onSave,
+  onClose,
+}: FlowStepPanelContentProps) {
+  const [label, setLabel] = useState(step.label || step.id);
+  const [config, setConfig] = useState<Record<string, unknown>>(step.config || {});
+
+  useEffect(() => {
+    setLabel(step.label || step.id);
+    setConfig(step.config || {});
+  }, [step.id]);
+
+  const handleSave = (finalConfig?: Record<string, unknown>) => {
+    onSave({ ...step, label, config: finalConfig ?? config });
+    onClose();
+  };
+
+  if (step.type === 'http') {
+    return (
+      <HttpStepConfig
+        label={label}
+        setLabel={setLabel}
+        config={config}
+        setConfig={setConfig}
+        restResources={restResources}
+        onSaveWithConfig={handleSave}
+        onClose={onClose}
+      />
+    );
+  }
+
+  if (step.type === 'query') {
+    return (
+      <QueryStepConfig
+        label={label}
+        setLabel={setLabel}
+        config={config}
+        setConfig={setConfig}
+        databases={databases}
+        onSave={() => handleSave()}
+        onClose={onClose}
+      />
+    );
+  }
+
+  if (step.type === 'input') {
+    return (
+      <InputStepConfig
+        label={label}
+        setLabel={setLabel}
+        config={config}
+        setConfig={setConfig}
+        onSave={() => handleSave()}
+        onClose={onClose}
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">Unknown step type: {step.type}</p>
+      <div className="flex gap-2 pt-4 border-t border-border">
+        <Button variant="outline" size="sm" onClick={onClose}>
+          Cancel
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function RequestBodySchemaForm({
+  bodySchema,
+  bodyValue,
+  onChange,
+}: {
+  bodySchema: { properties: ResolvedSchemaProperty[]; spec: Record<string, unknown> };
+  bodyValue: string;
+  onChange: (body: string) => void;
+}) {
+  const values = useMemo(() => {
+    try {
+      if (!bodyValue.trim()) return {};
+      return JSON.parse(bodyValue) as Record<string, unknown>;
+    } catch {
+      return {};
+    }
+  }, [bodyValue]);
+
+  const updateField = (name: string, value: unknown) => {
+    const next = { ...values, [name]: value };
+    onChange(JSON.stringify(next, null, 2));
+  };
+
+  return (
+    <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-3">
+      {bodySchema.properties.map((prop) => (
+        <SchemaPropertyField
+          key={prop.name}
+          prop={prop}
+          value={values[prop.name]}
+          onChange={(v) => updateField(prop.name, v)}
+        />
+      ))}
+    </div>
+  );
+}
+
+function SchemaPropertyField({
+  prop,
+  value,
+  onChange,
+}: {
+  prop: ResolvedSchemaProperty;
+  value: unknown;
+  onChange: (v: unknown) => void;
+}) {
+  const { name, schema, required } = prop;
+  const type = schema.type ?? 'string';
+  const enumValues = schema.enum;
+  const description = schema.description;
+
+  if (enumValues != null && Array.isArray(enumValues)) {
+    return (
+      <div>
+        <Label htmlFor={`body-${name}`} className="text-xs font-normal text-muted-foreground">
+          {name}{required ? ' *' : ''}
+        </Label>
+        {description && (
+          <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
+        )}
+        <Select
+          value={String(value ?? '')}
+          onValueChange={(v) => {
+            if (type === 'number' || type === 'integer') onChange(Number(v));
+            else if (type === 'boolean') onChange(v === 'true');
+            else onChange(v);
+          }}
+        >
+          <SelectTrigger id={`body-${name}`} className="mt-1">
+            <SelectValue placeholder={`Select ${name}`} />
+          </SelectTrigger>
+          <SelectContent>
+            {enumValues.map((opt) => (
+              <SelectItem key={String(opt)} value={String(opt)}>
+                {String(opt)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+    );
+  }
+
+  if (type === 'boolean') {
+    return (
+      <div className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          id={`body-${name}`}
+          checked={value === true || value === 'true'}
+          onChange={(e) => onChange(e.target.checked)}
+          className="rounded border-border"
+        />
+        <Label htmlFor={`body-${name}`} className="text-xs font-normal cursor-pointer">
+          {name}{required ? ' *' : ''}
+        </Label>
+        {description && (
+          <span className="text-xs text-muted-foreground">— {description}</span>
+        )}
+      </div>
+    );
+  }
+
+  if (type === 'integer' || type === 'number') {
+    return (
+      <div>
+        <Label htmlFor={`body-${name}`} className="text-xs font-normal text-muted-foreground">
+          {name}{required ? ' *' : ''}
+        </Label>
+        {description && (
+          <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
+        )}
+        <Input
+          id={`body-${name}`}
+          type="number"
+          value={value != null ? String(value) : ''}
+          onChange={(e) => {
+            const v = e.target.value;
+            onChange(v === '' ? undefined : (type === 'integer' ? parseInt(v, 10) : parseFloat(v)));
+          }}
+          placeholder={schema.format === 'int64' ? 'e.g. 123' : undefined}
+          className="mt-1 font-mono"
+        />
+      </div>
+    );
+  }
+
+  if (type === 'array' && schema.items) {
+    return (
+      <div>
+        <Label htmlFor={`body-${name}`} className="text-xs font-normal text-muted-foreground">
+          {name}{required ? ' *' : ''}
+        </Label>
+        {description && (
+          <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
+        )}
+        <Textarea
+          id={`body-${name}`}
+          value={Array.isArray(value) ? value.join(', ') : ''}
+          onChange={(e) => {
+            const parts = e.target.value.split(',').map((s) => s.trim()).filter(Boolean);
+            onChange(parts.length > 0 ? parts : undefined);
+          }}
+          placeholder="Comma-separated values"
+          rows={2}
+          className="mt-1 font-mono text-sm"
+        />
+      </div>
+    );
+  }
+
+  // string or object (nested) - use text input; for object refs, user can enter JSON
+  const isObject = type === 'object' || schema.$ref;
+  return (
+    <div>
+      <Label htmlFor={`body-${name}`} className="text-xs font-normal text-muted-foreground">
+        {name}{required ? ' *' : ''}
+      </Label>
+      {description && (
+        <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
+      )}
+      <Textarea
+        id={`body-${name}`}
+        value={
+          isObject && (typeof value === 'object' || typeof value === 'string')
+            ? typeof value === 'string'
+              ? value
+              : JSON.stringify(value ?? {}, null, 2)
+            : String(value ?? '')
+        }
+        onChange={(e) => {
+          const v = e.target.value;
+          if (isObject && v.trim().startsWith('{')) {
+            try {
+              onChange(JSON.parse(v));
+            } catch {
+              onChange(v);
+            }
+          } else {
+            onChange(v || undefined);
+          }
+        }}
+        placeholder={isObject ? '{"key": "value"}' : undefined}
+        rows={isObject ? 3 : 1}
+        className="mt-1 font-mono text-sm"
+      />
+    </div>
+  );
+}
+
+function HttpStepConfig({
+  label,
+  setLabel,
+  config,
+  setConfig,
+  restResources,
+  onSaveWithConfig,
+  onClose,
+}: {
+  label: string;
+  setLabel: (v: string) => void;
+  config: Record<string, unknown>;
+  setConfig: (v: Record<string, unknown>) => void;
+  restResources: RestResource[];
+  onSaveWithConfig: (config: Record<string, unknown>) => void;
+  onClose: () => void;
+}) {
+  const restId = (config.restId as string) ?? '';
+  const operationKey = (config.operationKey as string) ?? '';
+
+  const { data: specData } = useQuery({
+    queryKey: ['rest', 'spec', restId],
+    queryFn: () => fetchRestSpec(restId),
+    enabled: !!restId,
+  });
+
+  const { groups } = specData
+    ? parseOpenAPIOperationsGrouped(specData)
+    : { groups: [] };
+
+  const allOperations = groups.flatMap((g) => g.operations);
+  const selectedOp = allOperations.find(
+    (o) => `${o.method} ${o.path}` === operationKey
+  );
+
+  const pathParams = selectedOp?.parameters?.filter((p) => p.in === 'path') ?? [];
+  const queryParams = selectedOp?.parameters?.filter((p) => p.in === 'query') ?? [];
+  const hasBody =
+    selectedOp?.requestBody?.content?.['application/json'] != null ||
+    selectedOp?.bodySchema != null;
+
+  const bodySchema = specData && selectedOp
+    ? getRequestBodySchema(specData, selectedOp)
+    : null;
+
+  const pathParamValues = (config.pathParams as Record<string, string>) ?? {};
+  const queryParamValues = (config.queryParams as Record<string, string>) ?? {};
+  const bodyValue = (config.body as string) ?? '';
+
+  const resolvedPath = selectedOp
+    ? resolvePathTemplate(selectedOp.path, pathParamValues)
+    : '';
+
+  const resolvedQuery = Object.entries(queryParamValues)
+    .filter(([, v]) => v != null && v !== '')
+    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+    .join('&');
+
+  const finalPath = resolvedQuery ? `${resolvedPath}?${resolvedQuery}` : resolvedPath;
+
+  return (
+    <div className="flex flex-col gap-4 overflow-auto">
+      <div>
+        <Label htmlFor="step-label">Label</Label>
+        <Input
+          id="step-label"
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          placeholder="Step label"
+        />
+      </div>
+
+      <div>
+        <Label htmlFor="rest-id">REST resource</Label>
+        <Select
+          value={restId}
+          onValueChange={(v) => {
+            setConfig({
+              ...config,
+              restId: v,
+              operationKey: '',
+              pathParams: {},
+              queryParams: {},
+              body: '',
+            });
+          }}
+        >
+          <SelectTrigger id="rest-id">
+            <SelectValue placeholder="Select REST resource" />
+          </SelectTrigger>
+          <SelectContent>
+            {restResources.map((r) => (
+              <SelectItem key={r.id} value={r.id}>
+                {r.label || r.id}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {restId && (
+        <div>
+          <Label htmlFor="endpoint">Endpoint</Label>
+          <Select
+            value={operationKey}
+            onValueChange={(v) => {
+              setConfig({
+                ...config,
+                operationKey: v,
+                method: v.split(' ')[0],
+                path: v.split(' ').slice(1).join(' '),
+                pathParams: {},
+                queryParams: {},
+                body: '',
+              });
+            }}
+          >
+            <SelectTrigger id="endpoint">
+              <SelectValue placeholder="Select endpoint" />
+            </SelectTrigger>
+            <SelectContent>
+              {groups.map(({ tag, operations }) => (
+                <SelectGroup key={tag}>
+                  <SelectLabel>{tag}</SelectLabel>
+                  {operations.map((op) => (
+                    <SelectItem
+                      key={`${op.method} ${op.path}`}
+                      value={`${op.method} ${op.path}`}
+                    >
+                      <span className="font-mono text-xs text-muted-foreground mr-2">
+                        {op.method}
+                      </span>
+                      {op.path}
+                      {op.summary && (
+                        <span className="text-muted-foreground ml-1">
+                          — {op.summary}
+                        </span>
+                      )}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
+      {selectedOp && (
+        <>
+          {pathParams.length > 0 && (
+            <div className="space-y-2">
+              <Label>Path parameters</Label>
+              {pathParams.map((p) => (
+                <div key={p.name}>
+                  <Label htmlFor={`path-${p.name}`} className="text-xs font-normal text-muted-foreground">
+                    {p.name}{p.required ? ' *' : ''}
+                  </Label>
+                  <Input
+                    id={`path-${p.name}`}
+                    value={pathParamValues[p.name] ?? ''}
+                    onChange={(e) =>
+                      setConfig({
+                        ...config,
+                        pathParams: {
+                          ...pathParamValues,
+                          [p.name]: e.target.value,
+                        },
+                      })
+                    }
+                    placeholder={`Value for {${p.name}}`}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {queryParams.length > 0 && (
+            <div className="space-y-2">
+              <Label>Query parameters</Label>
+              {queryParams.map((p) => (
+                <div key={p.name}>
+                  <Label htmlFor={`query-${p.name}`} className="text-xs font-normal text-muted-foreground">
+                    {p.name}{p.required ? ' *' : ''}
+                  </Label>
+                  <Input
+                    id={`query-${p.name}`}
+                    value={queryParamValues[p.name] ?? ''}
+                    onChange={(e) =>
+                      setConfig({
+                        ...config,
+                        queryParams: {
+                          ...queryParamValues,
+                          [p.name]: e.target.value,
+                        },
+                      })
+                    }
+                    placeholder={`Value for ${p.name}`}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {hasBody && (
+            <div className="space-y-2">
+              <Label>Request body</Label>
+              {bodySchema && bodySchema.properties.length > 0 ? (
+                <RequestBodySchemaForm
+                  bodySchema={bodySchema}
+                  bodyValue={bodyValue}
+                  onChange={(body) => setConfig({ ...config, body })}
+                />
+              ) : (
+                <Textarea
+                  id="body"
+                  value={bodyValue}
+                  onChange={(e) =>
+                    setConfig({ ...config, body: e.target.value })
+                  }
+                  placeholder='{"key": "value"} or use param.paramName or step.http.foo.response_body.id'
+                  rows={6}
+                  className="font-mono text-sm"
+                />
+              )}
+            </div>
+          )}
+
+          <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-xs">
+            <span className="text-muted-foreground">Resolved path: </span>
+            <span className="font-mono">{finalPath || '(none)'}</span>
+          </div>
+        </>
+      )}
+
+      <div className="flex gap-2 pt-4 border-t border-border">
+        <Button variant="outline" size="sm" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button
+          size="sm"
+          onClick={() => {
+            const saveConfig = { ...config };
+            if (selectedOp) {
+              saveConfig.method = selectedOp.method;
+              saveConfig.path = finalPath || selectedOp.path;
+            }
+            onSaveWithConfig(saveConfig);
+          }}
+        >
+          Save
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function QueryStepConfig({
+  label,
+  setLabel,
+  config,
+  setConfig,
+  databases,
+  onSave,
+  onClose,
+}: {
+  label: string;
+  setLabel: (v: string) => void;
+  config: Record<string, unknown>;
+  setConfig: (v: Record<string, unknown>) => void;
+  databases: DatabaseOption[];
+  onSave: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-4 overflow-auto">
+      <div>
+        <Label htmlFor="step-label">Label</Label>
+        <Input
+          id="step-label"
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          placeholder="Step label"
+        />
+      </div>
+
+      <div>
+        <Label htmlFor="database-id">Database</Label>
+        <Select
+          value={(config.databaseId as string) ?? ''}
+          onValueChange={(v) =>
+            setConfig({ ...config, databaseId: v })
+          }
+        >
+          <SelectTrigger id="database-id">
+            <SelectValue placeholder="Select database" />
+          </SelectTrigger>
+          <SelectContent>
+            {databases.map((d) => (
+              <SelectItem key={d.id} value={d.id}>
+                {d.label || d.id}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div>
+        <Label htmlFor="sql">SQL</Label>
+        <Textarea
+          id="sql"
+          value={(config.sql as string) ?? ''}
+          onChange={(e) =>
+            setConfig({ ...config, sql: e.target.value })
+          }
+          placeholder="SELECT * FROM users WHERE id = $1"
+          rows={8}
+          className="font-mono text-sm"
+        />
+      </div>
+
+      <div>
+        <Label htmlFor="args">Args (param mapping)</Label>
+        <Input
+          id="args"
+          value={((config.args as string[]) ?? []).join(', ')}
+          onChange={(e) => {
+            const vals = e.target.value
+              .split(',')
+              .map((s) => s.trim())
+              .filter(Boolean);
+            setConfig({ ...config, args: vals });
+          }}
+          placeholder="param.user_id, param.limit"
+          className="font-mono text-sm"
+        />
+        <p className="text-xs text-muted-foreground mt-1">
+          Comma-separated param references for $1, $2, etc. (e.g. param.user_id)
+        </p>
+      </div>
+
+      <div className="flex gap-2 pt-4 border-t border-border">
+        <Button variant="outline" size="sm" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button size="sm" onClick={onSave}>
+          Save
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+interface InputParam {
+  name: string;
+  type: string;
+  default?: string;
+  description?: string;
+}
+
+function InputStepConfig({
+  label,
+  setLabel,
+  config,
+  setConfig,
+  onSave,
+  onClose,
+}: {
+  label: string;
+  setLabel: (v: string) => void;
+  config: Record<string, unknown>;
+  setConfig: (v: Record<string, unknown>) => void;
+  onSave: () => void;
+  onClose: () => void;
+}) {
+  const params = (config.params as InputParam[]) ?? [];
+
+  const setParams = (next: InputParam[]) => {
+    setConfig({ ...config, params: next });
+  };
+
+  const addParam = () => {
+    setParams([...params, { name: '', type: 'string' }]);
+  };
+
+  const updateParam = (i: number, updates: Partial<InputParam>) => {
+    const next = [...params];
+    next[i] = { ...next[i], ...updates };
+    setParams(next);
+  };
+
+  const removeParam = (i: number) => {
+    setParams(params.filter((_, j) => j !== i));
+  };
+
+  return (
+    <div className="flex flex-col gap-4 overflow-auto">
+      <div>
+        <Label htmlFor="step-label">Label</Label>
+        <Input
+          id="step-label"
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          placeholder="Step label"
+        />
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <Label>Parameters</Label>
+          <Button variant="outline" size="sm" onClick={addParam} className="gap-1">
+            <Plus className="size-3" />
+            Add param
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground mb-2">
+          Define input variables for the flow. Use <code className="font-mono">param.paramName</code> in other steps to reference them.
+        </p>
+        <div className="space-y-3">
+          {params.map((p, i) => (
+            <div key={i} className="rounded-lg border border-border p-3 space-y-2">
+              <div className="flex gap-2">
+                <Input
+                  placeholder="param_name"
+                  value={p.name}
+                  onChange={(e) => updateParam(i, { name: e.target.value.replace(/\s/g, '_') })}
+                  className="font-mono"
+                />
+                <Select
+                  value={p.type}
+                  onValueChange={(v) => updateParam(i, { type: v })}
+                >
+                  <SelectTrigger className="w-[120px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="string">string</SelectItem>
+                    <SelectItem value="number">number</SelectItem>
+                    <SelectItem value="bool">bool</SelectItem>
+                    <SelectItem value="any">any</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button variant="ghost" size="icon-sm" onClick={() => removeParam(i)} aria-label="Remove param">
+                  <Trash2 className="size-4" />
+                </Button>
+              </div>
+              <Input
+                placeholder="Description (optional)"
+                value={p.description ?? ''}
+                onChange={(e) => updateParam(i, { description: e.target.value || undefined })}
+                className="text-sm"
+              />
+              <Input
+                placeholder="Default value (optional)"
+                value={p.default ?? ''}
+                onChange={(e) => updateParam(i, { default: e.target.value || undefined })}
+                className="text-sm font-mono"
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex gap-2 pt-4 border-t border-border">
+        <Button variant="outline" size="sm" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button size="sm" onClick={onSave}>
+          Save
+        </Button>
+      </div>
+    </div>
+  );
+}

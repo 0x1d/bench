@@ -10,5 +10,14 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
+  flowpipe:
+    build:
+      context: .
+      dockerfile: docker/flowpipe/Dockerfile
+    ports:
+      - "7103:7103"
+    volumes:
+      - ./flows:/flows
+
 volumes:
   postgres_data: {}

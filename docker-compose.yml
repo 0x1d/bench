@@ -20,6 +20,7 @@ services:
       - "7103:7103"
     volumes:
       - ./flows:/flows
+      - /var/run/docker.sock:/var/run/docker.sock
 
 volumes:
   postgres_data: {}

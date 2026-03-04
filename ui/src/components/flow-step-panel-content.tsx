@@ -1413,7 +1413,9 @@ function PipelineStepConfig({
   const argsStr =
     typeof config.args === 'object' && config.args !== null
       ? JSON.stringify(config.args, null, 2)
-      : '{}';
+      : typeof config.args === 'string'
+        ? config.args
+        : '{}';
 
   const setArgs = (v: string) => {
     try {

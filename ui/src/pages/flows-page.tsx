@@ -106,7 +106,8 @@ export function FlowsPage() {
       const mod = variables.module;
       setFlowContext(displayWorkspace ?? null, mod === '.' || mod === null ? null : mod);
       setCreateFlowInModule(null);
-      window.location.hash = `#flows/${newFlow.id}`;
+      const path = mod && mod !== '.' ? `${mod}/${newFlow.id}` : newFlow.id;
+      window.location.hash = `#flows/${path}`;
     },
   });
 
@@ -241,7 +242,8 @@ export function FlowsPage() {
     (entry: FlowWorkspaceTreeEntry, modulePath: string) => {
       if (entry.type !== 'flow') return;
       setFlowContext(displayWorkspace ?? null, modulePath === '.' ? null : modulePath);
-      window.location.hash = `#flows/${entry.path}`;
+      const flowPath = modulePath === '.' ? entry.path : `${modulePath}/${entry.path}`;
+      window.location.hash = `#flows/${flowPath}`;
     },
     [displayWorkspace, setFlowContext]
   );

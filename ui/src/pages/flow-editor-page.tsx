@@ -224,9 +224,21 @@ const nodeTypes: NodeTypes = {
   flowStep: FlowStepNode,
 };
 
+/** Parse hash like "flows/sometest" or "flows/examples/sometest" into flowId and module. */
+function parseFlowHash(hash: string): { flowId: string; flowModule: string | null } {
+  const raw = hash.startsWith('#') ? hash.slice(1) : hash;
+  const parts = raw.split('/').filter(Boolean);
+  if (parts.length < 2 || parts[0] !== 'flows') {
+    return { flowId: '', flowModule: null };
+  }
+  const flowId = parts[parts.length - 1] ?? '';
+  const flowModule = parts.length > 2 ? parts.slice(1, -1).join('/') : null;
+  return { flowId, flowModule };
+}
+
 export default function FlowEditorPage() {
   const queryClient = useQueryClient();
-  const flowId = window.location.hash.split('/').pop() || '';
+  const { flowId, flowModule: flowModuleFromHash } = parseFlowHash(window.location.hash);
   const [renamedFlow, setRenamedFlow] = useState<{ id: string; name: string } | null>(null);
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameValue, setRenameValue] = useState('');
@@ -237,9 +249,14 @@ export default function FlowEditorPage() {
     setOnDeleteStep,
     setExecutionId,
     setFlow,
+    setFlowContext,
     flowWorkspace,
-    flowModule,
   } = useFlowView();
+  const flowModule = flowModuleFromHash;
+
+  useEffect(() => {
+    setFlowContext(flowWorkspace, flowModuleFromHash);
+  }, [flowModuleFromHash, flowWorkspace, setFlowContext]);
   const [connectFromSource, setConnectFromSource] = useState<{
     sourceId: string;
     x: number;
@@ -311,7 +328,8 @@ export default function FlowEditorPage() {
       queryClient.invalidateQueries({ queryKey: ['flows'] });
       queryClient.invalidateQueries({ queryKey: ['flows', 'entries'] });
       if (updatedFlow?.id && updatedFlow.id !== flowId) {
-        window.location.hash = `#flows/${updatedFlow.id}`;
+        const path = flowModule ? `${flowModule}/${updatedFlow.id}` : updatedFlow.id;
+        window.location.hash = `#flows/${path}`;
       }
       toast.success('Flow saved successfully');
     },
@@ -570,14 +588,20 @@ export default function FlowEditorPage() {
       if (e.key === 's' && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         if (isDirty) handleSave();
-      } else if ((e.key === 'Delete' || e.key === 'Backspace') && !isInput && selectedStep) {
-        e.preventDefault();
-        handleDeleteStep(selectedStep.id);
+      } else if ((e.key === 'Delete' || e.key === 'Backspace') && !isInput) {
+        const selectedEdges = edges.filter((ed) => ed.selected);
+        if (selectedEdges.length > 0) {
+          e.preventDefault();
+          onEdgesDelete(selectedEdges);
+        } else if (selectedStep) {
+          e.preventDefault();
+          handleDeleteStep(selectedStep.id);
+        }
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [isDirty, handleSave, selectedStep, handleDeleteStep]);
+  }, [isDirty, handleSave, edges, selectedStep, handleDeleteStep, onEdgesDelete]);
 
   if (!flowId) {
     return (
@@ -713,6 +737,7 @@ export default function FlowEditorPage() {
               setSelectedStep(step);
             }}
             onPaneClick={() => setSelectedStep(null)}
+            onEdgeClick={() => setSelectedStep(null)}
             nodeTypes={nodeTypes}
             nodesDraggable={false}
             fitView

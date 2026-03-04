@@ -154,7 +154,8 @@ function TreeNode({
           setExpanded((e) => !e);
         } else {
           setFlowContext(displayWorkspace, modulePath === '.' ? null : modulePath);
-          window.location.hash = `#flows/${entry.path}`;
+          const flowPath = parentModule === '.' ? entry.path : `${parentModule}/${entry.path}`;
+          window.location.hash = `#flows/${flowPath}`;
         }
       }}
       onDragOver={handleDragOver}

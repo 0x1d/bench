@@ -30,7 +30,7 @@ export const FlowStepNode = memo(function FlowStepNode({
         <Handle
           type="target"
           position={targetPosition}
-          className="!bg-primary transition-opacity group-hover:!opacity-0"
+          className="!bg-primary"
         />
       )}
       <Icon className="size-4 shrink-0 text-muted-foreground" />
@@ -43,20 +43,20 @@ export const FlowStepNode = memo(function FlowStepNode({
         <Handle
           type="source"
           position={sourcePosition}
-          className="!bg-primary transition-opacity group-hover:!opacity-0"
+          className="!bg-primary"
         />
       )}
 
       {onAddNextStep && stepType !== 'output' && (
         <Button
           type="button"
-          variant="secondary"
+          variant="default"
           size="icon"
-          className="absolute z-20 size-5 rounded-full border border-primary bg-primary text-primary-foreground shadow-sm opacity-0 group-hover:opacity-100 transition-opacity scale-90 hover:scale-100 flex items-center justify-center p-0"
+          className="absolute z-20 size-5 rounded-full border-2 border-primary shadow-md opacity-0 group-hover:opacity-100 transition-all scale-90 hover:scale-100 flex items-center justify-center p-0 hover:shadow-lg hover:ring-2 hover:ring-primary/40"
           style={{
             ...(sourcePosition === Position.Bottom
-              ? { bottom: -12, left: '50%', transform: 'translateX(-50%) scale(0.9)' }
-              : { right: -12, top: '50%', transform: 'translateY(-50%) scale(0.9)' }
+              ? { bottom: -12, left: 'calc(50% + 20px)', transform: 'translateX(-50%) scale(0.9)' }
+              : { right: -12, top: 'calc(50% + 20px)', transform: 'translateY(-50%) scale(0.9)' }
             )
           }}
           onClick={(e) => {

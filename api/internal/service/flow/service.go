@@ -22,6 +22,12 @@ var (
 	slugChars = regexp.MustCompile(`^[a-z0-9_-]+$`)
 )
 
+// isVirtualStep returns true for input/output steps that contribute param/output blocks, not step blocks.
+func isVirtualStep(t string) bool {
+	t = strings.TrimSpace(strings.ToLower(t))
+	return t == "input" || t == "output"
+}
+
 const (
 	modContent = `mod "bench_flows" {
   title       = "Bench Flows"
@@ -288,8 +294,10 @@ func (s *Service) generateHCL(flow *model.Flow) (string, error) {
 	}
 
 	for _, step := range flow.Steps {
-		// Input is virtual: it only contributes param blocks (emitted above), not step blocks.
-		if strings.EqualFold(step.Type, "input") {
+		// Input and output are virtual: they contribute param/output blocks, not step blocks.
+		stepType := strings.TrimSpace(strings.ToLower(step.Type))
+		stepType = strings.Join(strings.Fields(stepType), " ")
+		if isVirtualStep(step.Type) {
 			continue
 		}
 		b.WriteString(fmt.Sprintf("\n  // Step: %s (%s)\n", step.Label, step.ID))
@@ -297,14 +305,27 @@ func (s *Service) generateHCL(flow *model.Flow) (string, error) {
 		var stepHCL string
 		var err error
 
-		switch strings.ToLower(step.Type) {
+		switch stepType {
 		case "http":
 			stepHCL, err = s.stepHTTP(step)
 		case "query":
 			stepHCL, err = s.stepQuery(step)
 		case "message":
 			stepHCL, err = s.stepMessage(step)
+		case "sleep":
+			stepHCL, err = s.stepSleep(step)
+		case "transform":
+			stepHCL, err = s.stepTransform(step)
+		case "container":
+			stepHCL, err = s.stepContainer(step)
+		case "pipeline":
+			stepHCL, err = s.stepPipeline(step)
+		case "input", "output":
+			continue
 		default:
+			if isVirtualStep(step.Type) {
+				continue
+			}
 			return "", fmt.Errorf("unsupported step type: %s", step.Type)
 		}
 
@@ -337,32 +358,35 @@ func (s *Service) generateHCL(flow *model.Flow) (string, error) {
 		b.WriteString(stepHCL)
 	}
 
-	b.WriteString("\n  output \"result\" {\n")
-	last := s.lastExecutableStep(flow.Steps)
-	if last != nil {
-		normLastID := normalizeStepName(last.Label, last.ID)
-		switch last.Type {
-		case "query":
-			b.WriteString(fmt.Sprintf("    value = step.query.%s.rows\n", normLastID))
-		case "http":
-			b.WriteString(fmt.Sprintf("    value = step.http.%s.response_body\n", normLastID))
-		default:
-			b.WriteString(fmt.Sprintf("    value = step.%s.%s\n", stepTypeKey(last.Type), normLastID))
+	// Emit output blocks only from Output steps (virtual nodes). Do NOT add a default output
+	// block when there are no Output steps — output blocks are added only when the user
+	// explicitly adds an Output node in the UI.
+	for _, step := range flow.Steps {
+		if !strings.EqualFold(strings.TrimSpace(step.Type), "output") {
+			continue
 		}
-	} else {
-		b.WriteString("    value = null\n")
+		outputs, _ := step.Config["outputs"].([]any)
+		for _, o := range outputs {
+			om, ok := o.(map[string]any)
+			if !ok {
+				continue
+			}
+			name, _ := om["name"].(string)
+			value, _ := om["value"].(string)
+			if name == "" {
+				name = "result"
+			}
+			if value == "" {
+				value = "null"
+			}
+			b.WriteString(fmt.Sprintf("\n  output %q {\n", name))
+			b.WriteString(fmt.Sprintf("    value = %s\n", value))
+			b.WriteString("  }\n")
+		}
 	}
-	b.WriteString("  }\n}\n")
-	return b.String(), nil
-}
 
-func (s *Service) lastExecutableStep(steps []model.FlowStep) *model.FlowStep {
-	for i := len(steps) - 1; i >= 0; i-- {
-		if !strings.EqualFold(steps[i].Type, "input") {
-			return &steps[i]
-		}
-	}
-	return nil
+	b.WriteString("\n}\n")
+	return b.String(), nil
 }
 
 func (s *Service) stepInput(step model.FlowStep) (string, error) {
@@ -574,6 +598,128 @@ func (s *Service) stepMessage(step model.FlowStep) (string, error) {
 	escapedText = strings.ReplaceAll(escapedText, `"`, `\"`)
 	b.WriteString(fmt.Sprintf("    text     = %q\n", escapedText))
 
+	b.WriteString("  }\n\n")
+	return b.String(), nil
+}
+
+func (s *Service) stepSleep(step model.FlowStep) (string, error) {
+	duration, _ := step.Config["duration"].(string)
+	if duration == "" {
+		duration = "5s"
+	}
+
+	var b strings.Builder
+	stepName := normalizeStepName(step.Label, step.ID)
+	b.WriteString(fmt.Sprintf("  step \"sleep\" %q {\n", stepName))
+	b.WriteString(fmt.Sprintf("    duration = %q\n", strings.ReplaceAll(duration, `\`, `\\`)))
+	b.WriteString("  }\n\n")
+	return b.String(), nil
+}
+
+func (s *Service) stepTransform(step model.FlowStep) (string, error) {
+	value, _ := step.Config["value"].(string)
+	if value == "" {
+		value = "null"
+	}
+
+	var b strings.Builder
+	stepName := normalizeStepName(step.Label, step.ID)
+	b.WriteString(fmt.Sprintf("  step \"transform\" %q {\n", stepName))
+	// Value is HCL; if it looks like a simple literal, emit as-is; otherwise wrap in heredoc or quote
+	value = strings.TrimSpace(value)
+	if value == "" {
+		value = "null"
+	}
+	b.WriteString(fmt.Sprintf("    value = %s\n", value))
+	b.WriteString("  }\n\n")
+	return b.String(), nil
+}
+
+func (s *Service) stepContainer(step model.FlowStep) (string, error) {
+	image, _ := step.Config["image"].(string)
+	source, _ := step.Config["source"].(string)
+	cmdRaw, _ := step.Config["cmd"]
+
+	if image == "" && source == "" {
+		image = "alpine:latest"
+	}
+
+	var b strings.Builder
+	stepName := normalizeStepName(step.Label, step.ID)
+	b.WriteString(fmt.Sprintf("  step \"container\" %q {\n", stepName))
+	if image != "" {
+		b.WriteString(fmt.Sprintf("    image = %q\n", strings.ReplaceAll(image, `\`, `\\`)))
+	}
+	if source != "" {
+		b.WriteString(fmt.Sprintf("    source = %q\n", strings.ReplaceAll(source, `\`, `\\`)))
+	}
+	if cmdRaw != nil {
+		if cmd, ok := cmdRaw.([]any); ok && len(cmd) > 0 {
+			var parts []string
+			for _, c := range cmd {
+				if str, ok := c.(string); ok {
+					escaped := strings.ReplaceAll(str, `\`, `\\`)
+					escaped = strings.ReplaceAll(escaped, `"`, `\"`)
+					parts = append(parts, fmt.Sprintf("%q", escaped))
+				}
+			}
+			if len(parts) > 0 {
+				b.WriteString("    cmd = [" + strings.Join(parts, ", ") + "]\n")
+			}
+		}
+	}
+	envRaw, hasEnv := step.Config["env"]
+	if hasEnv && envRaw != nil {
+		if envMap, ok := envRaw.(map[string]any); ok && len(envMap) > 0 {
+			b.WriteString("    env = {\n")
+			for k, v := range envMap {
+				if vs, ok := v.(string); ok {
+					escaped := strings.ReplaceAll(vs, `\`, `\\`)
+					escaped = strings.ReplaceAll(escaped, `"`, `\"`)
+					b.WriteString(fmt.Sprintf("      %q = %q\n", k, escaped))
+				}
+			}
+			b.WriteString("    }\n")
+		}
+	}
+	b.WriteString("  }\n\n")
+	return b.String(), nil
+}
+
+func (s *Service) stepPipeline(step model.FlowStep) (string, error) {
+	pipelineRef, _ := step.Config["pipelineRef"].(string)
+	argsRaw, _ := step.Config["args"]
+
+	if pipelineRef == "" {
+		return "", fmt.Errorf("step %s: pipeline reference is required", step.ID)
+	}
+
+	var b strings.Builder
+	stepName := normalizeStepName(step.Label, step.ID)
+	b.WriteString(fmt.Sprintf("  step \"pipeline\" %q {\n", stepName))
+	b.WriteString(fmt.Sprintf("    pipeline = pipeline.%s\n", pipelineRef))
+	if argsRaw != nil {
+		if args, ok := argsRaw.(map[string]any); ok && len(args) > 0 {
+			b.WriteString("    args = {\n")
+			for k, v := range args {
+				switch val := v.(type) {
+				case string:
+					if strings.HasPrefix(val, "param.") || strings.HasPrefix(val, "step.") {
+						b.WriteString(fmt.Sprintf("      %q = %s\n", k, val))
+					} else {
+						escaped := strings.ReplaceAll(val, `\`, `\\`)
+						escaped = strings.ReplaceAll(escaped, `"`, `\"`)
+						b.WriteString(fmt.Sprintf("      %q = %q\n", k, escaped))
+					}
+				case float64:
+					b.WriteString(fmt.Sprintf("      %q = %v\n", k, val))
+				case bool:
+					b.WriteString(fmt.Sprintf("      %q = %v\n", k, val))
+				}
+			}
+			b.WriteString("    }\n")
+		}
+	}
 	b.WriteString("  }\n\n")
 	return b.String(), nil
 }
@@ -810,6 +956,14 @@ func stepTypeKey(t string) string {
 		return "query"
 	case "message":
 		return "message"
+	case "sleep":
+		return "sleep"
+	case "transform":
+		return "transform"
+	case "container":
+		return "container"
+	case "pipeline":
+		return "pipeline"
 	default:
 		return t
 	}
@@ -1185,15 +1339,16 @@ func (s *Service) SaveInModule(modulePath string, flow *model.Flow) error {
 	}
 	jsonPath := filepath.Join(dir, flow.ID+".json")
 	fpPath := filepath.Join(dir, flow.ID+".fp")
+	// Generate HCL first so we don't write JSON if HCL generation fails (avoids inconsistent state).
+	hcl, err := s.generateHCL(flow)
+	if err != nil {
+		return err
+	}
 	jsonData, err := json.MarshalIndent(flow, "", "  ")
 	if err != nil {
 		return err
 	}
 	if err := os.WriteFile(jsonPath, jsonData, 0644); err != nil {
-		return err
-	}
-	hcl, err := s.generateHCL(flow)
-	if err != nil {
 		return err
 	}
 	if err := os.WriteFile(fpPath, []byte(hcl), 0644); err != nil {

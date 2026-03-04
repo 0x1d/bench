@@ -261,6 +261,7 @@ export function FlowExecutionLog({ executionId, workspace, selectedStepId }: { e
     });
 
     const pipelineName = pexec.name?.split('.')?.pop() || pexec.name;
+    const pipelineStatus = pexec.status ?? execData.status ?? 'unknown';
     const pipelineDuration = formatDuration(pexec.start_time, pexec.end_time);
 
     return (
@@ -268,7 +269,7 @@ export function FlowExecutionLog({ executionId, workspace, selectedStepId }: { e
             {/* Pipeline header — only in full view */}
             {!selectedStepId && (
                 <div className="flex items-center gap-2 pb-2 border-b border-border">
-                    {statusIcon(pexec.status || execData.status)}
+                    {statusIcon(pipelineStatus)}
                     <span className="text-sm font-medium flex-1 truncate">{pipelineName}</span>
                     <span className="text-xs text-muted-foreground font-mono">{pipelineDuration}</span>
                 </div>

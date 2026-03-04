@@ -216,7 +216,7 @@ export default function FlowEditorPage() {
     enabled: !!flowId,
   });
   const displayFlowName = flow
-    ? renamedFlow?.id === flow.id
+    ? renamedFlow && renamedFlow.id === flow.id
       ? renamedFlow.name
       : (flow.name || flow.id)
     : '';

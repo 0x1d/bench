@@ -50,6 +50,16 @@ interface InputParam {
   default?: string;
 }
 
+function getUniqueLabel(nodes: Node[], baseLabel: string): string {
+  const existingLabels = new Set(
+    nodes.map((n) => (n.data as { step?: FlowStep })?.step?.label ?? (n.data as { label?: string })?.label ?? '')
+  );
+  if (!existingLabels.has(baseLabel)) return baseLabel;
+  let i = 2;
+  while (existingLabels.has(`${baseLabel} ${i}`)) i++;
+  return `${baseLabel} ${i}`;
+}
+
 function sortNodesInputFirst(nodes: Node[]): Node[] {
   return [...nodes].sort((a, b) => {
     const aStep = (a.data as { step?: FlowStep })?.step;
@@ -318,10 +328,11 @@ export default function FlowEditorPage() {
         input: 'Input',
         message: 'Message',
       };
+      const label = getUniqueLabel(nodes, labels[stepType]);
       const step: FlowStep = {
         id,
         type: stepType,
-        label: labels[stepType],
+        label,
         config: configs[stepType],
       };
       const newNode: Node = {
@@ -616,14 +627,16 @@ export default function FlowEditorPage() {
                   (n) => ((n.data as { step?: FlowStep })?.step?.type ?? '') === 'input'
                 )}
                 onAdd={(step) => {
+                  const label = getUniqueLabel(nodes, step.label || step.id);
+                  const stepWithLabel = { ...step, label };
                   const newNode: Node = {
                     id: step.id,
                     type: 'flowStep',
                     position: { x: 0, y: 0 },
                     data: {
                       stepType: step.type,
-                      label: step.label || step.id,
-                      step,
+                      label: stepWithLabel.label || step.id,
+                      step: stepWithLabel,
                       onAddNextStep: (nodeId: string, e: React.MouseEvent) => {
                         setConnectFromSource({ sourceId: nodeId, x: e.clientX, y: e.clientY });
                       }

@@ -371,19 +371,23 @@ func HandleFlowRun(w http.ResponseWriter, r *http.Request) {
 	flowpipeURL := strings.TrimSuffix(config.FlowpipeURLForWorkspace(workspace), "/")
 	url := flowpipeURL + "/api/v0/pipeline/" + f.ID + "/command"
 
-	// Collect unique database connections used in query steps
-	connArgs := make(map[string]any)
+	// Build the set of params this pipeline actually defines (Flowpipe rejects unknown params).
+	allowedParams := make(map[string]bool)
 	for _, step := range f.Steps {
-		if strings.EqualFold(step.Type, "query") {
-			dbID, _ := step.Config["databaseId"].(string)
-			if dbID == "" {
-				// We don't have access to s.defaultDatabaseID() here easily without flowSvc exposure,
-				// but flowSvc.Save ensures steps have databaseId or use defaults.
-				// However, the safest is to look for what generateHCL would have used.
-				// We'll skip empty dbID for now, or use a placeholder if needed.
+		if strings.EqualFold(step.Type, "input") {
+			if params, ok := step.Config["params"].([]any); ok {
+				for _, p := range params {
+					if m, ok := p.(map[string]any); ok {
+						if name, ok := m["name"].(string); ok && name != "" {
+							allowedParams[name] = true
+						}
+					}
+				}
 			}
-			if dbID != "" {
-				connArgs["conn_"+dbID] = dbID
+		}
+		if strings.EqualFold(step.Type, "query") {
+			if dbID, _ := step.Config["databaseId"].(string); dbID != "" {
+				allowedParams["conn_"+dbID] = true
 			}
 		}
 	}
@@ -395,17 +399,25 @@ func HandleFlowRun(w http.ResponseWriter, r *http.Request) {
 			Args map[string]any `json:"args"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&reqBody); err == nil && reqBody.Args != nil {
-			userArgs = reqBody.Args
+			for k, v := range reqBody.Args {
+				if allowedParams[k] {
+					userArgs[k] = v
+				}
+			}
 		}
 	}
 
-	// Merge: user args + connection args (connection args take precedence for conn_ prefixed keys)
+	// Add connection args for query steps (conn_X = connection name)
 	mergedArgs := make(map[string]any)
 	for k, v := range userArgs {
 		mergedArgs[k] = v
 	}
-	for k, v := range connArgs {
-		mergedArgs[k] = v
+	for _, step := range f.Steps {
+		if strings.EqualFold(step.Type, "query") {
+			if dbID, _ := step.Config["databaseId"].(string); dbID != "" {
+				mergedArgs["conn_"+dbID] = dbID
+			}
+		}
 	}
 
 	body := map[string]any{

@@ -96,13 +96,15 @@ export function FlowStepPanel() {
 
   const panelTitle = moduleEditPath
     ? `Edit module — ${moduleEditPath}`
-    : activeTab === 'execution'
-      ? selectedStep
-        ? `Execution — ${selectedStep.label || selectedStep.id}`
-        : 'Execution Log'
-      : selectedStep
-        ? `Configure — ${selectedStep.label || selectedStep.id}`
-        : 'Step';
+    : executionId && !selectedStep
+      ? 'Execution Log'
+      : activeTab === 'execution'
+        ? selectedStep
+          ? `Execution — ${selectedStep.label || selectedStep.id}`
+          : 'Execution Log'
+        : selectedStep
+          ? `Configure — ${selectedStep.label || selectedStep.id}`
+          : 'Step';
 
   const showTabs = executionId != null && selectedStep != null && !moduleEditPath;
 
@@ -124,7 +126,9 @@ export function FlowStepPanel() {
           className="truncate text-sm font-medium flex items-center gap-2"
           title={panelTitle}
         >
-          {activeTab === 'execution' && <Terminal className="size-4 text-primary" />}
+          {(activeTab === 'execution' || (executionId && !selectedStep)) && (
+            <Terminal className="size-4 text-primary" />
+          )}
           {panelTitle}
         </span>
         <div className="flex items-center gap-1">
@@ -192,7 +196,7 @@ export function FlowStepPanel() {
             onClose={handleClose}
           />
         )}
-        {!moduleEditPath && activeTab === 'config' && selectedStep && (
+        {!moduleEditPath && selectedStep && (activeTab === 'config' || !executionId) && (
           <FlowStepPanelContent
             key={selectedStep.id}
             step={selectedStep}
@@ -205,10 +209,10 @@ export function FlowStepPanel() {
             onClose={handleClose}
           />
         )}
-          {!moduleEditPath && activeTab === 'execution' && executionId && (
+          {!moduleEditPath && executionId && (activeTab === 'execution' || !selectedStep) && (
           <FlowExecutionLog executionId={executionId} workspace={flowWorkspace ?? undefined} selectedStepId={selectedStep ? normalizeStepName(selectedStep.label, selectedStep.id) : undefined} />
         )}
-          {!moduleEditPath && activeTab === 'execution' && !executionId && (
+          {!moduleEditPath && !executionId && activeTab === 'execution' && (
           <div className="text-sm text-muted-foreground py-8 text-center">
             No execution running. Click <strong>Run</strong> to start a flow.
           </div>

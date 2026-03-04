@@ -1,0 +1,73 @@
+{
+  "id": "test_input_message",
+  "name": "Test Input + Message",
+  "description": "Tests input params and message step",
+  "steps": [
+    {
+      "id": "step_input_1",
+      "type": "input",
+      "label": "Input",
+      "config": {
+        "params": [
+          {
+            "default": "Hello",
+            "name": "greeting",
+            "type": "string"
+          }
+        ]
+      },
+      "position": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "step_message_1",
+      "type": "message",
+      "label": "say",
+      "config": {
+        "notifier": "default",
+        "text": "Input+Message test: ${param.greeting}"
+      },
+      "dependsOn": [
+        "step_input_1"
+      ],
+      "position": {
+        "x": 0,
+        "y": 80
+      }
+    },
+    {
+      "id": "step_output_1",
+      "type": "output",
+      "label": "Output",
+      "config": {
+        "outputs": [
+          {
+            "name": "result",
+            "value": "step.message.say"
+          }
+        ]
+      },
+      "dependsOn": [
+        "step_message_1"
+      ],
+      "position": {
+        "x": 0,
+        "y": 160
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "step_input_1",
+      "target": "step_message_1"
+    },
+    {
+      "id": "e2",
+      "source": "step_message_1",
+      "target": "step_output_1"
+    }
+  ]
+}

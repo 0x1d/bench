@@ -1,0 +1,72 @@
+{
+  "id": "test_query",
+  "name": "Test Query",
+  "description": "Tests the query step",
+  "steps": [
+    {
+      "id": "step_query_1",
+      "type": "query",
+      "label": "select_one",
+      "config": {
+        "databaseId": "local",
+        "sql": "SELECT 1 AS num, 'query test' AS msg"
+      },
+      "position": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "step_message_1",
+      "type": "message",
+      "label": "notify",
+      "config": {
+        "notifier": "default",
+        "text": "Query test completed!"
+      },
+      "dependsOn": [
+        "step_query_1"
+      ],
+      "position": {
+        "x": 0,
+        "y": 116
+      }
+    },
+    {
+      "id": "step_output_1",
+      "type": "output",
+      "label": "Output",
+      "config": {
+        "outputs": [
+          {
+            "name": "result",
+            "value": "step.query.select_one.rows"
+          },
+          {
+            "name": "status",
+            "value": "\"nice\""
+          }
+        ]
+      },
+      "dependsOn": [
+        "step_message_1"
+      ],
+      "position": {
+        "x": 0,
+        "y": 232
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "step_query_1",
+      "target": "step_message_1"
+    },
+    {
+      "id": "e2",
+      "source": "step_message_1",
+      "target": "step_output_1"
+    }
+  ]
+}

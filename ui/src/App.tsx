@@ -49,13 +49,14 @@ function ClearDatabaseViewOnNavigate({ hash }: { hash: string }) {
 }
 
 function ClearFlowViewOnNavigate({ hash }: { hash: string }) {
-  const { setSelectedStep, setExecutionId, setModuleEditPath } = useFlowView();
+  const { setSelectedStep, setExecutionId, setModuleEditPath, setFlow } = useFlowView();
   useEffect(() => {
     // Clear when leaving flows entirely, or when going back to flows list from editor
     if (!isFlowsSection(hash) || hash === 'flows') {
       setSelectedStep(null);
       setExecutionId(null);
       setModuleEditPath(null);
+      setFlow(null);
     }
     // Close right panel when opening a flow in the editor
     else if (hash.startsWith('flows/')) {
@@ -63,7 +64,7 @@ function ClearFlowViewOnNavigate({ hash }: { hash: string }) {
       setSelectedStep(null);
       setExecutionId(null);
     }
-  }, [hash, setSelectedStep, setExecutionId, setModuleEditPath]);
+  }, [hash, setSelectedStep, setExecutionId, setModuleEditPath, setFlow]);
   return null;
 }
 

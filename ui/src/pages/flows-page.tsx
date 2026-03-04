@@ -91,18 +91,10 @@ export function FlowsPage() {
 
   const createFlowMutation = useMutation({
     mutationFn: ({ name, module: mod }: { name: string; module: string | null }) => {
-      const inputId = `step_input_${Date.now()}`;
       return createFlow(
         {
           name: name || 'New flow',
-          steps: [
-            {
-              id: inputId,
-              type: 'input',
-              label: 'Input',
-              config: { params: [] },
-            },
-          ],
+          steps: [],
           edges: [],
         },
         mod === '.' || mod === null ? undefined : mod

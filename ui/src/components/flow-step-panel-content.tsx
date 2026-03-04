@@ -4,6 +4,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { FlowCodeEditor } from '@/components/flow-code-editor';
+import { FlowExpressionInput } from '@/components/flow-expression-input';
 import {
   Select,
   SelectContent,
@@ -14,7 +16,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useQuery } from '@tanstack/react-query';
-import { fetchRestSpec } from '@/services/api';
+import { fetchRestSpec, fetchFlowList } from '@/services/api';
 import {
   getRequestBodySchema,
   parseOpenAPIOperationsGrouped,
@@ -22,7 +24,7 @@ import {
 } from '@/lib/openapi';
 import { useMemo } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
-import type { FlowStep, RestResource } from '@/services/api';
+import type { Flow, FlowStep, RestResource } from '@/services/api';
 import type { ResolvedSchemaProperty } from '@/lib/openapi';
 
 interface DatabaseOption {
@@ -32,6 +34,9 @@ interface DatabaseOption {
 
 interface FlowStepPanelContentProps {
   step: FlowStep;
+  flow?: Flow | null;
+  flowModule?: string;
+  currentFlowId?: string;
   databases: DatabaseOption[];
   restResources: RestResource[];
   onSave: (step: FlowStep) => void;
@@ -40,6 +45,9 @@ interface FlowStepPanelContentProps {
 
 export function FlowStepPanelContent({
   step,
+  flow = null,
+  flowModule,
+  currentFlowId,
   databases,
   restResources,
   onSave,
@@ -60,6 +68,8 @@ export function FlowStepPanelContent({
         setLabel={setLabel}
         config={config}
         setConfig={setConfig}
+        flow={flow}
+        currentStepId={step.id}
         restResources={restResources}
         onSaveWithConfig={handleSave}
         onClose={onClose}
@@ -74,6 +84,8 @@ export function FlowStepPanelContent({
         setLabel={setLabel}
         config={config}
         setConfig={setConfig}
+        flow={flow}
+        currentStepId={step.id}
         databases={databases}
         onSave={() => handleSave()}
         onClose={onClose}
@@ -101,6 +113,83 @@ export function FlowStepPanelContent({
         setLabel={setLabel}
         config={config}
         setConfig={setConfig}
+        flow={flow}
+        currentStepId={step.id}
+        onSave={() => handleSave()}
+        onClose={onClose}
+      />
+    );
+  }
+
+  if (step.type === 'sleep') {
+    return (
+      <SleepStepConfig
+        label={label}
+        setLabel={setLabel}
+        config={config}
+        setConfig={setConfig}
+        onSave={() => handleSave()}
+        onClose={onClose}
+      />
+    );
+  }
+
+  if (step.type === 'transform') {
+    return (
+      <TransformStepConfig
+        label={label}
+        setLabel={setLabel}
+        config={config}
+        setConfig={setConfig}
+        flow={flow}
+        currentStepId={step.id}
+        onSave={() => handleSave()}
+        onClose={onClose}
+      />
+    );
+  }
+
+  if (step.type === 'container') {
+    return (
+      <ContainerStepConfig
+        label={label}
+        setLabel={setLabel}
+        config={config}
+        setConfig={setConfig}
+        flow={flow}
+        currentStepId={step.id}
+        onSave={() => handleSave()}
+        onClose={onClose}
+      />
+    );
+  }
+
+  if (step.type === 'pipeline') {
+    return (
+      <PipelineStepConfig
+        label={label}
+        setLabel={setLabel}
+        config={config}
+        setConfig={setConfig}
+        flow={flow}
+        flowModule={flowModule}
+        currentFlowId={currentFlowId}
+        currentStepId={step.id}
+        onSave={() => handleSave()}
+        onClose={onClose}
+      />
+    );
+  }
+
+  if (step.type === 'output') {
+    return (
+      <OutputStepConfig
+        label={label}
+        setLabel={setLabel}
+        config={config}
+        setConfig={setConfig}
+        flow={flow}
+        currentStepId={step.id}
         onSave={() => handleSave()}
         onClose={onClose}
       />
@@ -312,6 +401,8 @@ function HttpStepConfig({
   setLabel,
   config,
   setConfig,
+  flow,
+  currentStepId,
   restResources,
   onSaveWithConfig,
   onClose,
@@ -320,6 +411,8 @@ function HttpStepConfig({
   setLabel: (v: string) => void;
   config: Record<string, unknown>;
   setConfig: (v: Record<string, unknown>) => void;
+  flow?: Flow | null;
+  currentStepId?: string;
   restResources: RestResource[];
   onSaveWithConfig: (config: Record<string, unknown>) => void;
   onClose: () => void;
@@ -474,19 +567,20 @@ function HttpStepConfig({
                   <Label htmlFor={`path-${p.name}`} className="text-xs font-normal text-muted-foreground">
                     {p.name}{p.required ? ' *' : ''}
                   </Label>
-                  <Input
-                    id={`path-${p.name}`}
+                  <FlowExpressionInput
                     value={pathParamValues[p.name] ?? ''}
-                    onChange={(e) =>
+                    onChange={(v) =>
                       setConfig({
                         ...config,
                         pathParams: {
                           ...pathParamValues,
-                          [p.name]: e.target.value,
+                          [p.name]: v,
                         },
                       })
                     }
-                    placeholder={`Value for {${p.name}}`}
+                    flow={flow}
+                    currentStepId={currentStepId}
+                    rows={1}
                     className="w-full"
                   />
                 </div>
@@ -502,19 +596,20 @@ function HttpStepConfig({
                   <Label htmlFor={`query-${p.name}`} className="text-xs font-normal text-muted-foreground">
                     {p.name}{p.required ? ' *' : ''}
                   </Label>
-                  <Input
-                    id={`query-${p.name}`}
+                  <FlowExpressionInput
                     value={queryParamValues[p.name] ?? ''}
-                    onChange={(e) =>
+                    onChange={(v) =>
                       setConfig({
                         ...config,
                         queryParams: {
                           ...queryParamValues,
-                          [p.name]: e.target.value,
+                          [p.name]: v,
                         },
                       })
                     }
-                    placeholder={`Value for ${p.name}`}
+                    flow={flow}
+                    currentStepId={currentStepId}
+                    rows={1}
                     className="w-full"
                   />
                 </div>
@@ -532,15 +627,14 @@ function HttpStepConfig({
                   onChange={(body) => setConfig({ ...config, body })}
                 />
               ) : (
-                <Textarea
-                  id="body"
+                <FlowCodeEditor
                   value={bodyValue}
-                  onChange={(e) =>
-                    setConfig({ ...config, body: e.target.value })
-                  }
-                  placeholder='{"key": "value"} or use param.paramName or step.http.foo.response_body.id'
-                  rows={6}
-                  className="w-full font-mono text-sm"
+                  onChange={(v) => setConfig({ ...config, body: v })}
+                  language="json"
+                  flow={flow}
+                  currentStepId={currentStepId}
+                  minHeight={180}
+                  className="w-full"
                 />
               )}
             </div>
@@ -580,6 +674,8 @@ function QueryStepConfig({
   setLabel,
   config,
   setConfig,
+  flow,
+  currentStepId,
   databases,
   onSave,
   onClose,
@@ -588,6 +684,8 @@ function QueryStepConfig({
   setLabel: (v: string) => void;
   config: Record<string, unknown>;
   setConfig: (v: Record<string, unknown>) => void;
+  flow?: Flow | null;
+  currentStepId?: string;
   databases: DatabaseOption[];
   onSave: () => void;
   onClose: () => void;
@@ -637,15 +735,14 @@ function QueryStepConfig({
           SQL
           <span className="ml-1 text-muted-foreground font-normal">(query)</span>
         </Label>
-        <Textarea
-          id="sql"
+        <FlowCodeEditor
           value={(config.sql as string) ?? ''}
-          onChange={(e) =>
-            setConfig({ ...config, sql: e.target.value })
-          }
-          placeholder="SELECT * FROM users WHERE id = $1"
-          rows={8}
-          className="w-full font-mono text-sm"
+          onChange={(v) => setConfig({ ...config, sql: v })}
+          language="sql"
+          flow={flow}
+          currentStepId={currentStepId}
+          minHeight={200}
+          className="w-full"
         />
       </div>
 
@@ -654,18 +751,19 @@ function QueryStepConfig({
           Args
           <span className="ml-1 text-muted-foreground font-normal">(params)</span>
         </Label>
-        <Input
-          id="args"
+        <FlowCodeEditor
           value={((config.args as string[]) ?? []).join(', ')}
-          onChange={(e) => {
-            const vals = e.target.value
+          onChange={(v) => {
+            const vals = v
               .split(',')
               .map((s) => s.trim())
               .filter(Boolean);
             setConfig({ ...config, args: vals });
           }}
-          placeholder="param.user_id, param.limit"
-          className="w-full font-mono text-sm"
+          flow={flow}
+          currentStepId={currentStepId}
+          minHeight={60}
+          className="w-full"
         />
         <p className="text-[10px] text-muted-foreground mt-1 px-1">
           Comma-separated param references for $1, $2, etc. (e.g. param.user_id)
@@ -815,11 +913,18 @@ function InputStepConfig({
   );
 }
 
-function MessageStepConfig({
+interface OutputItem {
+  name: string;
+  value: string;
+}
+
+function OutputStepConfig({
   label,
   setLabel,
   config,
   setConfig,
+  flow,
+  currentStepId,
   onSave,
   onClose,
 }: {
@@ -827,6 +932,119 @@ function MessageStepConfig({
   setLabel: (v: string) => void;
   config: Record<string, unknown>;
   setConfig: (v: Record<string, unknown>) => void;
+  flow?: Flow | null;
+  currentStepId?: string;
+  onSave: () => void;
+  onClose: () => void;
+}) {
+  const outputs = (config.outputs as OutputItem[]) ?? [];
+
+  const setOutputs = (next: OutputItem[]) => {
+    setConfig({ ...config, outputs: next });
+  };
+
+  const addOutput = () => {
+    setOutputs([...outputs, { name: 'result', value: '' }]);
+  };
+
+  const updateOutput = (i: number, updates: Partial<OutputItem>) => {
+    const next = [...outputs];
+    next[i] = { ...next[i], ...updates };
+    setOutputs(next);
+  };
+
+  const removeOutput = (i: number) => {
+    setOutputs(outputs.filter((_, j) => j !== i));
+  };
+
+  return (
+    <div className="flex flex-col gap-4 overflow-auto">
+      <div className="space-y-2">
+        <Label htmlFor="step-name">
+          Name
+          <span className="ml-1 text-muted-foreground font-normal">(string)</span>
+        </Label>
+        <Input
+          id="step-name"
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          placeholder="Step name"
+          className="w-full"
+        />
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <Label>Outputs</Label>
+          <Button variant="outline" size="sm" onClick={addOutput} className="gap-1">
+            <Plus className="size-3" />
+            Add output
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground mb-2">
+          Define pipeline outputs. Each output block maps to a named value in the pipeline result. Use HCL expressions like <code className="font-mono">step.http.foo.response_body</code>.
+        </p>
+        <div className="space-y-3">
+          {outputs.map((o, i) => (
+            <div key={i} className="rounded-lg border border-border p-3 space-y-2">
+              <div className="flex gap-2">
+                <Input
+                  placeholder="output_name"
+                  value={o.name}
+                  onChange={(e) => updateOutput(i, { name: e.target.value.replace(/\s/g, '_') })}
+                  className="min-w-0 flex-1 font-mono"
+                />
+                <Button variant="ghost" size="icon-sm" onClick={() => removeOutput(i)} aria-label="Remove output">
+                  <Trash2 className="size-4" />
+                </Button>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor={`output-value-${i}`} className="text-xs font-normal text-muted-foreground">
+                  Value (HCL expression)
+                </Label>
+                <FlowCodeEditor
+                  value={o.value}
+                  onChange={(v) => updateOutput(i, { value: v })}
+                  language="hcl"
+                  flow={flow}
+                  currentStepId={currentStepId ?? ''}
+                  minHeight={60}
+                  className="w-full"
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex gap-2 pt-4 border-t border-border">
+        <Button variant="outline" size="sm" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button size="sm" onClick={onSave}>
+          Save
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function MessageStepConfig({
+  label,
+  setLabel,
+  config,
+  setConfig,
+  flow,
+  currentStepId,
+  onSave,
+  onClose,
+}: {
+  label: string;
+  setLabel: (v: string) => void;
+  config: Record<string, unknown>;
+  setConfig: (v: Record<string, unknown>) => void;
+  flow?: Flow | null;
+  currentStepId?: string;
   onSave: () => void;
   onClose: () => void;
 }) {
@@ -867,16 +1085,413 @@ function MessageStepConfig({
           Message Text
           <span className="ml-1 text-muted-foreground font-normal">(interpolated)</span>
         </Label>
-        <Textarea
-          id="message-text"
+        <FlowExpressionInput
           value={(config.text as string) ?? ''}
-          onChange={(e) =>
-            setConfig({ ...config, text: e.target.value })
-          }
-          placeholder="Hello from bench! or use flowpipe interpolations like ${step.http.req.response_body.id}"
+          onChange={(v) => setConfig({ ...config, text: v })}
+          flow={flow}
+          currentStepId={currentStepId}
           rows={6}
+          className="w-full"
+        />
+      </div>
+
+      <div className="flex gap-2 pt-4 border-t border-border">
+        <Button variant="outline" size="sm" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button size="sm" onClick={onSave}>
+          Save
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function SleepStepConfig({
+  label,
+  setLabel,
+  config,
+  setConfig,
+  onSave,
+  onClose,
+}: {
+  label: string;
+  setLabel: (v: string) => void;
+  config: Record<string, unknown>;
+  setConfig: (v: Record<string, unknown>) => void;
+  onSave: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-4 overflow-auto">
+      <div className="space-y-2">
+        <Label htmlFor="step-name">
+          Name
+          <span className="ml-1 text-muted-foreground font-normal">(string)</span>
+        </Label>
+        <Input
+          id="step-name"
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          placeholder="Step name"
+          className="w-full"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="duration">
+          Duration
+          <span className="ml-1 text-muted-foreground font-normal">(e.g. 5s, 100ms, 1m)</span>
+        </Label>
+        <Input
+          id="duration"
+          value={(config.duration as string) ?? '5s'}
+          onChange={(e) => setConfig({ ...config, duration: e.target.value })}
+          placeholder="5s"
+          className="w-full font-mono"
+        />
+        <p className="text-[10px] text-muted-foreground mt-1 px-1">
+          Go duration string or milliseconds (e.g. 5s, 100ms, 1m).
+        </p>
+      </div>
+
+      <div className="flex gap-2 pt-4 border-t border-border">
+        <Button variant="outline" size="sm" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button size="sm" onClick={onSave}>
+          Save
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function TransformStepConfig({
+  label,
+  setLabel,
+  config,
+  setConfig,
+  flow,
+  currentStepId,
+  onSave,
+  onClose,
+}: {
+  label: string;
+  setLabel: (v: string) => void;
+  config: Record<string, unknown>;
+  setConfig: (v: Record<string, unknown>) => void;
+  flow?: Flow | null;
+  currentStepId?: string;
+  onSave: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-4 overflow-auto">
+      <div className="space-y-2">
+        <Label htmlFor="step-name">
+          Name
+          <span className="ml-1 text-muted-foreground font-normal">(string)</span>
+        </Label>
+        <Input
+          id="step-name"
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          placeholder="Step name"
+          className="w-full"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="transform-value">
+          Value
+          <span className="ml-1 text-muted-foreground font-normal">(HCL expression)</span>
+        </Label>
+        <FlowCodeEditor
+          value={(config.value as string) ?? ''}
+          onChange={(v) => setConfig({ ...config, value: v })}
+          language="hcl"
+          flow={flow}
+          currentStepId={currentStepId}
+          minHeight={120}
+          className="w-full"
+        />
+        <p className="text-[10px] text-muted-foreground mt-1 px-1">
+          HCL expression (e.g. jsonencode(step.http.foo.response_body) or step.query.bar.rows).
+        </p>
+      </div>
+
+      <div className="flex gap-2 pt-4 border-t border-border">
+        <Button variant="outline" size="sm" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button size="sm" onClick={onSave}>
+          Save
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function ContainerStepConfig({
+  label,
+  setLabel,
+  config,
+  setConfig,
+  flow,
+  currentStepId,
+  onSave,
+  onClose,
+}: {
+  label: string;
+  setLabel: (v: string) => void;
+  config: Record<string, unknown>;
+  setConfig: (v: Record<string, unknown>) => void;
+  flow?: Flow | null;
+  currentStepId?: string;
+  onSave: () => void;
+  onClose: () => void;
+}) {
+  const image = (config.image as string) ?? '';
+  const source = (config.source as string) ?? '';
+  const cmdRaw = config.cmd;
+  const cmdStr = Array.isArray(cmdRaw)
+    ? (cmdRaw as string[]).join(' ')
+    : typeof cmdRaw === 'string'
+      ? cmdRaw
+      : '';
+  const envStr =
+    typeof config.env === 'object' && config.env !== null
+      ? JSON.stringify(config.env, null, 2)
+      : '{}';
+
+  const setCmd = (v: string) => {
+    const parts = v
+      .split(/\s+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    setConfig({ ...config, cmd: parts });
+  };
+
+  const setEnv = (v: string) => {
+    try {
+      const parsed = v.trim() ? JSON.parse(v) : {};
+      setConfig({ ...config, env: parsed });
+    } catch {
+      setConfig({ ...config, env: v });
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-4 overflow-auto">
+      <div className="space-y-2">
+        <Label htmlFor="step-name">
+          Name
+          <span className="ml-1 text-muted-foreground font-normal">(string)</span>
+        </Label>
+        <Input
+          id="step-name"
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          placeholder="Step name"
+          className="w-full"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="container-image">
+          Image
+          <span className="ml-1 text-muted-foreground font-normal">(string)</span>
+        </Label>
+        <Input
+          id="container-image"
+          value={image}
+          onChange={(e) => setConfig({ ...config, image: e.target.value, source: '' })}
+          placeholder="e.g. alpine:latest"
           className="w-full font-mono text-sm"
         />
+        <p className="text-[10px] text-muted-foreground mt-1 px-1">
+          Docker image to run. Leave empty to use source instead.
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="container-source">
+          Source
+          <span className="ml-1 text-muted-foreground font-normal">(path)</span>
+        </Label>
+        <Input
+          id="container-source"
+          value={source}
+          onChange={(e) => setConfig({ ...config, source: e.target.value, image: '' })}
+          placeholder="Path to Dockerfile folder"
+          className="w-full font-mono text-sm"
+        />
+        <p className="text-[10px] text-muted-foreground mt-1 px-1">
+          Path to folder with Dockerfile (alternative to image).
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="container-cmd">
+          Command
+          <span className="ml-1 text-muted-foreground font-normal">(list)</span>
+        </Label>
+        <FlowExpressionInput
+          value={cmdStr}
+          onChange={setCmd}
+          flow={flow}
+          currentStepId={currentStepId ?? ''}
+          rows={2}
+          className="w-full"
+        />
+        <p className="text-[10px] text-muted-foreground mt-1 px-1">
+          Space-separated command and args (e.g. echo hello).
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="container-env">
+          Environment
+          <span className="ml-1 text-muted-foreground font-normal">(map)</span>
+        </Label>
+        <FlowCodeEditor
+          value={envStr}
+          onChange={setEnv}
+          language="json"
+          flow={flow}
+          currentStepId={currentStepId ?? ''}
+          minHeight={80}
+          className="w-full"
+        />
+      </div>
+
+      <div className="flex gap-2 pt-4 border-t border-border">
+        <Button variant="outline" size="sm" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button size="sm" onClick={onSave}>
+          Save
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function PipelineStepConfig({
+  label,
+  setLabel,
+  config,
+  setConfig,
+  flow,
+  flowModule,
+  currentFlowId,
+  currentStepId,
+  onSave,
+  onClose,
+}: {
+  label: string;
+  setLabel: (v: string) => void;
+  config: Record<string, unknown>;
+  setConfig: (v: Record<string, unknown>) => void;
+  flow?: Flow | null;
+  flowModule?: string;
+  currentFlowId?: string;
+  currentStepId?: string;
+  onSave: () => void;
+  onClose: () => void;
+}) {
+  const { data: flowList } = useQuery({
+    queryKey: ['flows', flowModule ?? ''],
+    queryFn: () => fetchFlowList(flowModule),
+    enabled: true,
+  });
+
+  const flows = flowList?.flows ?? [];
+  const availableFlows = flows.filter((f) => f.id !== currentFlowId);
+  const pipelineRef = (config.pipelineRef as string) ?? '';
+  const argsStr =
+    typeof config.args === 'object' && config.args !== null
+      ? JSON.stringify(config.args, null, 2)
+      : '{}';
+
+  const setArgs = (v: string) => {
+    try {
+      const parsed = v.trim() ? JSON.parse(v) : {};
+      setConfig({ ...config, args: parsed });
+    } catch {
+      setConfig({ ...config, args: v });
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-4 overflow-auto">
+      <div className="space-y-2">
+        <Label htmlFor="step-name">
+          Name
+          <span className="ml-1 text-muted-foreground font-normal">(string)</span>
+        </Label>
+        <Input
+          id="step-name"
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          placeholder="Step name"
+          className="w-full"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="pipeline-ref">
+          Pipeline
+          <span className="ml-1 text-muted-foreground font-normal">(reference)</span>
+        </Label>
+        {availableFlows.length > 0 ? (
+          <Select
+            value={pipelineRef}
+            onValueChange={(v) => setConfig({ ...config, pipelineRef: v })}
+          >
+            <SelectTrigger id="pipeline-ref" className="w-full">
+              <SelectValue placeholder="Select pipeline" />
+            </SelectTrigger>
+            <SelectContent>
+              {availableFlows.map((f) => (
+                <SelectItem key={f.id} value={f.id}>
+                  {f.name || f.id}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : (
+          <Input
+            id="pipeline-ref"
+            value={pipelineRef}
+            onChange={(e) => setConfig({ ...config, pipelineRef: e.target.value })}
+            placeholder="e.g. my_flow"
+            className="w-full font-mono text-sm"
+          />
+        )}
+        <p className="text-[10px] text-muted-foreground mt-1 px-1">
+          Flow/pipeline to invoke (same module).
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="pipeline-args">
+          Args
+          <span className="ml-1 text-muted-foreground font-normal">(map)</span>
+        </Label>
+        <FlowCodeEditor
+          value={argsStr}
+          onChange={setArgs}
+          language="json"
+          flow={flow}
+          currentStepId={currentStepId ?? ''}
+          minHeight={100}
+          className="w-full"
+        />
+        <p className="text-[10px] text-muted-foreground mt-1 px-1">
+          JSON map of argument names to values (e.g. {JSON.stringify({ param1: 'value' })}).
+        </p>
       </div>
 
       <div className="flex gap-2 pt-4 border-t border-border">

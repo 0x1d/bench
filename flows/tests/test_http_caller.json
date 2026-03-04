@@ -1,0 +1,67 @@
+{
+  "id": "test_http_caller",
+  "name": "Test HTTP Caller",
+  "description": "Calls test_http pipeline, transforms its output, and returns the result",
+  "steps": [
+    {
+      "id": "step_pipeline_1",
+      "type": "pipeline",
+      "label": "call_http",
+      "config": {
+        "args": {},
+        "pipelineRef": "test_http"
+      },
+      "position": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "step_transform_1",
+      "type": "transform",
+      "label": "enrich",
+      "config": {
+        "value": "jsonencode({ \n  source = \"test_http\", \n  data = step.pipeline.call_http.output.result, \n  transformed = true \n})"
+      },
+      "dependsOn": [
+        "step_pipeline_1"
+      ],
+      "position": {
+        "x": 0,
+        "y": 116
+      }
+    },
+    {
+      "id": "step_output_1772653484427",
+      "type": "output",
+      "label": "Output",
+      "config": {
+        "outputs": [
+          {
+            "name": "enriched_output",
+            "value": "step.transform.enrich.value"
+          }
+        ]
+      },
+      "dependsOn": [
+        "step_transform_1"
+      ],
+      "position": {
+        "x": 0,
+        "y": 232
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "step_pipeline_1",
+      "target": "step_transform_1"
+    },
+    {
+      "id": "step_transform_1-step_output_1772653484427",
+      "source": "step_transform_1",
+      "target": "step_output_1772653484427"
+    }
+  ]
+}

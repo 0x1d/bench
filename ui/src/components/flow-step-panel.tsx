@@ -33,7 +33,9 @@ export function FlowStepPanel() {
     onDeleteStep,
     executionId,
     setExecutionId,
+    flow,
     flowWorkspace,
+    flowModule,
     moduleEditPath,
     setModuleEditPath,
   } = useFlowView();
@@ -200,6 +202,9 @@ export function FlowStepPanel() {
           <FlowStepPanelContent
             key={selectedStep.id}
             step={selectedStep}
+            flow={flow}
+            flowModule={flowModule ?? undefined}
+            currentFlowId={flow?.id}
             databases={databases}
             restResources={restResources}
             onSave={(updatedStep) => {

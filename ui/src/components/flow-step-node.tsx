@@ -1,6 +1,6 @@
 import { memo } from 'react';
 import { type NodeProps, Handle, Position } from '@xyflow/react';
-import { Globe, Database, LogIn, Mail, Plus } from 'lucide-react';
+import { Globe, Database, LogIn, Mail, Plus, Clock, Binary, Box, GitBranch, LogOut } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import type { FlowStep } from '@/services/api';
@@ -9,7 +9,12 @@ const icons: Record<string, React.ComponentType<{ className?: string }>> = {
   http: Globe,
   query: Database,
   input: LogIn,
+  output: LogOut,
   message: Mail,
+  sleep: Clock,
+  transform: Binary,
+  container: Box,
+  pipeline: GitBranch,
 };
 
 export const FlowStepNode = memo(function FlowStepNode({
@@ -45,13 +50,15 @@ export const FlowStepNode = memo(function FlowStepNode({
         <span className="text-[10px] text-muted-foreground font-mono uppercase tracking-wider">{stepType}</span>
       </div>
 
-      <Handle
-        type="source"
-        position={sourcePosition}
-        className="!bg-primary transition-opacity group-hover:!opacity-0"
-      />
+      {stepType !== 'output' && (
+        <Handle
+          type="source"
+          position={sourcePosition}
+          className="!bg-primary transition-opacity group-hover:!opacity-0"
+        />
+      )}
 
-      {onAddNextStep && (
+      {onAddNextStep && stepType !== 'output' && (
         <Button
           type="button"
           variant="secondary"

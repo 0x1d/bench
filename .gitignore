@@ -31,7 +31,7 @@ api/server
 
 temp/
 
-# Flowpipe flows (user data)
-flows/
+# Flowpipe database
+flows/.flowpipe/
 
 server

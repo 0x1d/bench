@@ -60,12 +60,14 @@ function getUniqueLabel(nodes: Node[], baseLabel: string): string {
   return `${baseLabel} ${i}`;
 }
 
-function sortNodesInputFirst(nodes: Node[]): Node[] {
+function sortNodesInputFirstOutputLast(nodes: Node[]): Node[] {
   return [...nodes].sort((a, b) => {
     const aStep = (a.data as { step?: FlowStep })?.step;
     const bStep = (b.data as { step?: FlowStep })?.step;
     if (aStep?.type === 'input') return -1;
     if (bStep?.type === 'input') return 1;
+    if (aStep?.type === 'output') return 1;
+    if (bStep?.type === 'output') return -1;
     return 0;
   });
 }
@@ -76,7 +78,7 @@ function getLayoutedElements(
   direction: 'TB' | 'LR' = 'TB'
 ): { nodes: Node[]; edges: Edge[] } {
   const isHorizontal = direction === 'LR';
-  const sortedNodes = sortNodesInputFirst(nodes);
+  const sortedNodes = sortNodesInputFirstOutputLast(nodes);
   const graph = new dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
   graph.setGraph({
     rankdir: direction,
@@ -201,6 +203,7 @@ export default function FlowEditorPage() {
     setOnStepSave,
     setOnDeleteStep,
     setExecutionId,
+    setFlow,
     flowWorkspace,
     flowModule,
   } = useFlowView();
@@ -248,6 +251,10 @@ export default function FlowEditorPage() {
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initial.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initial.edges);
+
+  useEffect(() => {
+    setFlow(flow ?? null);
+  }, [flow, setFlow]);
 
   useEffect(() => {
     if (!flow) return;
@@ -314,19 +321,29 @@ export default function FlowEditorPage() {
   );
 
   const addStepFromConnection = useCallback(
-    (sourceId: string, stepType: 'http' | 'query' | 'input' | 'message') => {
+    (sourceId: string, stepType: 'http' | 'query' | 'input' | 'message' | 'sleep' | 'transform' | 'container' | 'pipeline' | 'output') => {
       const id = `step_${stepType}_${Date.now()}`;
       const configs: Record<string, Record<string, unknown>> = {
         http: { restId: '', method: 'GET', path: '/' },
         query: { databaseId: '', sql: '' },
         input: { params: [] },
         message: { notifier: 'default', text: 'Hello from bench!' },
+        sleep: { duration: '5s' },
+        transform: { value: '' },
+        container: { image: 'alpine:latest', cmd: ['echo', 'hello'] },
+        pipeline: { pipelineRef: '', args: {} },
+        output: { outputs: [{ name: 'result', value: '' }] },
       };
       const labels: Record<string, string> = {
         http: 'HTTP request',
         query: 'Query',
         input: 'Input',
         message: 'Message',
+        sleep: 'Sleep',
+        transform: 'Transform',
+        container: 'Container',
+        pipeline: 'Pipeline',
+        output: 'Output',
       };
       const label = getUniqueLabel(nodes, labels[stepType]);
       const step: FlowStep = {
@@ -746,6 +763,66 @@ export default function FlowEditorPage() {
                 <Plus className="size-4" />
                 Message
               </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  connectFromSource &&
+                  addStepFromConnection(connectFromSource.sourceId, 'sleep')
+                }
+                className="gap-1.5"
+              >
+                <Plus className="size-4" />
+                Sleep
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  connectFromSource &&
+                  addStepFromConnection(connectFromSource.sourceId, 'transform')
+                }
+                className="gap-1.5"
+              >
+                <Plus className="size-4" />
+                Transform
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  connectFromSource &&
+                  addStepFromConnection(connectFromSource.sourceId, 'container')
+                }
+                className="gap-1.5"
+              >
+                <Plus className="size-4" />
+                Container
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  connectFromSource &&
+                  addStepFromConnection(connectFromSource.sourceId, 'pipeline')
+                }
+                className="gap-1.5"
+              >
+                <Plus className="size-4" />
+                Pipeline
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  connectFromSource &&
+                  addStepFromConnection(connectFromSource.sourceId, 'output')
+                }
+                className="gap-1.5"
+              >
+                <Plus className="size-4" />
+                Output
+              </Button>
             </div>
           </PopoverContent>
         </Popover>
@@ -854,19 +931,29 @@ function AddStepButtons({
   hasInputStep: boolean;
   onAdd: (step: FlowStep) => void;
 }) {
-  const addStep = (type: 'http' | 'query' | 'input' | 'message') => {
+  const addStep = (type: 'http' | 'query' | 'input' | 'message' | 'sleep' | 'transform' | 'container' | 'pipeline' | 'output') => {
     const id = `step_${type}_${Date.now()}`;
     const configs: Record<string, Record<string, unknown>> = {
       http: { restId: '', method: 'GET', path: '/' },
       query: { databaseId: '', sql: '' },
       input: { params: [] },
       message: { notifier: 'default', text: 'Hello from bench!' },
+      sleep: { duration: '5s' },
+      transform: { value: '' },
+      container: { image: 'alpine:latest', cmd: ['echo', 'hello'] },
+      pipeline: { pipelineRef: '', args: {} },
+      output: { outputs: [{ name: 'result', value: '' }] },
     };
     const labels: Record<string, string> = {
       http: 'HTTP request',
       query: 'Query',
       input: 'Input',
       message: 'Message',
+      sleep: 'Sleep',
+      transform: 'Transform',
+      container: 'Container',
+      pipeline: 'Pipeline',
+      output: 'Output',
     };
     onAdd({
       id,
@@ -895,6 +982,26 @@ function AddStepButtons({
       <Button variant="outline" size="sm" onClick={() => addStep('message')} className="gap-1.5">
         <Plus className="size-4" />
         Message
+      </Button>
+      <Button variant="outline" size="sm" onClick={() => addStep('sleep')} className="gap-1.5">
+        <Plus className="size-4" />
+        Sleep
+      </Button>
+      <Button variant="outline" size="sm" onClick={() => addStep('transform')} className="gap-1.5">
+        <Plus className="size-4" />
+        Transform
+      </Button>
+      <Button variant="outline" size="sm" onClick={() => addStep('container')} className="gap-1.5">
+        <Plus className="size-4" />
+        Container
+      </Button>
+      <Button variant="outline" size="sm" onClick={() => addStep('pipeline')} className="gap-1.5">
+        <Plus className="size-4" />
+        Pipeline
+      </Button>
+      <Button variant="outline" size="sm" onClick={() => addStep('output')} className="gap-1.5">
+        <Plus className="size-4" />
+        Output
       </Button>
     </div>
   );

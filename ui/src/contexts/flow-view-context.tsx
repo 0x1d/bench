@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components -- context exports provider and hook */
 import { createContext, useCallback, useContext, useState } from 'react';
-import type { FlowStep } from '@/services/api';
+import type { Flow, FlowStep } from '@/services/api';
 
 export type OnStepSave = (step: FlowStep) => void;
 export type OnDeleteStep = (stepId: string) => void;
@@ -17,6 +17,8 @@ interface FlowViewContextValue {
   flowWorkspace: string | null;
   flowModule: string | null;
   setFlowContext: (workspace: string | null, module: string | null) => void;
+  flow: Flow | null;
+  setFlow: (flow: Flow | null) => void;
   moduleEditPath: string | null;
   setModuleEditPath: (path: string | null) => void;
 }
@@ -30,6 +32,7 @@ export function FlowViewProvider({ children }: { children: React.ReactNode }) {
   const [executionId, setExecutionId] = useState<string | null>(null);
   const [flowWorkspace, setFlowWorkspace] = useState<string | null>(null);
   const [flowModule, setFlowModule] = useState<string | null>(null);
+  const [flow, setFlow] = useState<Flow | null>(null);
   const [moduleEditPath, setModuleEditPath] = useState<string | null>(null);
 
   const setFlowContext = useCallback((workspace: string | null, module: string | null) => {
@@ -51,6 +54,8 @@ export function FlowViewProvider({ children }: { children: React.ReactNode }) {
         flowWorkspace,
         flowModule,
         setFlowContext,
+        flow,
+        setFlow,
         moduleEditPath,
         setModuleEditPath,
       }}

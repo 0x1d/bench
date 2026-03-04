@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import CodeMirror, { EditorView } from '@uiw/react-codemirror';
 import { tokyoNight } from '@uiw/codemirror-themes-all';
 import { loadLanguage } from '@uiw/codemirror-extensions-langs';
+import { hcl } from 'codemirror-lang-hcl';
 import { autocompletion } from '@codemirror/autocomplete';
 import type { Flow } from '@/services/api';
 import {
@@ -14,7 +15,6 @@ import { cn } from '@/lib/utils';
 const LANG_MAP: Record<string, string> = {
   sql: 'sql',
   json: 'json',
-  hcl: 'javascript', // HCL-like; use JS as fallback for highlighting
 };
 
 /** Editor styling: transparent bg, 0.75rem font, monospace. */
@@ -91,8 +91,10 @@ export function FlowCodeEditor({
   className,
 }: FlowCodeEditorProps) {
   const extensions = useMemo(() => {
-    const langKey = LANG_MAP[language] ?? 'sql';
-    const lang = loadLanguage(langKey as 'sql');
+    const lang =
+      language === 'hcl'
+        ? hcl()
+        : loadLanguage((LANG_MAP[language] ?? 'sql') as 'sql');
     const exts = lang ? [lang] : [];
     const completion = autocompletion({
       override: [

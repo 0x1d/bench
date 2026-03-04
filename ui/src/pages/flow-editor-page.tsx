@@ -16,7 +16,7 @@ import {
 } from '@xyflow/react';
 import dagre from 'dagre';
 import '@xyflow/react/dist/style.css';
-import { ArrowLeft, Pencil, Plus, LayoutGrid, Rows, Play } from 'lucide-react';
+import { ArrowLeft, Pencil, LayoutGrid, Rows, Play } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchFlow, updateFlow, runFlow, type Flow, type FlowStep, type FlowEdge } from '@/services/api';
 import { toast } from 'sonner';
@@ -34,6 +34,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { FlowStepNode } from '@/components/flow-step-node';
+import { flowStepIcons } from '@/lib/flow-step-icons';
 import {
   Popover,
   PopoverAnchor,
@@ -148,6 +149,37 @@ function flowToNodesEdges(flow: Flow): { nodes: Node[]; edges: Edge[] } {
   return { nodes, edges };
 }
 
+/** Compare two flows for equality (ignoring position to avoid layout-induced dirty state). */
+function flowsEqual(a: Flow, b: Flow): boolean {
+  if (!a || !b) return a === b;
+  if (a.id !== b.id) return false;
+  if ((a.name ?? '') !== (b.name ?? '')) return false;
+  if ((a.description ?? '') !== (b.description ?? '')) return false;
+  if (a.steps.length !== b.steps.length) return false;
+  if ((a.edges?.length ?? 0) !== (b.edges?.length ?? 0)) return false;
+  const aSteps = [...a.steps].sort((x, y) => x.id.localeCompare(y.id));
+  const bSteps = [...b.steps].sort((x, y) => x.id.localeCompare(y.id));
+  for (let i = 0; i < aSteps.length; i++) {
+    const sa = aSteps[i];
+    const sb = bSteps[i];
+    if (sa.id !== sb.id || sa.type !== sb.type || (sa.label ?? '') !== (sb.label ?? '')) return false;
+    if (JSON.stringify(sa.config ?? {}) !== JSON.stringify(sb.config ?? {})) return false;
+    const aDeps = [...(sa.dependsOn ?? [])].sort();
+    const bDeps = [...(sb.dependsOn ?? [])].sort();
+    if (JSON.stringify(aDeps) !== JSON.stringify(bDeps)) return false;
+  }
+  const aEdges = [...(a.edges ?? [])].sort((x, y) =>
+    `${x.source}-${x.target}`.localeCompare(`${y.source}-${y.target}`)
+  );
+  const bEdges = [...(b.edges ?? [])].sort((x, y) =>
+    `${x.source}-${x.target}`.localeCompare(`${y.source}-${y.target}`)
+  );
+  for (let i = 0; i < aEdges.length; i++) {
+    if (aEdges[i].source !== bEdges[i].source || aEdges[i].target !== bEdges[i].target) return false;
+  }
+  return true;
+}
+
 function nodesEdgesToFlow(
   flowId: string,
   flowName: string,
@@ -199,6 +231,7 @@ export default function FlowEditorPage() {
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameValue, setRenameValue] = useState('');
   const {
+    selectedStep,
     setSelectedStep,
     setOnStepSave,
     setOnDeleteStep,
@@ -414,6 +447,21 @@ export default function FlowEditorPage() {
     updateMutation.mutate(updated);
   }, [flowId, flow, displayFlowName, nodes, edges, updateMutation]);
 
+  const currentFlow = useMemo(() => {
+    if (!flowId || !flow) return null;
+    return nodesEdgesToFlow(
+      flowId,
+      displayFlowName.trim() || flow.id,
+      flow.description ?? '',
+      nodes,
+      edges
+    );
+  }, [flowId, flow, displayFlowName, nodes, edges]);
+
+  const isDirty = Boolean(
+    currentFlow && flow && !flowsEqual(currentFlow, flow)
+  );
+
   // Collect input params from input steps
   const inputParams = useMemo(() => {
     if (!flow) return [];
@@ -511,6 +559,26 @@ export default function FlowEditorPage() {
     return () => setOnDeleteStep(null);
   }, [setOnDeleteStep, handleDeleteStep]);
 
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const target = document.activeElement;
+      const isInput = target && (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        (target as HTMLElement).isContentEditable
+      );
+      if (e.key === 's' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        if (isDirty) handleSave();
+      } else if ((e.key === 'Delete' || e.key === 'Backspace') && !isInput && selectedStep) {
+        e.preventDefault();
+        handleDeleteStep(selectedStep.id);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isDirty, handleSave, selectedStep, handleDeleteStep]);
+
   if (!flowId) {
     return (
       <div className="flex flex-col gap-4">
@@ -565,11 +633,23 @@ export default function FlowEditorPage() {
         </span>
       </nav>
 
-      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 shadow-sm">
+      <div
+        className={cn(
+          'flex flex-wrap items-center gap-3 rounded-lg border px-4 py-3 shadow-sm transition-colors',
+          isDirty
+            ? 'border-amber-500/60 bg-amber-500/5 border-2'
+            : 'border-border bg-card'
+        )}
+      >
         <div className="flex items-center gap-2 min-w-0">
           <span className="font-medium truncate max-w-[200px]">
             {displayFlowName || flow.id}
           </span>
+          {isDirty && (
+            <span className="shrink-0 rounded-full bg-amber-500/20 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-400">
+              Unsaved changes
+            </span>
+          )}
           <Button
             variant="ghost"
             size="icon-xs"
@@ -591,11 +671,12 @@ export default function FlowEditorPage() {
             </span>
           )}
           <Button
-            variant="outline"
+            variant={isDirty ? 'default' : 'outline'}
             size="sm"
             onClick={handleSave}
             disabled={updateMutation.isPending}
             className="gap-1.5"
+            title="Save flow (Ctrl+S)"
           >
             {updateMutation.isPending ? 'Saving…' : 'Save'}
           </Button>
@@ -704,125 +785,55 @@ export default function FlowEditorPage() {
             />
           </PopoverAnchor>
           <PopoverContent
-            className="w-auto p-2"
+            className="w-56 p-0"
             align="start"
             side="bottom"
             sideOffset={8}
           >
-            <p className="text-xs text-muted-foreground mb-2 px-1">Add step</p>
-            <div className="flex gap-1">
-              {!nodes.some(
-                (n) => ((n.data as { step?: FlowStep })?.step?.type ?? '') === 'input'
-              ) && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      connectFromSource &&
-                      addStepFromConnection(connectFromSource.sourceId, 'input')
-                    }
-                    className="gap-1.5"
-                  >
-                    <Plus className="size-4" />
-                    Input
-                  </Button>
-                )}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  connectFromSource &&
-                  addStepFromConnection(connectFromSource.sourceId, 'http')
-                }
-                className="gap-1.5"
-              >
-                <Plus className="size-4" />
-                HTTP
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  connectFromSource &&
-                  addStepFromConnection(connectFromSource.sourceId, 'query')
-                }
-                className="gap-1.5"
-              >
-                <Plus className="size-4" />
-                Query
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  connectFromSource &&
-                  addStepFromConnection(connectFromSource.sourceId, 'message')
-                }
-                className="gap-1.5"
-              >
-                <Plus className="size-4" />
-                Message
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  connectFromSource &&
-                  addStepFromConnection(connectFromSource.sourceId, 'sleep')
-                }
-                className="gap-1.5"
-              >
-                <Plus className="size-4" />
-                Sleep
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  connectFromSource &&
-                  addStepFromConnection(connectFromSource.sourceId, 'transform')
-                }
-                className="gap-1.5"
-              >
-                <Plus className="size-4" />
-                Transform
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  connectFromSource &&
-                  addStepFromConnection(connectFromSource.sourceId, 'container')
-                }
-                className="gap-1.5"
-              >
-                <Plus className="size-4" />
-                Container
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  connectFromSource &&
-                  addStepFromConnection(connectFromSource.sourceId, 'pipeline')
-                }
-                className="gap-1.5"
-              >
-                <Plus className="size-4" />
-                Pipeline
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  connectFromSource &&
-                  addStepFromConnection(connectFromSource.sourceId, 'output')
-                }
-                className="gap-1.5"
-              >
-                <Plus className="size-4" />
-                Output
-              </Button>
+            <div className="rounded-lg border border-border bg-card shadow-lg overflow-hidden">
+              <div className="px-3 py-2 border-b border-border bg-muted/30">
+                <p className="text-xs font-medium text-muted-foreground">Add step</p>
+              </div>
+              <div className="py-1">
+                {[
+                  ...(!nodes.some(
+                    (n) => ((n.data as { step?: FlowStep })?.step?.type ?? '') === 'input'
+                  )
+                    ? (['input'] as const)
+                    : []),
+                  'http',
+                  'query',
+                  'message',
+                  'sleep',
+                  'transform',
+                  'container',
+                  'pipeline',
+                  'output',
+                ].map((type) => {
+                  const Icon = flowStepIcons[type];
+                  const label =
+                    type === 'http'
+                      ? 'HTTP'
+                      : type.charAt(0).toUpperCase() + type.slice(1);
+                  const stepType = type as Parameters<typeof addStepFromConnection>[1];
+                  return (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() =>
+                        connectFromSource &&
+                        addStepFromConnection(connectFromSource.sourceId, stepType)
+                      }
+                      className="group w-full flex items-center gap-3 px-3 py-2.5 text-left text-sm hover:bg-accent hover:text-accent-foreground transition-colors"
+                    >
+                      {Icon && (
+                        <Icon className="size-4 shrink-0 text-muted-foreground group-hover:text-accent-foreground transition-colors" />
+                      )}
+                      <span className="font-medium">{label}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </PopoverContent>
         </Popover>
@@ -932,6 +943,7 @@ function AddStepButtons({
   onAdd: (step: FlowStep) => void;
 }) {
   const addStep = (type: 'http' | 'query' | 'input' | 'message' | 'sleep' | 'transform' | 'container' | 'pipeline' | 'output') => {
+    // eslint-disable-next-line react-hooks/purity -- Date.now() runs only on user click, not during render
     const id = `step_${type}_${Date.now()}`;
     const configs: Record<string, Record<string, unknown>> = {
       http: { restId: '', method: 'GET', path: '/' },
@@ -963,46 +975,46 @@ function AddStepButtons({
     });
   };
 
+  const stepTypes = [
+    ...(!hasInputStep ? (['input'] as const) : []),
+    'http',
+    'query',
+    'message',
+    'sleep',
+    'transform',
+    'container',
+    'pipeline',
+    'output',
+  ] as const;
+  const labels: Record<string, string> = {
+    http: 'HTTP',
+    query: 'Query',
+    input: 'Input',
+    message: 'Message',
+    sleep: 'Sleep',
+    transform: 'Transform',
+    container: 'Container',
+    pipeline: 'Pipeline',
+    output: 'Output',
+  };
+
   return (
     <div className="flex gap-2 rounded-lg border border-border bg-card px-4 py-3 shadow-sm">
-      {!hasInputStep && (
-        <Button variant="outline" size="sm" onClick={() => addStep('input')} className="gap-1.5">
-          <Plus className="size-4" />
-          Input
-        </Button>
-      )}
-      <Button variant="outline" size="sm" onClick={() => addStep('http')} className="gap-1.5">
-        <Plus className="size-4" />
-        HTTP
-      </Button>
-      <Button variant="outline" size="sm" onClick={() => addStep('query')} className="gap-1.5">
-        <Plus className="size-4" />
-        Query
-      </Button>
-      <Button variant="outline" size="sm" onClick={() => addStep('message')} className="gap-1.5">
-        <Plus className="size-4" />
-        Message
-      </Button>
-      <Button variant="outline" size="sm" onClick={() => addStep('sleep')} className="gap-1.5">
-        <Plus className="size-4" />
-        Sleep
-      </Button>
-      <Button variant="outline" size="sm" onClick={() => addStep('transform')} className="gap-1.5">
-        <Plus className="size-4" />
-        Transform
-      </Button>
-      <Button variant="outline" size="sm" onClick={() => addStep('container')} className="gap-1.5">
-        <Plus className="size-4" />
-        Container
-      </Button>
-      <Button variant="outline" size="sm" onClick={() => addStep('pipeline')} className="gap-1.5">
-        <Plus className="size-4" />
-        Pipeline
-      </Button>
-      <Button variant="outline" size="sm" onClick={() => addStep('output')} className="gap-1.5">
-        <Plus className="size-4" />
-        Output
-      </Button>
+      {stepTypes.map((type) => {
+        const Icon = flowStepIcons[type];
+        return (
+          <Button
+            key={type}
+            variant="outline"
+            size="sm"
+            onClick={() => addStep(type)}
+            className="gap-1.5"
+          >
+            {Icon && <Icon className="size-4" />}
+            {labels[type]}
+          </Button>
+        );
+      })}
     </div>
   );
 }

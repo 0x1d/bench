@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import CodeMirror, { EditorView } from '@uiw/react-codemirror';
 import { tokyoNight } from '@uiw/codemirror-themes-all';
+import { hcl } from 'codemirror-lang-hcl';
 import { autocompletion } from '@codemirror/autocomplete';
 import type { Flow } from '@/services/api';
 import {
@@ -76,7 +77,7 @@ export function FlowExpressionInput({
     const completion = autocompletion({
       override: [completionSource(flow, currentStepId)],
     });
-    return [tokyoNight, completion, editorViewTheme];
+    return [tokyoNight, hcl(), completion, editorViewTheme];
   }, [flow, currentStepId]);
 
   const minHeight = Math.max(60, rows * 24);

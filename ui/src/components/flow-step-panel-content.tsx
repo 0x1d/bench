@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -186,7 +187,7 @@ function SchemaPropertyField({
             else onChange(v);
           }}
         >
-          <SelectTrigger id={`body-${name}`} className="mt-1">
+          <SelectTrigger id={`body-${name}`} className="mt-1 w-full">
             <SelectValue placeholder={`Select ${name}`} />
           </SelectTrigger>
           <SelectContent>
@@ -204,12 +205,10 @@ function SchemaPropertyField({
   if (type === 'boolean') {
     return (
       <div className="flex items-center gap-2">
-        <input
-          type="checkbox"
+        <Checkbox
           id={`body-${name}`}
           checked={value === true || value === 'true'}
-          onChange={(e) => onChange(e.target.checked)}
-          className="rounded border-border"
+          onCheckedChange={(checked) => onChange(checked === true)}
         />
         <Label htmlFor={`body-${name}`} className="text-xs font-normal cursor-pointer">
           {name}{required ? ' *' : ''}
@@ -239,7 +238,7 @@ function SchemaPropertyField({
             onChange(v === '' ? undefined : (type === 'integer' ? parseInt(v, 10) : parseFloat(v)));
           }}
           placeholder={schema.format === 'int64' ? 'e.g. 123' : undefined}
-          className="mt-1 font-mono"
+          className="mt-1 w-full font-mono"
         />
       </div>
     );
@@ -263,7 +262,7 @@ function SchemaPropertyField({
           }}
           placeholder="Comma-separated values"
           rows={2}
-          className="mt-1 font-mono text-sm"
+          className="mt-1 w-full font-mono text-sm"
         />
       </div>
     );
@@ -302,7 +301,7 @@ function SchemaPropertyField({
         }}
         placeholder={isObject ? '{"key": "value"}' : undefined}
         rows={isObject ? 3 : 1}
-        className="mt-1 font-mono text-sm"
+        className="mt-1 w-full font-mono text-sm"
       />
     </div>
   );
@@ -380,6 +379,7 @@ function HttpStepConfig({
           value={label}
           onChange={(e) => setLabel(e.target.value)}
           placeholder="Step name"
+          className="w-full"
         />
       </div>
 
@@ -401,7 +401,7 @@ function HttpStepConfig({
             });
           }}
         >
-          <SelectTrigger id="rest-id">
+          <SelectTrigger id="rest-id" className="w-full">
             <SelectValue placeholder="Select REST resource" />
           </SelectTrigger>
           <SelectContent>
@@ -434,7 +434,7 @@ function HttpStepConfig({
               });
             }}
           >
-            <SelectTrigger id="endpoint">
+            <SelectTrigger id="endpoint" className="w-full">
               <SelectValue placeholder="Select endpoint" />
             </SelectTrigger>
             <SelectContent>
@@ -487,6 +487,7 @@ function HttpStepConfig({
                       })
                     }
                     placeholder={`Value for {${p.name}}`}
+                    className="w-full"
                   />
                 </div>
               ))}
@@ -514,6 +515,7 @@ function HttpStepConfig({
                       })
                     }
                     placeholder={`Value for ${p.name}`}
+                    className="w-full"
                   />
                 </div>
               ))}
@@ -538,7 +540,7 @@ function HttpStepConfig({
                   }
                   placeholder='{"key": "value"} or use param.paramName or step.http.foo.response_body.id'
                   rows={6}
-                  className="font-mono text-sm"
+                  className="w-full font-mono text-sm"
                 />
               )}
             </div>
@@ -602,6 +604,7 @@ function QueryStepConfig({
           value={label}
           onChange={(e) => setLabel(e.target.value)}
           placeholder="Step name"
+          className="w-full"
         />
       </div>
 
@@ -616,7 +619,7 @@ function QueryStepConfig({
             setConfig({ ...config, databaseId: v })
           }
         >
-          <SelectTrigger id="database-id">
+          <SelectTrigger id="database-id" className="w-full">
             <SelectValue placeholder="Select database" />
           </SelectTrigger>
           <SelectContent>
@@ -642,7 +645,7 @@ function QueryStepConfig({
           }
           placeholder="SELECT * FROM users WHERE id = $1"
           rows={8}
-          className="font-mono text-sm"
+          className="w-full font-mono text-sm"
         />
       </div>
 
@@ -662,7 +665,7 @@ function QueryStepConfig({
             setConfig({ ...config, args: vals });
           }}
           placeholder="param.user_id, param.limit"
-          className="font-mono text-sm"
+          className="w-full font-mono text-sm"
         />
         <p className="text-[10px] text-muted-foreground mt-1 px-1">
           Comma-separated param references for $1, $2, etc. (e.g. param.user_id)
@@ -735,6 +738,7 @@ function InputStepConfig({
           value={label}
           onChange={(e) => setLabel(e.target.value)}
           placeholder="Step name"
+          className="w-full"
         />
       </div>
 
@@ -757,13 +761,21 @@ function InputStepConfig({
                   placeholder="param_name"
                   value={p.name}
                   onChange={(e) => updateParam(i, { name: e.target.value.replace(/\s/g, '_') })}
-                  className="font-mono"
+                  className="min-w-0 flex-1 font-mono"
                 />
+                <Button variant="ghost" size="icon-sm" onClick={() => removeParam(i)} aria-label="Remove param">
+                  <Trash2 className="size-4" />
+                </Button>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor={`param-type-${i}`} className="text-xs font-normal text-muted-foreground">
+                  Type
+                </Label>
                 <Select
                   value={p.type}
                   onValueChange={(v) => updateParam(i, { type: v })}
                 >
-                  <SelectTrigger className="w-[120px]">
+                  <SelectTrigger id={`param-type-${i}`} className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -773,21 +785,18 @@ function InputStepConfig({
                     <SelectItem value="any">any</SelectItem>
                   </SelectContent>
                 </Select>
-                <Button variant="ghost" size="icon-sm" onClick={() => removeParam(i)} aria-label="Remove param">
-                  <Trash2 className="size-4" />
-                </Button>
               </div>
               <Input
                 placeholder="Description (optional)"
                 value={p.description ?? ''}
                 onChange={(e) => updateParam(i, { description: e.target.value || undefined })}
-                className="text-sm"
+                className="w-full text-sm"
               />
               <Input
                 placeholder="Default value (optional)"
                 value={p.default ?? ''}
                 onChange={(e) => updateParam(i, { default: e.target.value || undefined })}
-                className="text-sm font-mono"
+                className="w-full text-sm font-mono"
               />
             </div>
           ))}
@@ -823,13 +832,14 @@ function MessageStepConfig({
 }) {
   return (
     <div className="flex flex-col gap-4 overflow-auto">
-      <div>
+      <div className="space-y-2">
         <Label htmlFor="step-name">Name</Label>
         <Input
           id="step-name"
           value={label}
           onChange={(e) => setLabel(e.target.value)}
           placeholder="Step name"
+          className="w-full"
         />
       </div>
 
@@ -845,7 +855,7 @@ function MessageStepConfig({
             setConfig({ ...config, notifier: e.target.value })
           }
           placeholder="default or slack"
-          className="font-mono text-sm"
+          className="w-full font-mono text-sm"
         />
         <p className="text-[10px] text-muted-foreground mt-1 px-1">
           Target notifier (auto-prefixed with <code>notifier.</code> if omitted).
@@ -865,7 +875,7 @@ function MessageStepConfig({
           }
           placeholder="Hello from bench! or use flowpipe interpolations like ${step.http.req.response_body.id}"
           rows={6}
-          className="font-mono text-sm"
+          className="w-full font-mono text-sm"
         />
       </div>
 

@@ -43,8 +43,6 @@ import {
 const NODE_WIDTH = 200;
 const NODE_HEIGHT = 56;
 
-const dagreGraph = new dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
-
 interface InputParam {
   name: string;
   type?: string;
@@ -69,27 +67,28 @@ function getLayoutedElements(
 ): { nodes: Node[]; edges: Edge[] } {
   const isHorizontal = direction === 'LR';
   const sortedNodes = sortNodesInputFirst(nodes);
-  dagreGraph.setGraph({
+  const graph = new dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
+  graph.setGraph({
     rankdir: direction,
     ranksep: 60,
     nodesep: 40,
   });
 
   sortedNodes.forEach((node) => {
-    dagreGraph.setNode(node.id, {
+    graph.setNode(node.id, {
       width: NODE_WIDTH,
       height: NODE_HEIGHT,
     });
   });
 
   edges.forEach((edge) => {
-    dagreGraph.setEdge(edge.source, edge.target);
+    graph.setEdge(edge.source, edge.target);
   });
 
-  dagre.layout(dagreGraph);
+  dagre.layout(graph);
 
   const layoutedNodes: Node[] = sortedNodes.map((node) => {
-    const nodeWithPosition = dagreGraph.node(node.id);
+    const nodeWithPosition = graph.node(node.id);
     return {
       ...node,
       targetPosition: (isHorizontal ? 'left' : 'top') as Position,
@@ -241,10 +240,14 @@ export default function FlowEditorPage() {
   const [edges, setEdges, onEdgesChange] = useEdgesState(initial.edges);
 
   useEffect(() => {
-    if (flow && initial.nodes.length > 0) {
+    if (!flow) return;
+    if (initial.nodes.length > 0) {
       const layouted = getLayoutedElements(initial.nodes, initial.edges, layoutDirection);
       setNodes(layouted.nodes);
       setEdges(layouted.edges);
+    } else {
+      setNodes([]);
+      setEdges([]);
     }
   }, [flow, initial.nodes, initial.edges, layoutDirection, setNodes, setEdges]);
 

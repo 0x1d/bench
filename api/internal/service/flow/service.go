@@ -91,6 +91,9 @@ func (s *Service) SyncFromJSON() error {
 	}
 	entries, err := os.ReadDir(dir)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
 		return err
 	}
 	for _, e := range entries {

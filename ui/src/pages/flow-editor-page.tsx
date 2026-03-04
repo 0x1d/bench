@@ -45,6 +45,13 @@ const NODE_HEIGHT = 56;
 
 const dagreGraph = new dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
 
+interface InputParam {
+  name: string;
+  type?: string;
+  description?: string;
+  default?: string;
+}
+
 function sortNodesInputFirst(nodes: Node[]): Node[] {
   return [...nodes].sort((a, b) => {
     const aStep = (a.data as { step?: FlowStep })?.step;
@@ -177,7 +184,7 @@ const nodeTypes: NodeTypes = {
 export default function FlowEditorPage() {
   const queryClient = useQueryClient();
   const flowId = window.location.hash.split('/').pop() || '';
-  const [flowName, setFlowName] = useState('');
+  const [renamedFlow, setRenamedFlow] = useState<{ id: string; name: string } | null>(null);
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameValue, setRenameValue] = useState('');
   const {
@@ -208,6 +215,11 @@ export default function FlowEditorPage() {
       fetchFlow(flowId!, flowModule ?? undefined),
     enabled: !!flowId,
   });
+  const displayFlowName = flow
+    ? renamedFlow?.id === flow.id
+      ? renamedFlow.name
+      : (flow.name || flow.id)
+    : '';
 
   const initial = useMemo(() => {
     if (!flow) return { nodes: [], edges: [] };
@@ -223,7 +235,7 @@ export default function FlowEditorPage() {
       return getLayoutedElements(nodes, edges, layoutDirection);
     }
     return { nodes, edges };
-  }, [flow?.id, layoutDirection]);
+  }, [flow, layoutDirection]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initial.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initial.edges);
@@ -234,17 +246,7 @@ export default function FlowEditorPage() {
       setNodes(layouted.nodes);
       setEdges(layouted.edges);
     }
-  }, [flow?.id, layoutDirection]);
-
-  useEffect(() => {
-    if (flow && !flowName) {
-      setFlowName(flow.name || flow.id);
-    }
-    // Clear execution state when switching flows
-    setExecutionId(null);
-    setSelectedStep(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [flow?.id]);
+  }, [flow, initial.nodes, initial.edges, layoutDirection, setNodes, setEdges]);
 
   const updateMutation = useMutation({
     mutationFn: (f: Flow) =>
@@ -266,7 +268,7 @@ export default function FlowEditorPage() {
   });
 
   const runMutation = useMutation({
-    mutationFn: ({ id, args }: { id: string; args?: Record<string, any> }) =>
+    mutationFn: ({ id, args }: { id: string; args?: Record<string, unknown> }) =>
       runFlow(id, args, {
         workspace: flowWorkspace ?? undefined,
         module: flowModule ?? undefined,
@@ -373,21 +375,24 @@ export default function FlowEditorPage() {
     if (!flowId || !flow) return;
     const updated = nodesEdgesToFlow(
       flowId,
-      flowName.trim() || flow.id,
+      displayFlowName.trim() || flow.id,
       flow.description ?? '',
       nodes,
       edges
     );
     updateMutation.mutate(updated);
-  }, [flowId, flow, flowName, nodes, edges, updateMutation]);
+  }, [flowId, flow, displayFlowName, nodes, edges, updateMutation]);
 
   // Collect input params from input steps
   const inputParams = useMemo(() => {
     if (!flow) return [];
     const inputStep = flow.steps.find((s) => s.type === 'input');
     if (!inputStep) return [];
-    const params = (inputStep.config?.params as any[]) || [];
-    return params.filter((p: any) => p?.name);
+    const params = (inputStep.config?.params as unknown[]) || [];
+    return params.filter(
+      (p): p is InputParam =>
+        typeof p === 'object' && p !== null && 'name' in p && typeof (p as InputParam).name === 'string'
+    );
   }, [flow]);
 
   const handleRun = useCallback(() => {
@@ -525,20 +530,20 @@ export default function FlowEditorPage() {
         </button>
         <span className="text-muted-foreground">/</span>
         <span className="rounded px-2 py-1 font-mono truncate max-w-[200px]">
-          {flowName || flow.id}
+          {displayFlowName || flow.id}
         </span>
       </nav>
 
       <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 shadow-sm">
         <div className="flex items-center gap-2 min-w-0">
           <span className="font-medium truncate max-w-[200px]">
-            {flowName || flow.id}
+            {displayFlowName || flow.id}
           </span>
           <Button
             variant="ghost"
             size="icon-xs"
             onClick={() => {
-              setRenameValue(flowName || flow.id);
+              setRenameValue(displayFlowName || flow.id);
               setRenameOpen(true);
             }}
             aria-label="Rename flow"
@@ -748,7 +753,7 @@ export default function FlowEditorPage() {
               onChange={(e) => setRenameValue(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
-                  setFlowName(renameValue.trim() || flow.id);
+                  setRenamedFlow({ id: flow.id, name: renameValue.trim() || flow.id });
                   setRenameOpen(false);
                 }
               }}
@@ -765,7 +770,7 @@ export default function FlowEditorPage() {
             </Button>
             <Button
               onClick={() => {
-                setFlowName(renameValue.trim() || flow.id);
+                setRenamedFlow({ id: flow.id, name: renameValue.trim() || flow.id });
                 setRenameOpen(false);
               }}
               disabled={!renameValue.trim()}
@@ -786,7 +791,7 @@ export default function FlowEditorPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-2">
-            {inputParams.map((p: any) => (
+            {inputParams.map((p) => (
               <div key={p.name} className="space-y-1.5">
                 <Label htmlFor={`param-${p.name}`} className="text-xs font-medium flex items-center gap-2">
                   {p.name}

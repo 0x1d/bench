@@ -42,11 +42,11 @@ Starts Vite dev server on `:5173`. The browser always calls `/api`; Vite proxies
 
 ### Pre-commit quality gate
 
-Before creating any commit, always run lint and build for both services, and only commit when all checks pass:
+Before creating any commit, always run lint and test checks for both services (plus required build checks), and only commit when all checks pass:
 
 ```bash
 # API
-cd api && go vet ./... && go build ./cmd/server
+cd api && go vet ./... && go test ./... && go build ./cmd/server
 
 # UI
 cd ui && pnpm lint && pnpm build

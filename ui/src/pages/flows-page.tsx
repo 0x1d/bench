@@ -167,18 +167,18 @@ export function FlowsPage() {
     default?: string;
   }
 
-  function getInputParams(flow: Flow): InputParam[] {
+  const getInputParams = useCallback((flow: Flow): InputParam[] => {
     const inputStep = flow.steps?.find((s) => s.type === 'input');
     if (!inputStep) return [];
     const params = (inputStep.config?.params as unknown[]) || [];
     return params.filter((p): p is InputParam => !!p && typeof p === 'object' && 'name' in p && !!p.name);
-  }
+  }, []);
 
-  async function executeRun(
+  const executeRun = useCallback(async (
     flow: Flow,
     args?: Record<string, unknown>,
     modulePath?: string
-  ) {
+  ) => {
     const mod = modulePath ?? runTargetModule ?? currentPath;
     try {
       const result = await runFlow(flow.id, args, {
@@ -196,7 +196,7 @@ export function FlowsPage() {
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to run flow');
     }
-  }
+  }, [currentPath, displayWorkspace, runTargetModule, setExecutionId, setSelectedStep]);
 
   async function handleRunWithParams() {
     if (!runTargetFlow) return;
@@ -242,7 +242,7 @@ export function FlowsPage() {
       }
       await executeRun(flow, undefined, modulePath);
     },
-    []
+    [executeRun, getInputParams]
   );
 
   const handleEdit = useCallback(

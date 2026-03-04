@@ -20,10 +20,10 @@ interface StepExecution {
     id: string;
     name: string;
     status: string;
-    input?: Record<string, any>;
+    input?: Record<string, unknown>;
     output?: {
         status: string;
-        data?: Record<string, any>;
+        data?: Record<string, unknown>;
         flowpipe?: { started_at?: string; finished_at?: string };
     };
     start_time?: string;
@@ -123,39 +123,39 @@ function StepDetail({ exec, defaultExpanded = false }: { exec: StepExecution; de
                     {exec.output?.data && (
                         <div>
                             <div className="text-xs font-medium text-muted-foreground mb-1">Output</div>
-                            {exec.output.data.status_code !== undefined && (
+                            {asNumber(exec.output.data['status_code']) !== undefined && (
                                 <div className="flex gap-2 text-xs mb-1">
                                     <span className="text-muted-foreground font-mono">status:</span>
                                     <span
                                         className={cn(
                                             'font-mono',
-                                            exec.output.data.status_code < 300
+                                            asNumber(exec.output.data['status_code'])! < 300
                                                 ? 'text-green-400'
-                                                : exec.output.data.status_code < 500
+                                                : asNumber(exec.output.data['status_code'])! < 500
                                                     ? 'text-yellow-400'
                                                     : 'text-red-400'
                                         )}
                                     >
-                                        {exec.output.data.status}
+                                        {String(exec.output.data['status'] ?? '')}
                                     </span>
                                 </div>
                             )}
-                            {exec.output.data.response_body !== undefined && (
+                            {exec.output.data['response_body'] !== undefined && (
                                 <pre className="p-2 rounded bg-background/50 border border-border font-mono text-xs overflow-auto max-h-48 whitespace-pre-wrap break-all text-foreground">
-                                    {typeof exec.output.data.response_body === 'string'
-                                        ? exec.output.data.response_body
-                                        : JSON.stringify(exec.output.data.response_body, null, 2)}
+                                    {typeof exec.output.data['response_body'] === 'string'
+                                        ? exec.output.data['response_body']
+                                        : JSON.stringify(exec.output.data['response_body'], null, 2)}
                                 </pre>
                             )}
-                            {exec.output.data.rows !== undefined && (
+                            {exec.output.data['rows'] !== undefined && (
                                 <pre className="p-2 rounded bg-background/50 border border-border font-mono text-xs overflow-auto max-h-48 whitespace-pre-wrap break-all text-foreground">
-                                    {JSON.stringify(exec.output.data.rows, null, 2)}
+                                    {JSON.stringify(exec.output.data['rows'], null, 2)}
                                 </pre>
                             )}
                             {/* Generic output for other step types */}
-                            {exec.output.data.response_body === undefined &&
-                                exec.output.data.rows === undefined &&
-                                exec.output.data.status_code === undefined && (
+                            {exec.output.data['response_body'] === undefined &&
+                                exec.output.data['rows'] === undefined &&
+                                exec.output.data['status_code'] === undefined && (
                                     <pre className="p-2 rounded bg-background/50 border border-border font-mono text-xs overflow-auto max-h-48 whitespace-pre-wrap break-all text-foreground">
                                         {JSON.stringify(exec.output.data, null, 2)}
                                     </pre>
@@ -179,6 +179,23 @@ interface ExecutionData {
     pipeline_executions?: Record<string, unknown>;
     root_pipelines?: string[];
     errors?: Array<{ error?: { detail?: string }; message?: string }>;
+}
+
+interface PipelineExecution {
+    name?: string;
+    status?: string;
+    start_time?: string;
+    end_time?: string;
+    pipeline_output?: Record<string, unknown>;
+    step_status?: Record<string, Record<string, StepStatusEntry>>;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null;
+}
+
+function asNumber(value: unknown): number | undefined {
+    return typeof value === 'number' ? value : undefined;
 }
 
 export function FlowExecutionLog({ executionId, workspace, selectedStepId }: { executionId: string; workspace?: string; selectedStepId?: string | null }) {
@@ -215,7 +232,8 @@ export function FlowExecutionLog({ executionId, workspace, selectedStepId }: { e
     const execData = data as ExecutionData;
     const pipelineExecs = execData.pipeline_executions || {};
     const rootPexecId = execData.root_pipelines?.[0];
-    const pexec = rootPexecId ? pipelineExecs[rootPexecId] : Object.values(pipelineExecs)[0] as any;
+    const pexecCandidate = rootPexecId ? pipelineExecs[rootPexecId] : Object.values(pipelineExecs)[0];
+    const pexec: PipelineExecution | null = isRecord(pexecCandidate) ? (pexecCandidate as PipelineExecution) : null;
 
     if (!pexec) {
         return (

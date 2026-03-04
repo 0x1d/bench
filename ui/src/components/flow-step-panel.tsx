@@ -46,13 +46,6 @@ export function FlowStepPanel() {
   const isExpanded =
     selectedStep != null || executionId != null || moduleEditPath != null;
 
-  // Auto-switch to execution tab when a new execution starts
-  const prevExecRef = useRef<string | null>(null);
-  if (executionId && executionId !== prevExecRef.current) {
-    prevExecRef.current = executionId;
-    setActiveTab('execution');
-  }
-
   const { data: statusData } = useQuery({
     queryKey: ['status'],
     queryFn: () => fetchStatus(),
@@ -201,6 +194,7 @@ export function FlowStepPanel() {
         )}
         {!moduleEditPath && activeTab === 'config' && selectedStep && (
           <FlowStepPanelContent
+            key={selectedStep.id}
             step={selectedStep}
             databases={databases}
             restResources={restResources}

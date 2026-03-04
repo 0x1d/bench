@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -46,12 +46,6 @@ export function FlowStepPanelContent({
 }: FlowStepPanelContentProps) {
   const [label, setLabel] = useState(step.label || step.id);
   const [config, setConfig] = useState<Record<string, unknown>>(step.config || {});
-
-  useEffect(() => {
-    setLabel(step.label || step.id);
-    setConfig(step.config || {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect
-  }, [step.id]);
 
   const handleSave = (finalConfig?: Record<string, unknown>) => {
     onSave({ ...step, label, config: finalConfig ?? config });

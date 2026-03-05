@@ -1,0 +1,71 @@
+{
+  "id": "test_container",
+  "name": "Test Container",
+  "description": "Tests the container step",
+  "steps": [
+    {
+      "id": "step_container_1",
+      "type": "container",
+      "label": "run_echo",
+      "config": {
+        "cmd": [
+          "echo",
+          "Hello from container!"
+        ],
+        "image": "alpine:latest"
+      },
+      "position": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "step_message_1",
+      "type": "message",
+      "label": "notify",
+      "config": {
+        "notifier": "default",
+        "text": "Container test completed!"
+      },
+      "dependsOn": [
+        "step_container_1"
+      ],
+      "position": {
+        "x": 0,
+        "y": 116
+      }
+    },
+    {
+      "id": "step_output_1",
+      "type": "output",
+      "label": "result",
+      "config": {
+        "outputs": [
+          {
+            "name": "result",
+            "value": "step.container.run_echo.stdout"
+          }
+        ]
+      },
+      "dependsOn": [
+        "step_message_1"
+      ],
+      "position": {
+        "x": 0,
+        "y": 232
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "step_container_1",
+      "target": "step_message_1"
+    },
+    {
+      "id": "e2",
+      "source": "step_message_1",
+      "target": "step_output_1"
+    }
+  ]
+}

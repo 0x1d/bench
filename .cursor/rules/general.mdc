@@ -48,6 +48,7 @@ Examples:
 ## Code Quality
 
 - All code must pass linting and type-checking before commit.
+- Always run lint and tests before every commit; do not commit if any check fails.
 - Write tests for business logic and critical paths.
 - Prefer explicit over implicit — avoid magic values and hidden side effects.
 - Keep functions short and focused on a single responsibility.

@@ -1,5 +1,6 @@
 services:
   postgres:
+    restart: unless-stopped
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: bench
@@ -9,6 +10,17 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+
+  flowpipe:
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: docker/flowpipe/Dockerfile
+    ports:
+      - "7103:7103"
+    volumes:
+      - ./flows:/flows
+      - /var/run/docker.sock:/var/run/docker.sock
 
 volumes:
   postgres_data: {}

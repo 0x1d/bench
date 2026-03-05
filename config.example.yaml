@@ -21,3 +21,11 @@ resources:
       openapiSpec: specs/petstore.json
       auth:
         type: none
+
+# Flows (Flowpipe integration)
+flows:
+  path: ./flows
+  workspaces:
+    - id: default
+      label: Default
+      flowpipeUrl: http://localhost:7103

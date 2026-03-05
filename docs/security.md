@@ -97,6 +97,15 @@ See [rest.md](rest.md) for the full API reference.
 
 See [filesystem.md](filesystem.md) for the full API reference.
 
+## Flows
+
+- Flows are configured in `config.yaml` under `flows.path` and `flows.workspaces`.
+- **Flowpipe URL**: Workspace `flowpipeUrl` is server-side; only id and label are exposed to the client.
+- **Database connections**: `connections.fpc` is auto-generated from `resources.databases`; credentials use env interpolation and are never sent to the client.
+- **Path validation**: Module paths reject `..` and path traversal.
+
+See [flows.md](flows.md) for the full API reference.
+
 ## CORS
 
 The API sets `Access-Control-Allow-Origin: *`. Any origin can make requests, but the token is still required. The token is the gate; CORS does not weaken authentication.

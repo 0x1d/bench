@@ -34,6 +34,11 @@ export interface StatusResponse {
     configured: boolean;
     count: number;
   };
+  flows?: {
+    configured: boolean;
+    count: number;
+    flowpipeHealthy: boolean;
+  };
 }
 
 export async function fetchHealth(): Promise<HealthStatus> {
@@ -561,7 +566,7 @@ export async function dropTable(
   const response = await fetch(
     withDbParams(`${API_BASE}/database/tables/${encodeURIComponent(tableName)}`, params, dbId),
     {
-    method: 'DELETE',
+      method: 'DELETE',
     }
   );
   if (!response.ok) {
@@ -648,4 +653,305 @@ export async function fetchRestProxy(
     }),
   });
   return response;
+}
+
+// Flow types and API
+export interface FlowStepPosition {
+  x: number;
+  y: number;
+}
+
+export interface FlowStep {
+  id: string;
+  type: string;
+  label: string;
+  config: Record<string, unknown>;
+  dependsOn?: string[];
+  position?: FlowStepPosition;
+}
+
+export interface FlowEdge {
+  id: string;
+  source: string;
+  target: string;
+}
+
+export interface Flow {
+  id: string;
+  name: string;
+  description?: string;
+  steps: FlowStep[];
+  edges?: FlowEdge[];
+}
+
+export interface FlowListResponse {
+  flows: Flow[];
+}
+
+export interface FlowWorkspace {
+  id: string;
+  label: string;
+  path: string;
+}
+
+export interface FlowWorkspacesResponse {
+  workspaces: FlowWorkspace[];
+}
+
+export interface FlowWorkspaceEntry {
+  name: string;
+  path: string;
+  type: 'module' | 'flow';
+  steps?: number;
+  mtime?: number;
+}
+
+export interface FlowWorkspaceTreeEntry extends FlowWorkspaceEntry {
+  children?: FlowWorkspaceTreeEntry[];
+}
+
+export interface FlowWorkspaceEntriesResponse {
+  entries: FlowWorkspaceEntry[];
+}
+
+export interface FlowWorkspaceTreeResponse {
+  entries: FlowWorkspaceTreeEntry[];
+}
+
+export async function fetchFlowWorkspaces(): Promise<FlowWorkspacesResponse> {
+  const response = await fetch(`${API_BASE}/flows/workspaces`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch workspaces: ${response.status} ${response.statusText}`);
+  }
+  return response.json();
+}
+
+export async function fetchFlowEntries(path = '.'): Promise<FlowWorkspaceEntriesResponse> {
+  const params = new URLSearchParams({ path });
+  const response = await fetch(`${API_BASE}/flows/entries?${params}`);
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Failed to fetch entries: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function fetchFlowTree(path = '.'): Promise<FlowWorkspaceTreeResponse> {
+  const params = new URLSearchParams({ path, recursive: 'true' });
+  const response = await fetch(`${API_BASE}/flows/entries?${params}`);
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Failed to fetch flow tree: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function moveFlow(
+  id: string,
+  fromModule: string,
+  toModule: string
+): Promise<void> {
+  const response = await fetch(`${API_BASE}/flows/${encodeURIComponent(id)}/move`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      fromModule: fromModule || '.',
+      toModule: toModule || '.',
+    }),
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Failed to move flow: ${response.status}`);
+  }
+}
+
+export interface FlowModuleMeta {
+  title: string;
+  description: string;
+}
+
+export async function fetchFlowModule(path: string): Promise<FlowModuleMeta> {
+  const params = new URLSearchParams({ path });
+  const response = await fetch(`${API_BASE}/flows/module?${params}`);
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Failed to fetch module: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function updateFlowModule(
+  path: string,
+  meta: FlowModuleMeta
+): Promise<FlowModuleMeta> {
+  const params = new URLSearchParams({ path });
+  const response = await fetch(`${API_BASE}/flows/module?${params}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(meta),
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Failed to update module: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function createFlowModule(name: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/flows/modules`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Failed to create module: ${response.status}`);
+  }
+}
+
+export async function fetchFlowList(module?: string): Promise<FlowListResponse> {
+  const params = new URLSearchParams();
+  if (module) params.set('module', module);
+  const qs = params.toString();
+  const url = qs ? `${API_BASE}/flows?${qs}` : `${API_BASE}/flows`;
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch flows: ${response.status} ${response.statusText}`);
+  }
+  return response.json();
+}
+
+export async function fetchFlow(id: string, module?: string): Promise<Flow> {
+  const params = new URLSearchParams();
+  if (module) params.set('module', module);
+  const qs = params.toString();
+  const url = qs
+    ? `${API_BASE}/flows/${encodeURIComponent(id)}?${qs}`
+    : `${API_BASE}/flows/${encodeURIComponent(id)}`;
+  const response = await fetch(url);
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Failed to fetch flow: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function createFlow(
+  flow: Partial<Flow>,
+  module?: string
+): Promise<Flow> {
+  const params = new URLSearchParams();
+  if (module) params.set('module', module);
+  const qs = params.toString();
+  const url = qs ? `${API_BASE}/flows?${qs}` : `${API_BASE}/flows`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(flow),
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Failed to create flow: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function updateFlow(
+  id: string,
+  flow: Partial<Flow>,
+  module?: string
+): Promise<Flow> {
+  const params = new URLSearchParams();
+  if (module) params.set('module', module);
+  const qs = params.toString();
+  const url = qs
+    ? `${API_BASE}/flows/${encodeURIComponent(id)}?${qs}`
+    : `${API_BASE}/flows/${encodeURIComponent(id)}`;
+  const response = await fetch(url, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...flow, id }),
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Failed to update flow: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function deleteFlow(id: string, module?: string): Promise<void> {
+  const params = new URLSearchParams();
+  if (module) params.set('module', module);
+  const qs = params.toString();
+  const url = qs
+    ? `${API_BASE}/flows/${encodeURIComponent(id)}?${qs}`
+    : `${API_BASE}/flows/${encodeURIComponent(id)}`;
+  const response = await fetch(url, {
+    method: 'DELETE',
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Failed to delete flow: ${response.status}`);
+  }
+}
+
+export async function runFlow(
+  id: string,
+  args?: Record<string, unknown>,
+  runOpts?: { workspace?: string; module?: string }
+): Promise<unknown> {
+  const params = new URLSearchParams();
+  if (runOpts?.workspace) params.set('workspace', runOpts.workspace);
+  if (runOpts?.module) params.set('module', runOpts.module);
+  const qs = params.toString();
+  const url = qs
+    ? `${API_BASE}/flows/${encodeURIComponent(id)}/run?${qs}`
+    : `${API_BASE}/flows/${encodeURIComponent(id)}/run`;
+  const fetchOpts: RequestInit = {
+    method: 'POST',
+  };
+  if (args && Object.keys(args).length > 0) {
+    fetchOpts.headers = { 'Content-Type': 'application/json' };
+    fetchOpts.body = JSON.stringify({ args });
+  }
+  const response = await fetch(url, fetchOpts);
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Failed to run flow: ${response.status}`);
+  }
+  // Try to parse JSON, fall back to text
+  const contentType = response.headers.get('content-type') || '';
+  if (contentType.includes('application/json')) {
+    return response.json();
+  }
+  return { output: await response.text() };
+}
+
+export async function fetchFlowProcesses(workspace?: string): Promise<unknown> {
+  const params = new URLSearchParams();
+  if (workspace) params.set('workspace', workspace);
+  const qs = params.toString();
+  const url = qs ? `${API_BASE}/flows/processes?${qs}` : `${API_BASE}/flows/processes`;
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch processes: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function fetchFlowExecution(
+  executionId: string,
+  workspace?: string
+): Promise<unknown> {
+  const params = new URLSearchParams();
+  if (workspace) params.set('workspace', workspace);
+  const qs = params.toString();
+  const url = qs
+    ? `${API_BASE}/flows/executions/${encodeURIComponent(executionId)}?${qs}`
+    : `${API_BASE}/flows/executions/${encodeURIComponent(executionId)}`;
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch execution: ${response.status}`);
+  }
+  return response.json();
 }

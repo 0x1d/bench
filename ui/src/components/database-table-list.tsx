@@ -3,16 +3,7 @@ import { Database, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { useDropTable } from '@/hooks/use-database';
 import { useDatabaseView } from '@/contexts/database-view-context';
 import { cn } from '@/lib/utils';
@@ -43,13 +34,6 @@ export function DatabaseTableList({
   const [dropCascade, setDropCascade] = useState(false);
   const [dropError, setDropError] = useState<string | null>(null);
   const dropMutation = useDropTable(selectedDatabaseId);
-
-  const handleDropDialogChange = (open: boolean) => {
-    if (open || dropMutation.isPending) return;
-    setDropTarget(null);
-    setDropCascade(false);
-    setDropError(null);
-  };
 
   const handleDropTargetChange = (tableName: string) => {
     if (dropMutation.isPending) return;
@@ -163,51 +147,42 @@ export function DatabaseTableList({
         </div>
       )}
 
-      <AlertDialog open={!!dropTarget} onOpenChange={handleDropDialogChange}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Drop table</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to drop the table &quot;{dropTarget}&quot;? All data will be
-              permanently deleted. This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="drop-table-cascade"
-                checked={dropCascade}
-                onCheckedChange={(checked) => setDropCascade(checked === true)}
-                disabled={dropMutation.isPending}
-              />
-              <Label htmlFor="drop-table-cascade" className="cursor-pointer text-sm">
-                Drop table with cascade
-              </Label>
-            </div>
-            {dropError && (
-              <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                {dropError}
-              </p>
-            )}
+      <ConfirmDeleteDialog
+        open={!!dropTarget}
+        onOpenChange={(open) => {
+          if (!open && !dropMutation.isPending) {
+            setDropTarget(null);
+            setDropCascade(false);
+            setDropError(null);
+          }
+        }}
+        title="Drop table"
+        description={`Are you sure you want to drop the table "${dropTarget}"? All data will be permanently deleted. This action cannot be undone.`}
+        onConfirm={handleConfirmDrop}
+        confirmLabel="Drop table"
+        loadingLabel="Dropping..."
+        cancelLabel="Cancel"
+        isLoading={dropMutation.isPending}
+      >
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="drop-table-cascade"
+              checked={dropCascade}
+              onCheckedChange={(checked) => setDropCascade(checked === true)}
+              disabled={dropMutation.isPending}
+            />
+            <Label htmlFor="drop-table-cascade" className="cursor-pointer text-sm">
+              Drop table with cascade
+            </Label>
           </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel asChild>
-              <Button variant="outline" disabled={dropMutation.isPending}>
-                Cancel
-              </Button>
-            </AlertDialogCancel>
-            <AlertDialogAction asChild>
-              <Button
-                variant="destructive"
-                onClick={handleConfirmDrop}
-                disabled={dropMutation.isPending}
-              >
-                {dropMutation.isPending ? 'Dropping...' : 'Drop table'}
-              </Button>
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+          {dropError && (
+            <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {dropError}
+            </p>
+          )}
+        </div>
+      </ConfirmDeleteDialog>
     </div>
   );
 }

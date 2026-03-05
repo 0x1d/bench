@@ -10,6 +10,7 @@ import (
 	"github.com/0x1d/bench/api/internal/db"
 	"github.com/0x1d/bench/api/internal/handler"
 	"github.com/0x1d/bench/api/internal/middleware"
+	"github.com/0x1d/bench/api/internal/service/flow"
 )
 
 func main() {
@@ -48,6 +49,14 @@ func main() {
 		}
 		defer db.Close()
 		log.Print("database connected (DATABASE_URL)")
+	}
+
+	// Regenerate .fp from .json on startup (fixes stale .fp when JSON edited outside API)
+	if dir := config.FlowsPath(); dir != "" {
+		flowSvc := flow.NewService()
+		if err := flowSvc.SyncFromJSON(); err != nil {
+			log.Printf("flow sync warning: %v", err)
+		}
 	}
 
 	mux := http.NewServeMux()

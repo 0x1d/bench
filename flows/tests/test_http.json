@@ -1,0 +1,69 @@
+{
+  "id": "test_http",
+  "name": "Test HTTP",
+  "description": "Tests the HTTP step (uses petstore REST)",
+  "steps": [
+    {
+      "id": "step_http_1",
+      "type": "http",
+      "label": "fetch_pet",
+      "config": {
+        "method": "GET",
+        "path": "/pet/1",
+        "restId": "petstore"
+      },
+      "position": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "step_message_1",
+      "type": "message",
+      "label": "notify",
+      "config": {
+        "notifier": "default",
+        "text": "HTTP test completed!"
+      },
+      "dependsOn": [
+        "step_http_1"
+      ],
+      "position": {
+        "x": 0,
+        "y": 116
+      }
+    },
+    {
+      "id": "step_output_1",
+      "type": "output",
+      "label": "Output",
+      "config": {
+        "outputs": [
+          {
+            "name": "result",
+            "value": "step.http.fetch_pet.response_body"
+          }
+        ]
+      },
+      "dependsOn": [
+        "step_message_1"
+      ],
+      "position": {
+        "x": 0,
+        "y": 232
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "step_http_1",
+      "target": "step_message_1"
+    },
+    {
+      "id": "e2",
+      "source": "step_message_1",
+      "target": "step_output_1"
+    }
+  ]
+}

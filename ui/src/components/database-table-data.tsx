@@ -1,16 +1,7 @@
 import { useState } from 'react';
 import { ChevronLeft, ChevronRight, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { useDatabaseView } from '@/contexts/database-view-context';
 import { useDeleteRow } from '@/hooks/use-database';
 import { cn } from '@/lib/utils';
@@ -150,33 +141,16 @@ export function DatabaseTableData({
             )}
           </div>
 
-          <AlertDialog
+          <ConfirmDeleteDialog
             open={!!deleteTarget}
             onOpenChange={(open) => !open && setDeleteTarget(null)}
-          >
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete row</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Are you sure you want to delete this row? This action cannot be undone.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel asChild>
-                  <Button variant="outline">Cancel</Button>
-                </AlertDialogCancel>
-                <AlertDialogAction asChild>
-                  <Button
-                    variant="destructive"
-                    onClick={handleConfirmDelete}
-                    disabled={deleteMutation.isPending}
-                  >
-                    {deleteMutation.isPending ? 'Deleting...' : 'Delete row'}
-                  </Button>
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+            title="Delete row"
+            description="Are you sure you want to delete this row? This action cannot be undone."
+            onConfirm={handleConfirmDelete}
+            confirmLabel="Delete row"
+            loadingLabel="Deleting..."
+            isLoading={deleteMutation.isPending}
+          />
 
           {total > 0 && (
             <div className="flex items-center justify-between gap-4">

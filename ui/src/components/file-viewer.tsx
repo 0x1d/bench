@@ -18,13 +18,7 @@ import { cn } from '@/lib/utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { StructuredForm } from '@/components/structured-form';
 import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import {
   AlertDialog,
-  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -32,6 +26,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 
 const STORAGE_KEY = 'bench-file-viewer-width';
 
@@ -756,40 +756,19 @@ export function FileViewer() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      <AlertDialog
+      <ConfirmDeleteDialog
         open={showDeleteConfirm}
         onOpenChange={(open) => !open && setShowDeleteConfirm(false)}
-      >
-        <AlertDialogContent
-          onOpenAutoFocus={(e) => {
-            e.preventDefault();
-            deleteButtonRef.current?.focus();
-          }}
-        >
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete &quot;{viewedFile?.name}&quot;? This action cannot be
-              undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel asChild>
-              <Button variant="outline">Cancel</Button>
-            </AlertDialogCancel>
-            <AlertDialogAction asChild>
-              <Button
-                ref={deleteButtonRef}
-                variant="destructive"
-                onClick={handleDelete}
-                disabled={deleteMutations.delete.isPending}
-              >
-                Delete
-              </Button>
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        title="Delete"
+        description={`Are you sure you want to delete "${viewedFile?.name}"? This action cannot be undone.`}
+        onConfirm={handleDelete}
+        isLoading={deleteMutations.delete.isPending}
+        confirmButtonRef={deleteButtonRef}
+        onOpenAutoFocus={(e) => {
+          e.preventDefault();
+          deleteButtonRef.current?.focus();
+        }}
+      />
     </>
   );
 }

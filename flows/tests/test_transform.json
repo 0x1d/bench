@@ -1,0 +1,67 @@
+{
+  "id": "test_transform",
+  "name": "Test Transform",
+  "description": "Tests the transform step",
+  "steps": [
+    {
+      "id": "step_transform_1",
+      "type": "transform",
+      "label": "make_data",
+      "config": {
+        "value": "jsonencode({ status = \"ok\", step = \"transform\" })"
+      },
+      "position": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "step_message_1",
+      "type": "message",
+      "label": "notify",
+      "config": {
+        "notifier": "default",
+        "text": "Transform test completed!"
+      },
+      "dependsOn": [
+        "step_transform_1"
+      ],
+      "position": {
+        "x": 0,
+        "y": 116
+      }
+    },
+    {
+      "id": "step_output_1",
+      "type": "output",
+      "label": "Output",
+      "config": {
+        "outputs": [
+          {
+            "name": "asdw",
+            "value": "step.transform.make_data.value"
+          }
+        ]
+      },
+      "dependsOn": [
+        "step_message_1"
+      ],
+      "position": {
+        "x": 0,
+        "y": 232
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "step_transform_1",
+      "target": "step_message_1"
+    },
+    {
+      "id": "e2",
+      "source": "step_message_1",
+      "target": "step_output_1"
+    }
+  ]
+}

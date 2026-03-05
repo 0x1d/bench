@@ -1,0 +1,67 @@
+{
+  "id": "test_sleep",
+  "name": "Test Sleep",
+  "description": "Tests the sleep step",
+  "steps": [
+    {
+      "id": "step_sleep_1",
+      "type": "sleep",
+      "label": "wait",
+      "config": {
+        "duration": "2s"
+      },
+      "position": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "step_message_1",
+      "type": "message",
+      "label": "done",
+      "config": {
+        "notifier": "default",
+        "text": "Sleep test completed!"
+      },
+      "dependsOn": [
+        "step_sleep_1"
+      ],
+      "position": {
+        "x": 0,
+        "y": 80
+      }
+    },
+    {
+      "id": "step_output_1",
+      "type": "output",
+      "label": "Output",
+      "config": {
+        "outputs": [
+          {
+            "name": "result",
+            "value": "step.message.done"
+          }
+        ]
+      },
+      "dependsOn": [
+        "step_message_1"
+      ],
+      "position": {
+        "x": 0,
+        "y": 160
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "step_sleep_1",
+      "target": "step_message_1"
+    },
+    {
+      "id": "e2",
+      "source": "step_message_1",
+      "target": "step_output_1"
+    }
+  ]
+}

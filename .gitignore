@@ -30,3 +30,9 @@ coverage/
 api/server
 
 temp/
+
+# Flowpipe database
+flows/.flowpipe/
+flows/local/
+
+server

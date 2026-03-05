@@ -73,6 +73,15 @@ func (d DatabaseEntry) IsEnabled() bool {
 	return *d.Enabled
 }
 
+// WorkspaceEntry represents a Flowpipe workspace profile (not a directory).
+// Workspaces are named profiles in workspaces.fpc; switching workspace only
+// changes which profile is used when executing pipelines.
+type WorkspaceEntry struct {
+	ID          string `yaml:"id" json:"id"`
+	Label       string `yaml:"label" json:"label"`
+	FlowpipeURL string `yaml:"flowpipeUrl,omitempty" json:"flowpipeUrl,omitempty"` // Flowpipe server URL (host in workspaces.fpc)
+}
+
 // ResourcesConfig is the resources section of config.yaml.
 type ResourcesConfig struct {
 	Filesystem []FilesystemEntry `yaml:"filesystem"`
@@ -80,9 +89,16 @@ type ResourcesConfig struct {
 	Rest       []RestEntry       `yaml:"rest"`
 }
 
+// FlowsConfig holds flow-related settings including workspaces.
+type FlowsConfig struct {
+	Path       string           `yaml:"path"`         // flows directory (default ./flows)
+	Workspaces []WorkspaceEntry `yaml:"workspaces"`   // Flowpipe workspace profiles (id, label, flowpipeUrl)
+}
+
 // Config is the top-level config structure.
 type Config struct {
 	Resources ResourcesConfig `yaml:"resources"`
+	Flows     *FlowsConfig    `yaml:"flows,omitempty"`
 }
 
 // FindConfigPath returns the path to config.yaml, or empty if none exists.
@@ -114,6 +130,11 @@ func FindConfigPath() string {
 }
 
 var envVarPattern = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}`)
+
+// EnvVarPattern returns the regex for extracting env var names from ${VAR} placeholders.
+func EnvVarPattern() *regexp.Regexp {
+	return envVarPattern
+}
 
 func interpolateEnv(data []byte) ([]byte, error) {
 	matches := envVarPattern.FindAllSubmatch(data, -1)
@@ -224,6 +245,19 @@ func validateConfig(cfg Config) error {
 			}
 		}
 	}
+
+	if cfg.Flows != nil {
+		seenWorkspace := map[string]struct{}{}
+		for i, ws := range cfg.Flows.Workspaces {
+			if ws.ID == "" {
+				return fmt.Errorf("flows.workspaces[%d].id is required", i)
+			}
+			if _, ok := seenWorkspace[ws.ID]; ok {
+				return fmt.Errorf("flows.workspaces contains duplicate id %q", ws.ID)
+			}
+			seenWorkspace[ws.ID] = struct{}{}
+		}
+	}
 	return nil
 }
 
@@ -305,6 +339,31 @@ func DatabasesWithError() ([]DatabaseEntry, error) {
 	return out, nil
 }
 
+// DatabasesFromRawConfig returns database entries from config without env interpolation.
+// Use when ReadConfig fails (e.g. missing env vars) but we still need to generate
+// connection blocks for flows. DatabaseURLOrEnv can resolve env var names or raw URLs.
+func DatabasesFromRawConfig() ([]DatabaseEntry, error) {
+	rawData, err := ReadConfigRaw()
+	if err != nil {
+		return nil, err
+	}
+	cfg, err := parseConfigRaw(rawData)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]DatabaseEntry, 0, len(cfg.Resources.Databases))
+	for _, e := range cfg.Resources.Databases {
+		if e.ID == "" || e.URL == "" {
+			continue
+		}
+		if e.Label == "" {
+			e.Label = e.ID
+		}
+		out = append(out, e)
+	}
+	return out, nil
+}
+
 // RestResources returns configured REST resources from config.yaml.
 func RestResources() []RestEntry {
 	out, err := RestResourcesWithError()
@@ -332,6 +391,51 @@ func RestResourcesWithError() ([]RestEntry, error) {
 	}
 	return out, nil
 }
+
+// Workspaces returns configured flow workspaces from config.yaml.
+func Workspaces() []WorkspaceEntry {
+	out, _ := WorkspacesWithError()
+	return out
+}
+
+// WorkspacesWithError returns configured Flowpipe workspace profiles.
+func WorkspacesWithError() ([]WorkspaceEntry, error) {
+	cfg, _, err := ReadConfig()
+	if err != nil {
+		return nil, err
+	}
+	workspaces := []WorkspaceEntry{}
+	if cfg.Flows != nil {
+		workspaces = cfg.Flows.Workspaces
+	}
+	out := make([]WorkspaceEntry, 0, len(workspaces))
+	for _, e := range workspaces {
+		if e.ID == "" {
+			continue
+		}
+		label := e.Label
+		if label == "" {
+			label = e.ID
+		}
+		url := e.FlowpipeURL
+		if url == "" {
+			url = "http://localhost:7103"
+		}
+		out = append(out, WorkspaceEntry{ID: e.ID, Label: label, FlowpipeURL: url})
+	}
+	return out, nil
+}
+
+// WorkspaceByID returns the workspace entry for the given ID, or nil if not found.
+func WorkspaceByID(id string) *WorkspaceEntry {
+	for _, w := range Workspaces() {
+		if w.ID == id {
+			return &w
+		}
+	}
+	return nil
+}
+
 
 // RootStatus represents a filesystem root for status display (includes path).
 type RootStatus struct {
@@ -379,6 +483,63 @@ func ConfigDir() string {
 	return filepath.Dir(path)
 }
 
+// FlowsConfigured returns true if flows are configured (path or workspaces) in config.
+// Uses raw config so it works even when ReadConfig fails (e.g. missing env vars).
+func FlowsConfigured() bool {
+	rawData, err := ReadConfigRaw()
+	if err != nil {
+		return false
+	}
+	cfg, err := parseConfigRaw(rawData)
+	if err != nil {
+		return false
+	}
+	if cfg.Flows == nil {
+		return false
+	}
+	if cfg.Flows.Path != "" {
+		return true
+	}
+	return len(cfg.Flows.Workspaces) > 0
+}
+
+// FlowsPath returns the absolute path to the flows directory.
+// Defaults to ./flows relative to config dir.
+// When ReadConfig fails (e.g. missing env vars), falls back to ./flows relative to config file.
+func FlowsPath() string {
+	cfg, path, err := ReadConfig()
+	if err == nil {
+		baseDir := filepath.Dir(path)
+		p := "flows"
+		if cfg.Flows != nil && cfg.Flows.Path != "" {
+			p = cfg.Flows.Path
+		}
+		if !filepath.IsAbs(p) {
+			p = filepath.Join(baseDir, p)
+		}
+		abs, _ := filepath.Abs(p)
+		return abs
+	}
+	// Fallback when ReadConfig fails (e.g. missing env vars): use ./flows relative to config
+	configPath := FindConfigPath()
+	if configPath == "" {
+		return ""
+	}
+	baseDir := filepath.Dir(configPath)
+	p := filepath.Join(baseDir, "flows")
+	abs, _ := filepath.Abs(p)
+	return abs
+}
+
+// FlowpipeURLForWorkspace returns the Flowpipe server URL for the given workspace profile.
+func FlowpipeURLForWorkspace(workspaceID string) string {
+	w := WorkspaceByID(workspaceID)
+	if w != nil && w.FlowpipeURL != "" {
+		return w.FlowpipeURL
+	}
+	return "http://localhost:7103"
+}
+
 // ExampleConfigPath returns the path to config.example.yaml (same dir as config or write path).
 func ExampleConfigPath() string {
 	path := FindConfigPath()
@@ -405,6 +566,51 @@ func ReadConfigRaw() ([]byte, error) {
 		return nil, os.ErrNotExist
 	}
 	return os.ReadFile(path)
+}
+
+// parseConfigRaw parses config YAML without env interpolation.
+// Used when we need to extract env var names from URLs (e.g. for flow HCL generation).
+func parseConfigRaw(data []byte) (Config, error) {
+	var cfg Config
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return Config{}, err
+	}
+	if err := validateConfig(cfg); err != nil {
+		return Config{}, err
+	}
+	return cfg, nil
+}
+
+// DatabaseURLOrEnv returns either the env var name (if URL contains ${VAR}) or the URL.
+// When the raw URL has ${VAR}, returns envVar and useResolved=false.
+// When the raw URL has no ${VAR}, returns useResolved=true and the URL (from interpolated config if available, else raw).
+func DatabaseURLOrEnv(dbID string) (envVar string, useResolved bool, resolvedURL string) {
+	rawData, err := ReadConfigRaw()
+	if err != nil {
+		return "", false, ""
+	}
+	rawCfg, err := parseConfigRaw(rawData)
+	if err != nil {
+		return "", false, ""
+	}
+	for _, d := range rawCfg.Resources.Databases {
+		if d.ID == dbID {
+			matches := EnvVarPattern().FindStringSubmatch(d.URL)
+			if len(matches) >= 2 {
+				return matches[1], false, ""
+			}
+			// No env var: use URL. Prefer interpolated (in case of other ${VAR} in URL), else raw.
+			if interpCfg, _, err := ReadConfig(); err == nil {
+				for _, ic := range interpCfg.Resources.Databases {
+					if ic.ID == dbID {
+						return "", true, ic.URL
+					}
+				}
+			}
+			return "", true, d.URL
+		}
+	}
+	return "", false, ""
 }
 
 // RootsStatus returns configured roots with paths for status display.

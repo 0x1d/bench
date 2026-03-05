@@ -19,7 +19,7 @@ services:
     ports:
       - "7103:7103"
     volumes:
-      - ./flows:/flows
+      - ./workspace/flows:/flows
       - /var/run/docker.sock:/var/run/docker.sock
 
 volumes:

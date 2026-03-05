@@ -1,0 +1,342 @@
+openapi: 3.1.0
+info:
+  title: ComfyScript Workflow Service
+  description: Generate and run ComfyUI workflows from JSON. Dynamically transpile
+    API workflows to Python and execute them as background jobs.
+  version: 0.1.0
+paths:
+  /api/generate:
+    post:
+      tags:
+      - generate
+      summary: Generate From Request
+      description: Generate Python from workflow JSON. Optionally save to generated/{name}.py.
+      operationId: generate_from_request_api_generate_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenerateRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenerateResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/upload:
+    post:
+      tags:
+      - generate
+      summary: Generate From Upload
+      description: Upload JSON file, generate Python, optionally save.
+      operationId: generate_from_upload_api_upload_post
+      parameters:
+      - name: save
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: true
+          title: Save
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_generate_from_upload_api_upload_post'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenerateResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/run:
+    post:
+      tags:
+      - run
+      summary: Run Workflow Endpoint
+      description: 'Start a workflow run. Either provide workflow_name (pre-generated)
+
+        or workflow + name (generate on-the-fly then run).'
+      operationId: run_workflow_endpoint_api_run_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RunRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/jobs/{job_id}:
+    get:
+      tags:
+      - run
+      summary: Get Job
+      description: Get job status, progress, and output URLs.
+      operationId: get_job_api_jobs__job_id__get
+      parameters:
+      - name: job_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Job Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/workflows:
+    get:
+      tags:
+      - workflows
+      summary: List Workflows
+      description: List available workflows (api/*.json and generated/*.py).
+      operationId: list_workflows_api_workflows_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/WorkflowListItem'
+                type: array
+                title: Response List Workflows Api Workflows Get
+  /health:
+    get:
+      summary: Health
+      description: Health check.
+      operationId: health_health_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+components:
+  schemas:
+    Body_generate_from_upload_api_upload_post:
+      properties:
+        file:
+          type: string
+          contentMediaType: application/octet-stream
+          title: File
+      type: object
+      required:
+      - file
+      title: Body_generate_from_upload_api_upload_post
+    GenerateRequest:
+      properties:
+        workflow:
+          additionalProperties: true
+          type: object
+          title: Workflow
+        name:
+          type: string
+          title: Name
+        save:
+          type: boolean
+          title: Save
+          default: true
+      type: object
+      required:
+      - workflow
+      - name
+      title: GenerateRequest
+      description: Request to generate Python from workflow JSON.
+    GenerateResponse:
+      properties:
+        name:
+          type: string
+          title: Name
+        code:
+          type: string
+          title: Code
+        saved:
+          type: boolean
+          title: Saved
+      type: object
+      required:
+      - name
+      - code
+      - saved
+      title: GenerateResponse
+      description: Response from generate endpoint.
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    JobProgress:
+      properties:
+        node_id:
+          type: string
+          title: Node Id
+        value:
+          type: integer
+          title: Value
+        max:
+          type: integer
+          title: Max
+      type: object
+      required:
+      - node_id
+      - value
+      - max
+      title: JobProgress
+      description: Progress info for a running job.
+    JobResponse:
+      properties:
+        id:
+          type: string
+          title: Id
+        status:
+          type: string
+          title: Status
+        progress:
+          anyOf:
+          - $ref: '#/components/schemas/JobProgress'
+          - type: 'null'
+        output_paths:
+          items:
+            type: string
+          type: array
+          title: Output Paths
+        output_urls:
+          items:
+            type: string
+          type: array
+          title: Output Urls
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error
+        created_at:
+          type: string
+          title: Created At
+        workflow_name:
+          type: string
+          title: Workflow Name
+      type: object
+      required:
+      - id
+      - status
+      - created_at
+      - workflow_name
+      title: JobResponse
+      description: Job status response.
+    RunRequest:
+      properties:
+        workflow_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Workflow Name
+        workflow:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Workflow
+        name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Name
+      type: object
+      title: RunRequest
+      description: Request to run a workflow.
+    RunResponse:
+      properties:
+        job_id:
+          type: string
+          title: Job Id
+      type: object
+      required:
+      - job_id
+      title: RunResponse
+      description: Response from run endpoint.
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+        input:
+          title: Input
+        ctx:
+          type: object
+          title: Context
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError
+    WorkflowListItem:
+      properties:
+        name:
+          type: string
+          title: Name
+        has_json:
+          type: boolean
+          title: Has Json
+        has_generated:
+          type: boolean
+          title: Has Generated
+      type: object
+      required:
+      - name
+      - has_json
+      - has_generated
+      title: WorkflowListItem
+      description: Workflow list item.

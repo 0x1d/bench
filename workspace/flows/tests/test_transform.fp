@@ -16,7 +16,7 @@ pipeline "test_transform" {
   }
 
 
-  output "asdw" {
+  output "result" {
     value = step.transform.make_data.value
   }
 

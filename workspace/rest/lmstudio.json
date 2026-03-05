@@ -1,0 +1,399 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "LM Studio REST API",
+    "description": "LM Studio REST API for local inference and model management. Includes native v1 endpoints and OpenAI-compatible endpoints. See https://lmstudio.ai/docs/developer/rest for full documentation.",
+    "version": "1.0.0",
+    "contact": {
+      "url": "https://lmstudio.ai/docs"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:1234",
+      "description": "LM Studio local server (default port)"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "tags": [
+    { "name": "LM Studio REST API v1", "description": "Native LM Studio endpoints" },
+    { "name": "OpenAI Compatible", "description": "OpenAI-compatible endpoints" }
+  ],
+  "paths": {
+    "/api/v1/chat": {
+      "post": {
+        "tags": ["LM Studio REST API v1"],
+        "summary": "Chat with a model",
+        "operationId": "chat",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["model", "input"],
+                "properties": {
+                  "model": { "type": "string", "description": "Unique identifier for the model to use" },
+                  "input": {
+                    "oneOf": [
+                      { "type": "string", "description": "Text content of the message" },
+                      {
+                        "type": "array",
+                        "items": {
+                          "oneOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "type": { "type": "string", "enum": ["message"], "description": "Type of input item" },
+                                "content": { "type": "string", "description": "Text content" }
+                              }
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "type": { "type": "string", "enum": ["image"], "description": "Type of input item" },
+                                "data_url": { "type": "string", "description": "Image as base64 data URL" }
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  "system_prompt": { "type": "string", "description": "System message for model behavior" },
+                  "integrations": {
+                    "type": "array",
+                    "items": {
+                      "oneOf": [
+                        { "type": "string", "description": "Plugin id" },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "type": { "enum": ["plugin", "ephemeral_mcp"] },
+                            "id": { "type": "string" },
+                            "server_label": { "type": "string" },
+                            "server_url": { "type": "string" },
+                            "allowed_tools": { "type": "array", "items": { "type": "string" } },
+                            "headers": { "type": "object" }
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "stream": { "type": "boolean", "default": false, "description": "Stream via SSE" },
+                  "temperature": { "type": "number", "minimum": 0, "maximum": 1 },
+                  "top_p": { "type": "number", "minimum": 0, "maximum": 1 },
+                  "top_k": { "type": "integer" },
+                  "min_p": { "type": "number" },
+                  "repeat_penalty": { "type": "number" },
+                  "max_output_tokens": { "type": "integer" },
+                  "reasoning": { "type": "string", "enum": ["off", "low", "medium", "high", "on"] },
+                  "context_length": { "type": "integer" },
+                  "store": { "type": "boolean", "default": true },
+                  "previous_response_id": { "type": "string", "description": "Response id to append to (starts with resp_)" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Chat response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "model_instance_id": { "type": "string" },
+                    "output": {
+                      "type": "array",
+                      "items": {
+                        "oneOf": [
+                          { "type": "object", "properties": { "type": { "enum": ["message"] }, "content": { "type": "string" } } },
+                          { "type": "object", "properties": { "type": { "enum": ["tool_call"] }, "tool": { "type": "string" }, "arguments": { "type": "object" }, "output": { "type": "string" }, "provider_info": { "type": "object" } } },
+                          { "type": "object", "properties": { "type": { "enum": ["reasoning"] }, "content": { "type": "string" } } }
+                        ]
+                      }
+                    },
+                    "stats": {
+                      "type": "object",
+                      "properties": {
+                        "input_tokens": { "type": "number" },
+                        "total_output_tokens": { "type": "number" },
+                        "reasoning_output_tokens": { "type": "number" },
+                        "tokens_per_second": { "type": "number" },
+                        "time_to_first_token_seconds": { "type": "number" },
+                        "model_load_time_seconds": { "type": "number" }
+                      }
+                    },
+                    "response_id": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/models": {
+      "get": {
+        "tags": ["LM Studio REST API v1"],
+        "summary": "List models",
+        "operationId": "listModels",
+        "responses": {
+          "200": {
+            "description": "List of available models",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "models": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "type": { "type": "string", "enum": ["llm", "embedding"] },
+                          "publisher": { "type": "string" },
+                          "key": { "type": "string" },
+                          "display_name": { "type": "string" },
+                          "architecture": { "type": "string" },
+                          "quantization": { "type": "object", "properties": { "name": { "type": "string" }, "bits_per_weight": { "type": "number" } } },
+                          "size_bytes": { "type": "number" },
+                          "params_string": { "type": "string" },
+                          "loaded_instances": { "type": "array" },
+                          "max_context_length": { "type": "number" },
+                          "format": { "type": "string", "enum": ["gguf", "mlx", null] },
+                          "capabilities": { "type": "object", "properties": { "vision": { "type": "boolean" }, "trained_for_tool_use": { "type": "boolean" } } }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/models/load": {
+      "post": {
+        "tags": ["LM Studio REST API v1"],
+        "summary": "Load a model",
+        "operationId": "loadModel",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["model"],
+                "properties": {
+                  "model": { "type": "string", "description": "Unique identifier for the model to load" },
+                  "context_length": { "type": "number" },
+                  "eval_batch_size": { "type": "number" },
+                  "flash_attention": { "type": "boolean" },
+                  "num_experts": { "type": "number" },
+                  "offload_kv_cache_to_gpu": { "type": "boolean" },
+                  "echo_load_config": { "type": "boolean", "default": false }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Model loaded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": { "type": "string", "enum": ["llm", "embedding"] },
+                    "instance_id": { "type": "string" },
+                    "load_time_seconds": { "type": "number" },
+                    "status": { "type": "string", "enum": ["loaded"] },
+                    "load_config": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/models/unload": {
+      "post": {
+        "tags": ["LM Studio REST API v1"],
+        "summary": "Unload a model",
+        "operationId": "unloadModel",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["instance_id"],
+                "properties": {
+                  "instance_id": { "type": "string", "description": "Unique identifier of the model instance to unload" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Model unloaded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "instance_id": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/models/download": {
+      "post": {
+        "tags": ["LM Studio REST API v1"],
+        "summary": "Download a model",
+        "operationId": "downloadModel",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "model": { "type": "string", "description": "Model identifier to download" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Download initiated"
+          }
+        }
+      }
+    },
+    "/api/v1/models/download/status": {
+      "get": {
+        "tags": ["LM Studio REST API v1"],
+        "summary": "Get download status",
+        "operationId": "getDownloadStatus",
+        "responses": {
+          "200": {
+            "description": "Download status"
+          }
+        }
+      }
+    },
+    "/v1/models": {
+      "get": {
+        "tags": ["OpenAI Compatible"],
+        "summary": "List models (OpenAI compatible)",
+        "operationId": "openaiListModels",
+        "description": "OpenAI-compatible models endpoint. Use base URL http://localhost:1234/v1",
+        "responses": {
+          "200": {
+            "description": "List of models in OpenAI format"
+          }
+        }
+      }
+    },
+    "/v1/chat/completions": {
+      "post": {
+        "tags": ["OpenAI Compatible"],
+        "summary": "Chat completions (OpenAI compatible)",
+        "operationId": "openaiChatCompletions",
+        "description": "OpenAI-compatible chat completions. See https://platform.openai.com/docs/api-reference/chat/create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "model": { "type": "string" },
+                  "messages": { "type": "array", "items": { "type": "object" } },
+                  "temperature": { "type": "number" },
+                  "top_p": { "type": "number" },
+                  "top_k": { "type": "integer" },
+                  "max_tokens": { "type": "integer" },
+                  "stream": { "type": "boolean" },
+                  "stop": { "oneOf": [{ "type": "string" }, { "type": "array", "items": { "type": "string" } }] },
+                  "presence_penalty": { "type": "number" },
+                  "frequency_penalty": { "type": "number" },
+                  "logit_bias": { "type": "object" },
+                  "repeat_penalty": { "type": "number" },
+                  "seed": { "type": "integer" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Chat completion response"
+          }
+        }
+      }
+    },
+    "/v1/responses": {
+      "post": {
+        "tags": ["OpenAI Compatible"],
+        "summary": "Responses API (OpenAI compatible)",
+        "operationId": "openaiResponses",
+        "description": "OpenAI Responses API - newer than Chat Completions",
+        "responses": {
+          "200": {
+            "description": "Responses API response"
+          }
+        }
+      }
+    },
+    "/v1/embeddings": {
+      "post": {
+        "tags": ["OpenAI Compatible"],
+        "summary": "Embeddings (OpenAI compatible)",
+        "operationId": "openaiEmbeddings",
+        "responses": {
+          "200": {
+            "description": "Embeddings response"
+          }
+        }
+      }
+    },
+    "/v1/completions": {
+      "post": {
+        "tags": ["OpenAI Compatible"],
+        "summary": "Completions legacy (OpenAI compatible)",
+        "operationId": "openaiCompletions",
+        "responses": {
+          "200": {
+            "description": "Completion response"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "API Token",
+        "description": "Optional. Set via LM_API_TOKEN when authentication is enabled in LM Studio."
+      }
+    }
+  }
+}

@@ -38,7 +38,7 @@
       "config": {
         "outputs": [
           {
-            "name": "asdw",
+            "name": "result",
             "value": "step.transform.make_data.value"
           }
         ]

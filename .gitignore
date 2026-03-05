@@ -32,7 +32,7 @@ api/server
 temp/
 
 # Flowpipe database
-flows/.flowpipe/
-flows/local/
+workspace/flows/.flowpipe/
+workspace/flows/local/
 
 server

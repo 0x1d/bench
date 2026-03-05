@@ -1,13 +1,11 @@
-# Resource roots for file browsing.
-# Copy to config.yaml and adjust paths for your environment.
 resources:
   filesystem:
-    - id: default
-      label: My Data
-      path: /path/to/your/data
-    - id: workflows
-      label: Workflows
-      path: /path/to/workflows
+    - id: workspace
+      label: Workspace
+      path: ./workspace
+    - id: flows
+      label: Flows
+      path: ./workspace/flows
   databases:
     - id: main
       label: Main DB
@@ -18,13 +16,20 @@ resources:
     - id: petstore
       label: Petstore API
       baseUrl: https://petstore.swagger.io/v2
-      openapiSpec: specs/petstore.json
+      openapiSpec: ./workspace/rest/petstore.json
       auth:
         type: none
+    - id: lmstudio
+      label: LM Studio
+      baseUrl: http://host.docker.internal:1234
+      openapiSpec: ./workspace/rest/lmstudio.json
+    - id: comfyui
+      label: ComfyUI API
+      baseUrl: http://host.docker.internal:3000
+      openapiSpec: ./workspace/rest/comfyui.yaml
 
-# Flows (Flowpipe integration)
 flows:
-  path: ./flows
+  path: ./workspace/flows
   workspaces:
     - id: default
       label: Default

@@ -16,7 +16,7 @@ cd "$(dirname "$0")/.."
 
 API_BASE="${1:-${API_BASE_URL:-http://localhost:8080}}"
 API_TOKEN="${2:-${API_TOKEN:-1234567890}}"
-FLOWS_DIR="${FLOWS_DIR:-./flows}"
+FLOWS_DIR="${FLOWS_DIR:-./workspace/flows}"
 
 # Ensure API base has no trailing slash and includes /api
 API_BASE="${API_BASE%/}"

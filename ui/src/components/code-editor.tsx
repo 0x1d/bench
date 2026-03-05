@@ -1,9 +1,10 @@
 import { useMemo } from 'react';
 import CodeMirror, { EditorView } from '@uiw/react-codemirror';
-import { tokyoNight } from '@uiw/codemirror-themes-all';
+import { tokyoNight, tokyoNightDay } from '@uiw/codemirror-themes-all';
 import { loadLanguage } from '@uiw/codemirror-extensions-langs';
 import { hcl } from 'codemirror-lang-hcl';
 import { getCodeMirrorLanguage } from '@/lib/syntax-language';
+import { useTheme } from '@/contexts/theme-context';
 import { cn } from '@/lib/utils';
 
 /** Editor styling: transparent bg, 0.75rem font, monospace, 0.75rem padding. */
@@ -35,6 +36,7 @@ export function CodeEditor({
   filename = 'file.yaml',
   className,
 }: CodeEditorProps) {
+  const { theme } = useTheme();
   const extensions = useMemo(() => {
     const langId = getCodeMirrorLanguage(filename);
     const lang =
@@ -42,8 +44,9 @@ export function CodeEditor({
         ? hcl()
         : loadLanguage(langId as Parameters<typeof loadLanguage>[0]);
     const exts = lang ? [lang] : [];
-    return [tokyoNight, ...exts, editorViewTheme];
-  }, [filename]);
+    const cmTheme = theme === 'tokyo-day' ? tokyoNightDay : tokyoNight;
+    return [cmTheme, ...exts, editorViewTheme];
+  }, [filename, theme]);
 
   return (
     <CodeMirror

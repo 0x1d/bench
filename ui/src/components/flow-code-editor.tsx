@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import CodeMirror, { EditorView } from '@uiw/react-codemirror';
-import { tokyoNight } from '@uiw/codemirror-themes-all';
+import { tokyoNight, tokyoNightDay } from '@uiw/codemirror-themes-all';
 import { loadLanguage } from '@uiw/codemirror-extensions-langs';
 import { hcl } from 'codemirror-lang-hcl';
 import { autocompletion } from '@codemirror/autocomplete';
@@ -10,6 +10,7 @@ import {
   inferCompletionContext,
   type CompletionItem,
 } from '@/lib/flowpipe-autocomplete';
+import { useTheme } from '@/contexts/theme-context';
 import { cn } from '@/lib/utils';
 
 const LANG_MAP: Record<string, string> = {
@@ -90,6 +91,7 @@ export function FlowCodeEditor({
   minHeight = 200,
   className,
 }: FlowCodeEditorProps) {
+  const { theme } = useTheme();
   const extensions = useMemo(() => {
     const lang =
       language === 'hcl'
@@ -101,8 +103,9 @@ export function FlowCodeEditor({
         completionSource(flow, currentStepId, language === 'hcl'),
       ],
     });
-    return [tokyoNight, ...exts, completion, editorViewTheme];
-  }, [language, flow, currentStepId]);
+    const cmTheme = theme === 'tokyo-day' ? tokyoNightDay : tokyoNight;
+    return [cmTheme, ...exts, completion, editorViewTheme];
+  }, [language, flow, currentStepId, theme]);
 
   return (
     <CodeMirror

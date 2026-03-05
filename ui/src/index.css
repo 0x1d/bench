@@ -49,38 +49,39 @@ body {
   --color-sidebar-ring: var(--sidebar-ring);
 }
 
+/* Tokyo Day (light) - default when .dark is not set */
 :root {
   --radius: 0.625rem;
-  --background: #1a1b26;
-  --foreground: #c0caf5;
-  --card: #1f2335;
-  --card-foreground: #c0caf5;
-  --popover: #1f2335;
-  --popover-foreground: #c0caf5;
+  --background: #e1e2e7;
+  --foreground: #3760bf;
+  --card: #d5d6db;
+  --card-foreground: #3760bf;
+  --popover: #d5d6db;
+  --popover-foreground: #3760bf;
   --primary: #7aa2f7;
   --primary-foreground: #1a1b26;
-  --secondary: #24283b;
-  --secondary-foreground: #a9b1d6;
-  --muted: #24283b;
+  --secondary: #cbccd1;
+  --secondary-foreground: #3760bf;
+  --muted: #cbccd1;
   --muted-foreground: #565f89;
-  --accent: #2a2f45;
-  --accent-foreground: #c0caf5;
+  --accent: #b9bac4;
+  --accent-foreground: #3760bf;
   --destructive: #f7768e;
-  --border: #3b4261;
-  --input: #3b4261;
+  --border: #a9b1d6;
+  --input: #a9b1d6;
   --ring: #7aa2f7;
   --chart-1: #7aa2f7;
   --chart-2: #7dcfff;
   --chart-3: #9ece6a;
   --chart-4: #e0af68;
   --chart-5: #bb9af7;
-  --sidebar: #16161e;
-  --sidebar-foreground: #c0caf5;
+  --sidebar: #cbccd1;
+  --sidebar-foreground: #3760bf;
   --sidebar-primary: #7aa2f7;
   --sidebar-primary-foreground: #1a1b26;
-  --sidebar-accent: #24283b;
-  --sidebar-accent-foreground: #c0caf5;
-  --sidebar-border: #3b4261;
+  --sidebar-accent: #b9bac4;
+  --sidebar-accent-foreground: #3760bf;
+  --sidebar-border: #a9b1d6;
   --sidebar-ring: #7aa2f7;
 }
 

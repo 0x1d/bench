@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { ThemeProvider } from '@/contexts/theme-context';
 import { FileViewProvider, useFileView } from '@/contexts/file-view-context';
 import { DatabaseViewProvider, useDatabaseView } from '@/contexts/database-view-context';
 import { FlowViewProvider, useFlowView } from '@/contexts/flow-view-context';
@@ -104,8 +105,9 @@ export function App() {
   }, []);
 
   return (
-    <UploadProvider>
-      <FileViewProvider>
+    <ThemeProvider>
+      <UploadProvider>
+        <FileViewProvider>
         <DatabaseViewProvider>
           <FlowViewProvider>
             <ClearFileViewOnNavigate hash={hash} />
@@ -151,21 +153,22 @@ export function App() {
             </div>
           </FlowViewProvider>
         </DatabaseViewProvider>
-      </FileViewProvider>
-      <UploadProgress />
-      <Toaster
-        position="top-center"
-        closeButton
-        richColors
-        theme="dark"
-        toastOptions={{
-          style: {
-            background: '#1f2335',
-            border: '1px solid #3b4261',
-            color: '#c0caf5',
-          },
-        }}
-      />
-    </UploadProvider>
+        </FileViewProvider>
+        <UploadProgress />
+        <Toaster
+          position="top-center"
+          closeButton
+          richColors
+          theme="dark"
+          toastOptions={{
+            style: {
+              background: '#1f2335',
+              border: '1px solid #3b4261',
+              color: '#c0caf5',
+            },
+          }}
+        />
+      </UploadProvider>
+    </ThemeProvider>
   );
 }

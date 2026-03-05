@@ -7,6 +7,9 @@
     <title>ui</title>
   </head>
   <body>
+    <script>
+      (function(){var t=localStorage.getItem('bench-theme');document.documentElement.classList.toggle('dark',t!=='tokyo-day');})();
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

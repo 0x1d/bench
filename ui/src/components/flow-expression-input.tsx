@@ -1,9 +1,10 @@
 import { useMemo } from 'react';
 import CodeMirror, { EditorView } from '@uiw/react-codemirror';
-import { tokyoNight } from '@uiw/codemirror-themes-all';
+import { tokyoNight, tokyoNightDay } from '@uiw/codemirror-themes-all';
 import { hcl } from 'codemirror-lang-hcl';
 import { autocompletion } from '@codemirror/autocomplete';
 import type { Flow } from '@/services/api';
+import { useTheme } from '@/contexts/theme-context';
 import {
   getCompletionsForStep,
   inferCompletionContext,
@@ -73,12 +74,14 @@ export function FlowExpressionInput({
   rows = 3,
   className,
 }: FlowExpressionInputProps) {
+  const { theme } = useTheme();
   const extensions = useMemo(() => {
     const completion = autocompletion({
       override: [completionSource(flow, currentStepId)],
     });
-    return [tokyoNight, hcl(), completion, editorViewTheme];
-  }, [flow, currentStepId]);
+    const cmTheme = theme === 'tokyo-day' ? tokyoNightDay : tokyoNight;
+    return [cmTheme, hcl(), completion, editorViewTheme];
+  }, [flow, currentStepId, theme]);
 
   const minHeight = Math.max(60, rows * 24);
 

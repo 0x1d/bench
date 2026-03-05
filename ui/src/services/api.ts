@@ -973,6 +973,21 @@ export async function fetchInfrastructureStatus(): Promise<InfrastructureStatusR
 }
 
 /**
+ * Saves a file to the infrastructure directory and runs terraform fmt.
+ */
+export async function saveInfrastructureFile(path: string, content: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/infrastructure/save-file`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path, content }),
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Save failed: ${response.status}`);
+  }
+}
+
+/**
  * Runs a Terraform command (init, plan, apply, destroy) and streams output to the callback.
  * Returns the full output text when done.
  */

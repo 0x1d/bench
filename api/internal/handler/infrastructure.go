@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 
 	"github.com/0x1d/bench/api/internal/config"
 )
@@ -135,4 +137,77 @@ func runTerraformCommand(w http.ResponseWriter, args ...string) {
 	}
 
 	cmd.Wait()
+}
+
+// SaveFileRequest is the JSON body for POST /api/infrastructure/save-file.
+type SaveFileRequest struct {
+	Path    string `json:"path"`
+	Content string `json:"content"`
+}
+
+// HandleInfrastructureSaveFile saves a file to the infrastructure directory and runs terraform fmt.
+func HandleInfrastructureSaveFile(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if !config.InfrastructureConfigured() {
+		http.Error(w, "infrastructure not configured", http.StatusBadRequest)
+		return
+	}
+
+	dir := config.InfrastructurePath()
+	if dir == "" {
+		http.Error(w, "infrastructure path not configured", http.StatusBadRequest)
+		return
+	}
+
+	var req SaveFileRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid JSON body", http.StatusBadRequest)
+		return
+	}
+	if req.Path == "" {
+		http.Error(w, "path is required", http.StatusBadRequest)
+		return
+	}
+
+	// Resolve path and ensure it stays within infra dir
+	absPath := filepath.Join(dir, filepath.Clean(req.Path))
+	absDir, err := filepath.Abs(dir)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("invalid path: %v", err), http.StatusInternalServerError)
+		return
+	}
+	absPathResolved, err := filepath.Abs(absPath)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("invalid path: %v", err), http.StatusBadRequest)
+		return
+	}
+	rel, err := filepath.Rel(absDir, absPathResolved)
+	if err != nil || strings.HasPrefix(rel, "..") {
+		http.Error(w, "path traversal not allowed", http.StatusBadRequest)
+		return
+	}
+
+	if err := os.MkdirAll(filepath.Dir(absPathResolved), 0755); err != nil {
+		http.Error(w, fmt.Sprintf("failed to create directory: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	if err := os.WriteFile(absPathResolved, []byte(req.Content), 0644); err != nil {
+		http.Error(w, fmt.Sprintf("failed to write file: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Run terraform fmt in the infra directory
+	fmtCmd := exec.Command("terraform", "fmt")
+	fmtCmd.Dir = dir
+	if err := fmtCmd.Run(); err != nil {
+		// Log but don't fail - file was saved; fmt may fail if content is invalid
+		_ = err
+	}
+
+	w.WriteHeader(http.StatusOK)
 }

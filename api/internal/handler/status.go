@@ -22,7 +22,7 @@ type StatusResponse struct {
 	} `json:"database"`
 	REST struct {
 		Configured bool `json:"configured"`
-		Count     int  `json:"count"`
+		Count      int  `json:"count"`
 	} `json:"rest"`
 	Flows struct {
 		Configured      bool `json:"configured"`

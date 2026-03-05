@@ -170,7 +170,7 @@ body {
   --xy-controls-button-color-hover: var(--foreground);
   --xy-controls-button-border-color: var(--border);
   --xy-controls-box-shadow: 0 0 2px 1px rgba(0, 0, 0, 0.2);
-  --xy-attribution-background-color: rgba(26, 27, 38, 0.85);
+  --xy-attribution-background-color: var(--card);
   --xy-background-pattern-dots-color: var(--border);
   --xy-background-pattern-lines-color: var(--border);
   --xy-background-pattern-cross-color: var(--border);
@@ -179,5 +179,25 @@ body {
   color: var(--muted-foreground);
 }
 .flow-editor-canvas .react-flow__attribution a:hover {
+  color: var(--foreground);
+}
+
+/* Infrastructure diagram - same controls/attribution styling */
+.infra-diagram-canvas .react-flow {
+  --xy-controls-button-background-color: var(--card);
+  --xy-controls-button-background-color-hover: var(--accent);
+  --xy-controls-button-color: var(--foreground);
+  --xy-controls-button-color-hover: var(--foreground);
+  --xy-controls-button-border-color: var(--border);
+  --xy-controls-box-shadow: 0 0 2px 1px rgba(0, 0, 0, 0.2);
+  --xy-attribution-background-color: var(--card);
+  --xy-background-pattern-dots-color: var(--border);
+  --xy-background-pattern-lines-color: var(--border);
+  --xy-background-pattern-cross-color: var(--border);
+}
+.infra-diagram-canvas .react-flow__attribution a {
+  color: var(--muted-foreground);
+}
+.infra-diagram-canvas .react-flow__attribution a:hover {
   color: var(--foreground);
 }

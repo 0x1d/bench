@@ -170,17 +170,45 @@ export const InfraGroupNode = memo(function InfraGroupNode({
 }: NodeProps) {
   const label = (data?.label as string) ?? 'Group';
   const childCount = (data?.childCount as number) ?? 0;
+  const sourceFile = (data?.sourceFile as string) ?? '';
+  const Icon = NODE_ICONS.group;
   return (
     <div
       className={cn(
-        'rounded-lg border-2 px-4 py-3 min-w-[160px] bg-muted/50 shadow-sm',
+        'flex items-center gap-2 rounded-lg border-2 px-4 py-3 min-w-[160px] bg-muted/50 shadow-sm',
         selected ? 'border-primary' : 'border-border hover:border-muted-foreground/50'
       )}
     >
-      <div className="text-sm font-medium">{label}</div>
-      {childCount > 0 && (
-        <div className="text-xs text-muted-foreground mt-1">{childCount} items</div>
+      <Icon className="size-4 shrink-0 text-muted-foreground" />
+      <div className="flex flex-col min-w-0 flex-1">
+        <span className="text-sm font-medium truncate">{label}</span>
+        <span className="text-[10px] text-muted-foreground font-mono truncate">
+          {childCount > 0 ? `${childCount} in ${sourceFile}` : sourceFile || 'empty'}
+        </span>
+      </div>
+    </div>
+  );
+});
+
+/** Container for Module group (Providers, Variables, Outputs). */
+export const InfraModuleContainerNode = memo(function InfraModuleContainerNode({
+  data,
+  selected,
+}: NodeProps) {
+  const label = (data?.label as string) ?? 'Module';
+  const Icon = NODE_ICONS.module;
+  return (
+    <div
+      className={cn(
+        'flex flex-col w-full h-full rounded-xl border-2 bg-card/80 shadow-sm overflow-hidden',
+        selected ? 'border-primary' : 'border-border'
       )}
+    >
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-muted/30 shrink-0">
+        <Icon className="size-4 shrink-0 text-muted-foreground" />
+        <span className="text-sm font-medium">{label}</span>
+      </div>
+      <div className="flex-1 min-h-0" />
     </div>
   );
 });

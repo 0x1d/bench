@@ -7,7 +7,7 @@ type FlowStep struct {
 	Label     string            `json:"label"`
 	Config    map[string]any    `json:"config"`
 	DependsOn []string          `json:"dependsOn,omitempty"` // step IDs this step depends on
-	Position  *FlowStepPosition  `json:"position,omitempty"`
+	Position  *FlowStepPosition `json:"position,omitempty"`
 }
 
 // FlowStepPosition holds React Flow node position.
@@ -25,20 +25,20 @@ type FlowEdge struct {
 
 // Flow represents a flow definition.
 type Flow struct {
-	ID          string      `json:"id"`
-	Name        string      `json:"name"`
-	Description string      `json:"description,omitempty"`
-	Steps       []FlowStep  `json:"steps"`
-	Edges       []FlowEdge  `json:"edges,omitempty"`
+	ID          string     `json:"id"`
+	Name        string     `json:"name"`
+	Description string     `json:"description,omitempty"`
+	Steps       []FlowStep `json:"steps"`
+	Edges       []FlowEdge `json:"edges,omitempty"`
 }
 
 // FlowStepConfigHTTP holds config for an HTTP step (REST).
 type FlowStepConfigHTTP struct {
-	RestID   string `json:"restId"`
-	Method   string `json:"method"`
-	Path     string `json:"path"`
-	Body     string `json:"body,omitempty"`
-	Headers  map[string]string `json:"headers,omitempty"`
+	RestID  string            `json:"restId"`
+	Method  string            `json:"method"`
+	Path    string            `json:"path"`
+	Body    string            `json:"body,omitempty"`
+	Headers map[string]string `json:"headers,omitempty"`
 }
 
 // FlowStepConfigQuery holds config for a query step (database).

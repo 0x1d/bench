@@ -12,7 +12,7 @@ import (
 func TestParseRefComment(t *testing.T) {
 	tests := []struct {
 		comment string
-		want   *model.ForeignKeyRef
+		want    *model.ForeignKeyRef
 	}{
 		{"ref:tags:id:multiple", &model.ForeignKeyRef{Table: "tags", Column: "id", Multiple: true}},
 		{"ref:tags:id", &model.ForeignKeyRef{Table: "tags", Column: "id", Multiple: false}},

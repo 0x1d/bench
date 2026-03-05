@@ -43,8 +43,8 @@ func TestHandleDatabaseTableDataSearch(t *testing.T) {
 	}
 
 	var data struct {
-		Total int        `json:"total"`
-		Rows  [][]any    `json:"rows"`
+		Total int     `json:"total"`
+		Rows  [][]any `json:"rows"`
 	}
 	if err := json.NewDecoder(rr.Body).Decode(&data); err != nil {
 		t.Fatalf("decode: %v", err)

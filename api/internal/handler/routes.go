@@ -51,6 +51,7 @@ func RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/flows/executions/{execId}", HandleFlowExecution)
 	// Infrastructure routes
 	mux.HandleFunc("GET /api/infrastructure/status", HandleInfrastructureStatus)
+	mux.HandleFunc("POST /api/infrastructure/save-file", HandleInfrastructureSaveFile)
 	mux.HandleFunc("POST /api/infrastructure/init", HandleInfrastructureInit)
 	mux.HandleFunc("POST /api/infrastructure/plan", HandleInfrastructurePlan)
 	mux.HandleFunc("POST /api/infrastructure/apply", HandleInfrastructureApply)

@@ -29,7 +29,7 @@ func isVirtualStep(t string) bool {
 }
 
 const (
-	modContent = `mod "bench_flows" {
+	modContent = `mod "bench" {
   title       = "Bench Flows"
   description = "Flows created in Bench"
 }

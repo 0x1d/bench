@@ -446,12 +446,14 @@ func (s *Service) stepHTTP(step model.FlowStep) (string, error) {
 		path = "/"
 	}
 
-	// HCL: jsonencode({ method = "GET", path = "/...", body = "..." })
+	// HCL: jsonencode({ method = "GET", path = "/...", body = "...", headers = {...} })
 	bodyArg := ""
+	headersArg := ""
 	if body != "" {
 		bodyArg = fmt.Sprintf(`, body = %q`, strings.ReplaceAll(body, `\`, `\\`))
+		headersArg = `, headers = { "Content-Type" = "application/json" }`
 	}
-	proxyObj := fmt.Sprintf(`{ method = %q, path = %q%s }`, strings.ToUpper(method), path, bodyArg)
+	proxyObj := fmt.Sprintf(`{ method = %q, path = %q%s%s }`, strings.ToUpper(method), path, bodyArg, headersArg)
 
 	// Try to get direct configuration from REST entry
 	restSvc := rest.NewService()
@@ -469,40 +471,33 @@ func (s *Service) stepHTTP(step model.FlowStep) (string, error) {
 			b.WriteString(fmt.Sprintf("    request_body = %q\n", strings.ReplaceAll(body, `\`, `\\`)))
 		}
 
-		// Apply authentication from config
-		if entry.Auth != nil {
+		// Apply request headers: Content-Type for JSON body (honors OpenAPI media type) and auth from config
+		hasHeaders := body != "" || entry.Auth != nil
+		if hasHeaders {
 			b.WriteString("    request_headers = {\n")
-			switch entry.Auth.Type {
-			case config.RestAuthBasic:
-				// Basic auth is usually user:pass base64 in Authorization header
-				// For simplicity in HCL, we might need a helper, but common way is manual header
-				// or if Flowpipe supports it directly. Flowpipe http step doesn't have native basic auth fields as of some versions.
-				// We'll set the header.
-				b.WriteString(fmt.Sprintf("      \"Authorization\" = \"Basic ${base64encode(\"%s:%s\")}\"\n", entry.Auth.Username, entry.Auth.Password))
-			case config.RestAuthBearer:
-				b.WriteString(fmt.Sprintf("      \"Authorization\" = \"Bearer %s\"\n", entry.Auth.Token))
-			case config.RestAuthAPIKey:
-				name := entry.Auth.Name
-				if name == "" {
-					name = "X-API-Key"
-				}
-				if strings.ToLower(entry.Auth.In) != "query" {
-					b.WriteString(fmt.Sprintf("      %q = %q\n", name, entry.Auth.Value))
+			if body != "" {
+				b.WriteString("      \"Content-Type\" = \"application/json\"\n")
+			}
+			if entry.Auth != nil {
+				switch entry.Auth.Type {
+				case config.RestAuthBasic:
+					b.WriteString(fmt.Sprintf("      \"Authorization\" = \"Basic ${base64encode(\"%s:%s\")}\"\n", entry.Auth.Username, entry.Auth.Password))
+				case config.RestAuthBearer:
+					b.WriteString(fmt.Sprintf("      \"Authorization\" = \"Bearer %s\"\n", entry.Auth.Token))
+				case config.RestAuthAPIKey:
+					name := entry.Auth.Name
+					if name == "" {
+						name = "X-API-Key"
+					}
+					if strings.ToLower(entry.Auth.In) != "query" {
+						b.WriteString(fmt.Sprintf("      %q = %q\n", name, entry.Auth.Value))
+					}
 				}
 			}
 			b.WriteString("    }\n")
 
-			// Handle API Key in query
-			if entry.Auth.Type == config.RestAuthAPIKey && strings.ToLower(entry.Auth.In) == "query" {
-				name := entry.Auth.Name
-				if name == "" {
-					name = "X-API-Key"
-				}
-				if strings.Contains(targetURL, "?") {
-				}
+			if entry.Auth != nil && entry.Auth.Type == config.RestAuthAPIKey && strings.ToLower(entry.Auth.In) == "query" {
 				b.WriteString("    # Note: apiKey in query added to URL\n")
-				// This is a bit tricky to update the URL here, so we replace it.
-				// Better approach: use flowpipe's query_params if available, but URL is simpler for now.
 			}
 		}
 		b.WriteString("  }\n\n")
@@ -523,6 +518,9 @@ func (s *Service) stepHTTP(step model.FlowStep) (string, error) {
 	b.WriteString(fmt.Sprintf("    url    = %q\n", apiURL+"/api/rest/"+restID+"/proxy"))
 	b.WriteString("    method = \"post\"\n")
 	b.WriteString("    request_body = jsonencode(" + proxyObj + ")\n")
+	b.WriteString("    request_headers = {\n")
+	b.WriteString("      \"Content-Type\" = \"application/json\"\n")
+	b.WriteString("    }\n")
 	b.WriteString("  }\n\n")
 	return b.String(), nil
 }

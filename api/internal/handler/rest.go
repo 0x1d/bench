@@ -118,6 +118,10 @@ func HandleRestProxy(w http.ResponseWriter, r *http.Request) {
 	var body io.Reader
 	if len(req.Body) > 0 {
 		body = strings.NewReader(string(req.Body))
+		// Default to application/json when body is present and Content-Type not set (honors OpenAPI media type)
+		if headers.Get("Content-Type") == "" {
+			headers.Set("Content-Type", "application/json")
+		}
 	}
 
 	resp, err := restSvc.ProxyRequest(id, method, path, headers, body)

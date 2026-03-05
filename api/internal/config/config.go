@@ -50,9 +50,9 @@ type RestAuth struct {
 	Username string       `yaml:"username,omitempty"`
 	Password string       `yaml:"password,omitempty"`
 	Token    string       `yaml:"token,omitempty"`
-	Name     string       `yaml:"name,omitempty"`     // Header/query param name for apiKey
-	In       string       `yaml:"in,omitempty"`      // "header" or "query" for apiKey
-	Value    string       `yaml:"value,omitempty"`    // Env placeholder for apiKey
+	Name     string       `yaml:"name,omitempty"`  // Header/query param name for apiKey
+	In       string       `yaml:"in,omitempty"`    // "header" or "query" for apiKey
+	Value    string       `yaml:"value,omitempty"` // Env placeholder for apiKey
 }
 
 // RestEntry represents one configured REST resource.
@@ -91,14 +91,20 @@ type ResourcesConfig struct {
 
 // FlowsConfig holds flow-related settings including workspaces.
 type FlowsConfig struct {
-	Path       string           `yaml:"path"`         // flows directory (default ./flows)
-	Workspaces []WorkspaceEntry `yaml:"workspaces"`   // Flowpipe workspace profiles (id, label, flowpipeUrl)
+	Path       string           `yaml:"path"`       // flows directory (default ./flows)
+	Workspaces []WorkspaceEntry `yaml:"workspaces"` // Flowpipe workspace profiles (id, label, flowpipeUrl)
+}
+
+// InfrastructureConfig holds infrastructure (Terraform) settings.
+type InfrastructureConfig struct {
+	Path string `yaml:"path"` // Terraform config directory (default ./workspace/infra)
 }
 
 // Config is the top-level config structure.
 type Config struct {
-	Resources ResourcesConfig `yaml:"resources"`
-	Flows     *FlowsConfig    `yaml:"flows,omitempty"`
+	Resources      ResourcesConfig       `yaml:"resources"`
+	Flows          *FlowsConfig          `yaml:"flows,omitempty"`
+	Infrastructure *InfrastructureConfig `yaml:"infrastructure,omitempty"`
 }
 
 // FindConfigPath returns the path to config.yaml, or empty if none exists.
@@ -308,6 +314,14 @@ func Roots() []model.Root {
 		roots = append(roots, model.Root{ID: e.ID, Label: label, Path: abs})
 	}
 
+	// Add infrastructure root when configured
+	if InfrastructureConfigured() {
+		infraPath := InfrastructurePath()
+		if infraPath != "" {
+			roots = append(roots, model.Root{ID: "infra", Label: "Infrastructure", Path: infraPath})
+		}
+	}
+
 	return roots
 }
 
@@ -436,7 +450,6 @@ func WorkspaceByID(id string) *WorkspaceEntry {
 	return nil
 }
 
-
 // RootStatus represents a filesystem root for status display (includes path).
 type RootStatus struct {
 	ID        string `json:"id"`
@@ -527,6 +540,45 @@ func FlowsPath() string {
 	}
 	baseDir := filepath.Dir(configPath)
 	p := filepath.Join(baseDir, "flows")
+	abs, _ := filepath.Abs(p)
+	return abs
+}
+
+// InfrastructureConfigured returns true if infrastructure is configured in config.
+func InfrastructureConfigured() bool {
+	rawData, err := ReadConfigRaw()
+	if err != nil {
+		return false
+	}
+	cfg, err := parseConfigRaw(rawData)
+	if err != nil {
+		return false
+	}
+	return cfg.Infrastructure != nil && cfg.Infrastructure.Path != ""
+}
+
+// InfrastructurePath returns the absolute path to the infrastructure (Terraform) directory.
+// Defaults to ./workspace/infra relative to config dir.
+func InfrastructurePath() string {
+	cfg, path, err := ReadConfig()
+	if err == nil {
+		baseDir := filepath.Dir(path)
+		p := "workspace/infra"
+		if cfg.Infrastructure != nil && cfg.Infrastructure.Path != "" {
+			p = cfg.Infrastructure.Path
+		}
+		if !filepath.IsAbs(p) {
+			p = filepath.Join(baseDir, p)
+		}
+		abs, _ := filepath.Abs(p)
+		return abs
+	}
+	configPath := FindConfigPath()
+	if configPath == "" {
+		return ""
+	}
+	baseDir := filepath.Dir(configPath)
+	p := filepath.Join(baseDir, "workspace", "infra")
 	abs, _ := filepath.Abs(p)
 	return abs
 }

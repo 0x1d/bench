@@ -34,3 +34,6 @@ flows:
     - id: default
       label: Default
       flowpipeUrl: http://localhost:7103
+
+infrastructure:
+  path: ./workspace/infra

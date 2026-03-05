@@ -18,6 +18,7 @@ import { StatusPage } from '@/pages/status-page';
 import { DatabasePage } from '@/pages/database-page';
 import { FlowsPage } from '@/pages/flows-page';
 import FlowEditorPage from '@/pages/flow-editor-page';
+import { InfrastructurePage } from '@/pages/infrastructure-page';
 import { cn } from '@/lib/utils';
 import { Toaster } from 'sonner';
 
@@ -131,7 +132,7 @@ export function App() {
                     <section
                       id="main"
                       className={
-                        hash === 'filesystem' || hash === 'database' || hash === 'resources' || hash === 'rest' || isFlowsSection(hash)
+                        hash === 'filesystem' || hash === 'database' || hash === 'resources' || hash === 'rest' || hash === 'infrastructure' || isFlowsSection(hash)
                           ? 'flex min-h-0 flex-1 flex-col items-stretch p-4 md:p-6'
                           : 'flex flex-1 items-start justify-center p-4 md:min-h-min'
                       }
@@ -142,7 +143,8 @@ export function App() {
                       {hash === 'database' && <DatabasePage />}
                       {hash === 'flows' && <FlowsPage />}
                       {hash.startsWith('flows/') && <FlowEditorPage />}
-                      {hash !== 'filesystem' && hash !== 'resources' && hash !== 'rest' && hash !== 'database' && !isFlowsSection(hash) && <StatusPage />}
+                      {hash === 'infrastructure' && <InfrastructurePage />}
+                      {hash !== 'filesystem' && hash !== 'resources' && hash !== 'rest' && hash !== 'database' && hash !== 'infrastructure' && !isFlowsSection(hash) && <StatusPage />}
                     </section>
                   </SidebarInset>
                   <FileViewer />

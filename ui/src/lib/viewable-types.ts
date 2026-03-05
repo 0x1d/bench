@@ -5,7 +5,7 @@ const TEXT_EXTENSIONS = new Set([
   'txt', 'md', 'json', 'yml', 'yaml', 'xml', 'csv', 'log', 'ini', 'cfg', 'conf',
   'html', 'htm', 'css', 'scss', 'less', 'js', 'ts', 'tsx', 'jsx', 'mjs', 'cjs',
   'py', 'go', 'rs', 'rb', 'java', 'kt', 'c', 'cpp', 'h', 'hpp', 'sql', 'sh',
-  'bash', 'zsh', 'ps1', 'bat', 'env', 'gitignore', 'dockerignore',
+  'bash', 'zsh', 'ps1', 'bat', 'env', 'fp', 'gitignore', 'dockerignore',
 ]);
 
 /**

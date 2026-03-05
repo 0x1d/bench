@@ -3,7 +3,6 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { FlowCodeEditor } from '@/components/flow-code-editor';
 import { FlowExpressionInput } from '@/components/flow-expression-input';
 import {
@@ -199,7 +198,7 @@ export function FlowStepPanelContent({
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">Unknown step type: {step.type}</p>
-      <div className="flex gap-2 pt-4 border-t border-border">
+      <div className="flex gap-2 pt-4 border-t border-border justify-end">
         <Button variant="outline" size="sm" onClick={onClose}>
           Cancel
         </Button>
@@ -212,10 +211,14 @@ function RequestBodySchemaForm({
   bodySchema,
   bodyValue,
   onChange,
+  flow,
+  currentStepId,
 }: {
   bodySchema: { properties: ResolvedSchemaProperty[]; spec: Record<string, unknown> };
   bodyValue: string;
   onChange: (body: string) => void;
+  flow?: Flow | null;
+  currentStepId?: string;
 }) {
   const values = useMemo(() => {
     try {
@@ -239,6 +242,8 @@ function RequestBodySchemaForm({
           prop={prop}
           value={values[prop.name]}
           onChange={(v) => updateField(prop.name, v)}
+          flow={flow}
+          currentStepId={currentStepId ?? ''}
         />
       ))}
     </div>
@@ -249,10 +254,14 @@ function SchemaPropertyField({
   prop,
   value,
   onChange,
+  flow,
+  currentStepId,
 }: {
   prop: ResolvedSchemaProperty;
   value: unknown;
   onChange: (v: unknown) => void;
+  flow?: Flow | null;
+  currentStepId?: string;
 }) {
   const { name, schema, required } = prop;
   const type = schema.type ?? 'string';
@@ -318,22 +327,27 @@ function SchemaPropertyField({
         {description && (
           <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
         )}
-        <Input
-          id={`body-${name}`}
-          type="number"
+        <FlowExpressionInput
           value={value != null ? String(value) : ''}
-          onChange={(e) => {
-            const v = e.target.value;
-            onChange(v === '' ? undefined : (type === 'integer' ? parseInt(v, 10) : parseFloat(v)));
+          onChange={(v) => {
+            const num = parseFloat(v);
+            onChange(v === '' ? undefined : (Number.isNaN(num) ? v : num));
           }}
-          placeholder={schema.format === 'int64' ? 'e.g. 123' : undefined}
-          className="mt-1 w-full font-mono"
+          flow={flow}
+          currentStepId={currentStepId ?? ''}
+          rows={1}
+          className="mt-1 w-full"
         />
       </div>
     );
   }
 
   if (type === 'array' && schema.items) {
+    const displayValue = Array.isArray(value)
+      ? value.join(', ')
+      : typeof value === 'string'
+        ? value
+        : '';
     return (
       <div>
         <Label htmlFor={`body-${name}`} className="text-xs font-normal text-muted-foreground">
@@ -342,23 +356,34 @@ function SchemaPropertyField({
         {description && (
           <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
         )}
-        <Textarea
-          id={`body-${name}`}
-          value={Array.isArray(value) ? value.join(', ') : ''}
-          onChange={(e) => {
-            const parts = e.target.value.split(',').map((s) => s.trim()).filter(Boolean);
-            onChange(parts.length > 0 ? parts : undefined);
+        <FlowExpressionInput
+          value={displayValue}
+          onChange={(v) => {
+            const trimmed = v.trim();
+            if (trimmed && !trimmed.includes('param.') && !trimmed.includes('step.')) {
+              const parts = trimmed.split(',').map((s) => s.trim()).filter(Boolean);
+              onChange(parts.length > 0 ? parts : undefined);
+            } else {
+              onChange(trimmed || undefined);
+            }
           }}
-          placeholder="Comma-separated values"
+          flow={flow}
+          currentStepId={currentStepId ?? ''}
           rows={2}
-          className="mt-1 w-full font-mono text-sm"
+          className="mt-1 w-full"
         />
       </div>
     );
   }
 
-  // string or object (nested) - use text input; for object refs, user can enter JSON
+  // string or object (nested) - use FlowExpressionInput for HCL variable autocomplete
   const isObject = type === 'object' || schema.$ref;
+  const displayValue =
+    isObject && (typeof value === 'object' || typeof value === 'string')
+      ? typeof value === 'string'
+        ? value
+        : JSON.stringify(value ?? {}, null, 2)
+      : String(value ?? '');
   return (
     <div>
       <Label htmlFor={`body-${name}`} className="text-xs font-normal text-muted-foreground">
@@ -367,17 +392,9 @@ function SchemaPropertyField({
       {description && (
         <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
       )}
-      <Textarea
-        id={`body-${name}`}
-        value={
-          isObject && (typeof value === 'object' || typeof value === 'string')
-            ? typeof value === 'string'
-              ? value
-              : JSON.stringify(value ?? {}, null, 2)
-            : String(value ?? '')
-        }
-        onChange={(e) => {
-          const v = e.target.value;
+      <FlowExpressionInput
+        value={displayValue}
+        onChange={(v) => {
           if (isObject && v.trim().startsWith('{')) {
             try {
               onChange(JSON.parse(v));
@@ -388,9 +405,10 @@ function SchemaPropertyField({
             onChange(v || undefined);
           }
         }}
-        placeholder={isObject ? '{"key": "value"}' : undefined}
-        rows={isObject ? 3 : 1}
-        className="mt-1 w-full font-mono text-sm"
+        flow={flow}
+        currentStepId={currentStepId ?? ''}
+        rows={isObject ? 4 : 1}
+        className="mt-1 w-full"
       />
     </div>
   );
@@ -625,6 +643,8 @@ function HttpStepConfig({
                   bodySchema={bodySchema}
                   bodyValue={bodyValue}
                   onChange={(body) => setConfig({ ...config, body })}
+                  flow={flow}
+                  currentStepId={currentStepId}
                 />
               ) : (
                 <FlowCodeEditor
@@ -647,7 +667,7 @@ function HttpStepConfig({
         </>
       )}
 
-      <div className="flex gap-2 pt-4 border-t border-border">
+      <div className="flex gap-2 pt-4 border-t border-border justify-end">
         <Button variant="outline" size="sm" onClick={onClose}>
           Cancel
         </Button>
@@ -770,7 +790,7 @@ function QueryStepConfig({
         </p>
       </div>
 
-      <div className="flex gap-2 pt-4 border-t border-border">
+      <div className="flex gap-2 pt-4 border-t border-border justify-end">
         <Button variant="outline" size="sm" onClick={onClose}>
           Cancel
         </Button>
@@ -901,7 +921,7 @@ function InputStepConfig({
         </div>
       </div>
 
-      <div className="flex gap-2 pt-4 border-t border-border">
+      <div className="flex gap-2 pt-4 border-t border-border justify-end">
         <Button variant="outline" size="sm" onClick={onClose}>
           Cancel
         </Button>
@@ -1017,7 +1037,7 @@ function OutputStepConfig({
         </div>
       </div>
 
-      <div className="flex gap-2 pt-4 border-t border-border">
+      <div className="flex gap-2 pt-4 border-t border-border justify-end">
         <Button variant="outline" size="sm" onClick={onClose}>
           Cancel
         </Button>
@@ -1095,7 +1115,7 @@ function MessageStepConfig({
         />
       </div>
 
-      <div className="flex gap-2 pt-4 border-t border-border">
+      <div className="flex gap-2 pt-4 border-t border-border justify-end">
         <Button variant="outline" size="sm" onClick={onClose}>
           Cancel
         </Button>
@@ -1155,7 +1175,7 @@ function SleepStepConfig({
         </p>
       </div>
 
-      <div className="flex gap-2 pt-4 border-t border-border">
+      <div className="flex gap-2 pt-4 border-t border-border justify-end">
         <Button variant="outline" size="sm" onClick={onClose}>
           Cancel
         </Button>
@@ -1221,7 +1241,7 @@ function TransformStepConfig({
         </p>
       </div>
 
-      <div className="flex gap-2 pt-4 border-t border-border">
+      <div className="flex gap-2 pt-4 border-t border-border justify-end">
         <Button variant="outline" size="sm" onClick={onClose}>
           Cancel
         </Button>
@@ -1366,7 +1386,7 @@ function ContainerStepConfig({
         />
       </div>
 
-      <div className="flex gap-2 pt-4 border-t border-border">
+      <div className="flex gap-2 pt-4 border-t border-border justify-end">
         <Button variant="outline" size="sm" onClick={onClose}>
           Cancel
         </Button>
@@ -1496,7 +1516,7 @@ function PipelineStepConfig({
         </p>
       </div>
 
-      <div className="flex gap-2 pt-4 border-t border-border">
+      <div className="flex gap-2 pt-4 border-t border-border justify-end">
         <Button variant="outline" size="sm" onClick={onClose}>
           Cancel
         </Button>

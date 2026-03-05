@@ -41,6 +41,7 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   cfg: 'ini',
   conf: 'ini',
   env: 'bash',
+  fp: 'hcl',
   gitignore: 'plaintext',
   dockerignore: 'plaintext',
   log: 'plaintext',
@@ -78,6 +79,7 @@ const PRISM_TO_CODEMIRROR: Record<string, string> = {
   powershell: 'ps1',
   batch: 'text',
   ini: 'ini',
+  hcl: 'hcl',
   plaintext: 'text',
 };
 

@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import CodeMirror, { EditorView } from '@uiw/react-codemirror';
 import { tokyoNight } from '@uiw/codemirror-themes-all';
 import { loadLanguage } from '@uiw/codemirror-extensions-langs';
+import { hcl } from 'codemirror-lang-hcl';
 import { getCodeMirrorLanguage } from '@/lib/syntax-language';
 import { cn } from '@/lib/utils';
 
@@ -35,9 +36,11 @@ export function CodeEditor({
   className,
 }: CodeEditorProps) {
   const extensions = useMemo(() => {
-    const lang = loadLanguage(
-      getCodeMirrorLanguage(filename) as Parameters<typeof loadLanguage>[0]
-    );
+    const langId = getCodeMirrorLanguage(filename);
+    const lang =
+      langId === 'hcl'
+        ? hcl()
+        : loadLanguage(langId as Parameters<typeof loadLanguage>[0]);
     const exts = lang ? [lang] : [];
     return [tokyoNight, ...exts, editorViewTheme];
   }, [filename]);

@@ -18,6 +18,7 @@ import {
   Panel,
   useNodesState,
   useEdgesState,
+  useReactFlow,
   addEdge,
   type Node,
   type Edge,
@@ -246,6 +247,18 @@ function parseFlowHash(hash: string): { flowId: string; flowModule: string | nul
   const flowId = parts[parts.length - 1] ?? '';
   const flowModule = parts.length > 2 ? parts.slice(1, -1).join('/') : null;
   return { flowId, flowModule };
+}
+
+/** Fits the React Flow view when the right-side panel expands (e.g. on pipeline run). */
+function FitViewOnPanelExpand() {
+  const { fitView } = useReactFlow();
+  const { executionId } = useFlowView();
+  useEffect(() => {
+    if (!executionId) return;
+    const id = setTimeout(() => fitView({ padding: 0.1, duration: 200 }), 50);
+    return () => clearTimeout(id);
+  }, [executionId, fitView]);
+  return null;
 }
 
 export default function FlowEditorPage() {
@@ -775,6 +788,7 @@ export default function FlowEditorPage() {
           >
             <Background />
             <Controls />
+            <FitViewOnPanelExpand />
             <Panel position="top-left">
               <AddStepButtons
                 hasInputStep={nodes.some(

@@ -131,9 +131,15 @@ export function DatabaseCreateTablePanelContent({
                 Add
               </Button>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-3">
               {columns.map((col, i) => (
-                <div key={i} className="space-y-2">
+                <div
+                  key={i}
+                  className="rounded-lg border border-border bg-muted/40 p-3 space-y-3"
+                >
+                  <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                    {col.name.trim() ? col.name : `Column ${i + 1}`}
+                  </div>
                   <div className="flex flex-wrap gap-2 items-center">
                     <Input
                       value={col.name}

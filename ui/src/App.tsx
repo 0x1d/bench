@@ -68,6 +68,31 @@ function ClearFlowViewOnNavigate({ hash }: { hash: string }) {
   return null;
 }
 
+const CLOSE_PANEL_EVENT = 'bench:close-panel';
+
+function GlobalEscapeHandler() {
+  const { setViewedFile } = useFileView();
+  const { setPanelMode } = useDatabaseView();
+  const { setSelectedStep, setExecutionId, setModuleEditPath } = useFlowView();
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      const target = e.target as HTMLElement;
+      if (target?.closest?.('dialog') || target?.closest?.('[role="dialog"]')) return;
+      setViewedFile(null);
+      setPanelMode(null);
+      setSelectedStep(null);
+      setExecutionId(null);
+      setModuleEditPath(null);
+      window.dispatchEvent(new CustomEvent(CLOSE_PANEL_EVENT));
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [setViewedFile, setPanelMode, setSelectedStep, setExecutionId, setModuleEditPath]);
+  return null;
+}
+
 
 export function App() {
   const [hash, setHash] = useState(getHash);
@@ -86,6 +111,7 @@ export function App() {
             <ClearFileViewOnNavigate hash={hash} />
             <ClearDatabaseViewOnNavigate hash={hash} />
             <ClearFlowViewOnNavigate hash={hash} />
+            <GlobalEscapeHandler />
             <div className="[--header-height:calc(--spacing(14))] h-svh overflow-hidden flex flex-col">
               <SidebarProvider className="flex flex-col min-h-0 flex-1 overflow-hidden">
                 <SiteHeader />

@@ -315,6 +315,18 @@ export function ResourcesConfigPage() {
     };
   }, []);
 
+  useEffect(() => {
+    const handleClosePanel = () => {
+      if (panelMode != null) {
+        setPanelMode(null);
+        setPanelIndex(null);
+        setPanelError(null);
+      }
+    };
+    window.addEventListener('bench:close-panel', handleClosePanel);
+    return () => window.removeEventListener('bench:close-panel', handleClosePanel);
+  }, [panelMode]);
+
   const openAddFilesystem = () => {
     setFilesystemDraft({ id: '', label: '', path: '' });
     setPanelIndex(null);

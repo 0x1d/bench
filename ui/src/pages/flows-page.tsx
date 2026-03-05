@@ -4,11 +4,14 @@ import {
   Play,
   Workflow,
   FolderPlus,
+  Search,
+  Eye,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   fetchFlowWorkspaces,
   fetchFlowTree,
+  fetchFlowProcesses,
   createFlowModule,
   fetchFlow,
   createFlow,
@@ -40,7 +43,28 @@ import {
 import { toast } from 'sonner';
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { FlowsTreeView } from '@/components/flows-tree-view';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useFlowView } from '@/contexts/flow-view-context';
+import { cn } from '@/lib/utils';
+
+function filterTreeByFlowName(
+  entries: FlowWorkspaceTreeEntry[],
+  query: string
+): FlowWorkspaceTreeEntry[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return entries;
+  return entries
+    .map((entry) => {
+      if (entry.type === 'flow') {
+        return entry.name.toLowerCase().includes(q) ? entry : null;
+      }
+      const filteredChildren = entry.children
+        ? filterTreeByFlowName(entry.children, query)
+        : [];
+      return filteredChildren.length > 0 ? { ...entry, children: filteredChildren } : null;
+    })
+    .filter((e): e is FlowWorkspaceTreeEntry => e !== null);
+}
 
 export function FlowsPage() {
   const [selectedWorkspace, setSelectedWorkspace] = useState<string | null>(null);
@@ -56,6 +80,8 @@ export function FlowsPage() {
   const [runParamValues, setRunParamValues] = useState<Record<string, string>>({});
   const [runTargetFlow, setRunTargetFlow] = useState<Flow | null>(null);
   const [runTargetModule, setRunTargetModule] = useState<string | null>(null);
+  const [flowFilter, setFlowFilter] = useState('');
+  const [activeTab, setActiveTab] = useState<'modules' | 'executions'>('modules');
   const { setExecutionId, setSelectedStep, setFlowContext, setModuleEditPath } = useFlowView();
 
   const queryClient = useQueryClient();
@@ -79,6 +105,37 @@ export function FlowsPage() {
   });
 
   const treeEntries = treeData?.entries ?? [];
+  const filteredTreeEntries = filterTreeByFlowName(treeEntries, flowFilter);
+
+  const { data: processesData, isLoading: processesLoading, error: processesError } = useQuery({
+    queryKey: ['flows', 'processes', displayWorkspace ?? 'default'],
+    queryFn: () => fetchFlowProcesses(displayWorkspace ?? undefined),
+    enabled: workspaces.length > 0 && activeTab === 'executions',
+  });
+
+  const processItems: Record<string, unknown>[] = (() => {
+    const raw = processesData;
+    if (Array.isArray(raw)) return raw;
+    if (raw && typeof raw === 'object' && 'items' in raw && Array.isArray((raw as { items: unknown[] }).items)) {
+      return (raw as { items: Record<string, unknown>[] }).items;
+    }
+    return [];
+  })();
+
+  const flowFilterLower = flowFilter.trim().toLowerCase();
+  const filteredProcesses = flowFilterLower
+    ? processItems.filter((p) => {
+        const name = String(
+          (p as Record<string, unknown>).pipeline ??
+            (p as Record<string, unknown>).pipeline_name ??
+            (p as Record<string, unknown>).name ??
+            (p as Record<string, unknown>).id ??
+            (p as Record<string, unknown>).execution_id ??
+            ''
+        ).toLowerCase();
+        return name.includes(flowFilterLower);
+      })
+    : processItems;
 
   const createModuleMutation = useMutation({
     mutationFn: (name: string) => createFlowModule(name),
@@ -278,7 +335,7 @@ export function FlowsPage() {
     <div className="flex w-full min-h-0 flex-1 flex-col gap-4">
       {/* Breadcrumbs */}
       <nav className="flex flex-wrap items-center gap-1 text-sm">
-        <span className="rounded px-2 py-1 font-medium">Modules</span>
+        <span className="rounded px-2 py-1 font-medium">Flows</span>
       </nav>
 
       {/* Toolbar */}
@@ -301,6 +358,17 @@ export function FlowsPage() {
             ))}
           </SelectContent>
         </Select>
+        <div className="relative flex-1 min-w-0 sm:max-w-xs">
+          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            type="search"
+            placeholder="Filter by flow name..."
+            value={flowFilter}
+            onChange={(e) => setFlowFilter(e.target.value)}
+            className="pl-9"
+            aria-label="Filter by flow name"
+          />
+        </div>
         <div className="flex flex-1" />
         <div className="flex flex-shrink-0 items-center gap-2">
           <Button
@@ -326,67 +394,169 @@ export function FlowsPage() {
         </div>
       </div>
 
-      <div className="flex-1 min-w-0 overflow-auto">
-        {entriesLoading ? (
-          <p className="text-muted-foreground">Loading...</p>
-        ) : treeEntries.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-border p-8 text-center">
-            <Workflow className="mx-auto size-10 text-muted-foreground" />
-            <p className="mt-2 text-sm text-muted-foreground">
-              No modules or flows yet
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Create a module or add flows at root to get started
-            </p>
-            <p className="mt-4 flex justify-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleCreateModule}
-                disabled={createModuleMutation.isPending}
-              >
-                <FolderPlus className="size-4 mr-2" />
-                New module
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleCreateFlow('.')}
-                disabled={createFlowMutation.isPending}
-              >
-                <Plus className="size-4 mr-2" />
-                New flow
-              </Button>
-            </p>
-          </div>
-        ) : (
-          <div className="rounded-lg border border-border bg-card overflow-hidden">
-            <div className="grid grid-cols-[1fr_auto_5rem_7rem_auto] gap-2 border-b border-border bg-muted/30 px-4 py-3 text-sm font-medium">
-              <span>Name</span>
-              <span className="hidden sm:block"></span>
-              <span className="hidden sm:block">Steps</span>
-              <span className="hidden md:block">Modified</span>
-              <span className="w-20"></span>
+      <Tabs
+        value={activeTab}
+        onValueChange={(v) => setActiveTab(v as 'modules' | 'executions')}
+        className="flex-1 min-w-0 flex flex-col overflow-hidden"
+      >
+        <TabsList variant="line" className="w-fit">
+          <TabsTrigger value="modules">Modules</TabsTrigger>
+          <TabsTrigger value="executions">Executions</TabsTrigger>
+        </TabsList>
+        <TabsContent value="modules" className="flex-1 min-w-0 overflow-auto mt-3">
+          {entriesLoading ? (
+            <p className="text-muted-foreground">Loading...</p>
+          ) : filteredTreeEntries.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-border p-8 text-center">
+              <Workflow className="mx-auto size-10 text-muted-foreground" />
+              <p className="mt-2 text-sm text-muted-foreground">
+                {flowFilter.trim() ? 'No matching flows' : 'No modules or flows yet'}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {flowFilter.trim()
+                  ? 'Try a different filter'
+                  : 'Create a module or add flows at root to get started'}
+              </p>
+              {!flowFilter.trim() && (
+                <p className="mt-4 flex justify-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCreateModule}
+                    disabled={createModuleMutation.isPending}
+                  >
+                    <FolderPlus className="size-4 mr-2" />
+                    New module
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleCreateFlow('.')}
+                    disabled={createFlowMutation.isPending}
+                  >
+                    <Plus className="size-4 mr-2" />
+                    New flow
+                  </Button>
+                </p>
+              )}
             </div>
-            <div className="px-4 py-3">
-            <FlowsTreeView
-              entries={treeEntries}
-              parentModule="."
-              displayWorkspace={displayWorkspace}
-              onRun={handleRun}
-              onEdit={handleEdit}
-              onDelete={handleDelete}
-              onMove={(flowId, fromModule, toModule) =>
-                moveMutation.mutate({ flowId, fromModule, toModule })
-              }
-              onEditModule={setModuleEditPath}
-              onCreateFlow={(modulePath) => handleCreateFlow(modulePath)}
-              setFlowContext={setFlowContext}
-            />
+          ) : (
+            <div className="rounded-lg border border-border bg-card overflow-hidden">
+              <div className="grid grid-cols-[1fr_auto_5rem_7rem_auto] gap-2 border-b border-border bg-muted/30 px-4 py-3 text-sm font-medium">
+                <span>Name</span>
+                <span className="hidden sm:block"></span>
+                <span className="hidden sm:block">Steps</span>
+                <span className="hidden md:block">Modified</span>
+                <span className="w-20"></span>
+              </div>
+              <div className="px-4 py-3">
+                <FlowsTreeView
+                  entries={filteredTreeEntries}
+                  parentModule="."
+                  displayWorkspace={displayWorkspace}
+                  onRun={handleRun}
+                  onEdit={handleEdit}
+                  onDelete={handleDelete}
+                  onMove={(flowId, fromModule, toModule) =>
+                    moveMutation.mutate({ flowId, fromModule, toModule })
+                  }
+                  onEditModule={setModuleEditPath}
+                  onCreateFlow={(modulePath) => handleCreateFlow(modulePath)}
+                  setFlowContext={setFlowContext}
+                />
+              </div>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </TabsContent>
+        <TabsContent value="executions" className="flex-1 min-w-0 overflow-auto mt-3">
+          {processesLoading ? (
+            <p className="text-muted-foreground">Loading executions...</p>
+          ) : processesError ? (
+            <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
+              <p className="text-sm text-destructive">
+                {processesError instanceof Error ? processesError.message : 'Failed to load executions'}
+              </p>
+            </div>
+          ) : filteredProcesses.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-border p-8 text-center">
+              <Workflow className="mx-auto size-10 text-muted-foreground" />
+              <p className="mt-2 text-sm text-muted-foreground">
+                {flowFilter.trim() ? 'No matching executions' : 'No executions yet'}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {flowFilter.trim() ? 'Try a different filter' : 'Run a flow to see executions here'}
+              </p>
+            </div>
+          ) : (
+            <div className="rounded-lg border border-border bg-card overflow-hidden">
+              <div className="grid grid-cols-[1fr_auto_6rem_auto] gap-2 border-b border-border bg-muted/30 px-4 py-3 text-sm font-medium">
+                <span>Flow</span>
+                <span>Status</span>
+                <span className="hidden sm:block">Started</span>
+                <span className="w-16"></span>
+              </div>
+              {filteredProcesses.map((proc) => {
+                const p = proc as Record<string, unknown>;
+                const id = String(p.execution_id ?? p.id ?? '');
+                const flowName = String(
+                  p.pipeline ?? p.pipeline_name ?? p.name ?? p.id ?? p.execution_id ?? '—'
+                );
+                const status = String(p.status ?? '');
+                const createdAt = p.created_at ?? p.started_at ?? p.start_time;
+                const startStr = typeof createdAt === 'string' ? createdAt : undefined;
+                const handleView = () => {
+                  setFlowContext(displayWorkspace ?? null, null);
+                  setSelectedStep(null);
+                  setExecutionId(id);
+                };
+                return (
+                  <div
+                    key={id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={handleView}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        handleView();
+                      }
+                    }}
+                    className="grid grid-cols-[1fr_auto_6rem_auto] gap-2 items-center px-4 py-2 border-b border-border last:border-b-0 hover:bg-muted/30 cursor-pointer"
+                  >
+                    <span className="font-medium truncate">{flowName}</span>
+                    <span
+                      className={cn(
+                        'text-sm',
+                        status === 'finished' && 'text-green-600 dark:text-green-400',
+                        status === 'failed' && 'text-red-600 dark:text-red-400',
+                        (status === 'started' || status === 'queued') &&
+                          'text-yellow-600 dark:text-yellow-400'
+                      )}
+                    >
+                      {status || '—'}
+                    </span>
+                    <span className="hidden sm:block text-sm text-muted-foreground truncate">
+                      {startStr ? new Date(startStr).toLocaleTimeString() : '—'}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="gap-1"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleView();
+                      }}
+                    >
+                      <Eye className="size-3.5" />
+                      View
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
 
       <ConfirmDeleteDialog
         open={!!deleteTargetFlow}

@@ -483,6 +483,26 @@ func ConfigDir() string {
 	return filepath.Dir(path)
 }
 
+// FlowsConfigured returns true if flows are configured (path or workspaces) in config.
+// Uses raw config so it works even when ReadConfig fails (e.g. missing env vars).
+func FlowsConfigured() bool {
+	rawData, err := ReadConfigRaw()
+	if err != nil {
+		return false
+	}
+	cfg, err := parseConfigRaw(rawData)
+	if err != nil {
+		return false
+	}
+	if cfg.Flows == nil {
+		return false
+	}
+	if cfg.Flows.Path != "" {
+		return true
+	}
+	return len(cfg.Flows.Workspaces) > 0
+}
+
 // FlowsPath returns the absolute path to the flows directory.
 // Defaults to ./flows relative to config dir.
 // When ReadConfig fails (e.g. missing env vars), falls back to ./flows relative to config file.

@@ -34,6 +34,11 @@ export interface StatusResponse {
     configured: boolean;
     count: number;
   };
+  flows?: {
+    configured: boolean;
+    count: number;
+    flowpipeHealthy: boolean;
+  };
 }
 
 export async function fetchHealth(): Promise<HealthStatus> {

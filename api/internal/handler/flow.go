@@ -478,6 +478,15 @@ func HandleFlowProcesses(w http.ResponseWriter, r *http.Request) {
 	}
 	defer resp.Body.Close()
 
+	// Flowpipe may panic on /api/v0/process (e.g. nil pointer in LoadProcessDB).
+	// Return a user-friendly error instead of passing through the raw 5xx body.
+	if resp.StatusCode >= 500 {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadGateway)
+		_, _ = w.Write([]byte(`{"error":"Flowpipe server error: unable to list processes"}`))
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(resp.StatusCode)
 	_, _ = io.Copy(w, resp.Body)

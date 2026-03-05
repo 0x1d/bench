@@ -748,7 +748,7 @@ export default function FlowEditorPage() {
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <div className="h-full min-h-[300px] rounded-lg border border-border overflow-hidden">
+        <div className="flow-editor-canvas h-full min-h-[300px] rounded-lg border border-border overflow-hidden">
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -774,7 +774,7 @@ export default function FlowEditorPage() {
             fitView
           >
             <Background />
-            <Controls className="bg-card border-border border shadow-sm [&_button]:border-border [&_button]:bg-card [&_button_svg]:fill-foreground hover:[&_button]:bg-accent" />
+            <Controls />
             <Panel position="top-left">
               <AddStepButtons
                 hasInputStep={nodes.some(

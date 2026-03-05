@@ -99,7 +99,7 @@ export function StatusPage() {
   };
 
   return (
-    <div className="w-full grid gap-6 max-w-6xl" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
+    <div className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl">
       <div className="bg-background/90 text-card-foreground border rounded-xl p-6 relative">
         <div className="flex items-start justify-between gap-2">
           <div>

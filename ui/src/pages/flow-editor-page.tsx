@@ -1,4 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+
+const LAYOUT_STORAGE_PREFIX = 'bench-flow-layout-';
+
+function getStoredLayout(flowPath: string | null): 'TB' | 'LR' {
+  if (!flowPath) return 'TB';
+  try {
+    const stored = localStorage.getItem(LAYOUT_STORAGE_PREFIX + flowPath);
+    return stored === 'LR' ? 'LR' : 'TB';
+  } catch {
+    return 'TB';
+  }
+}
 import {
   ReactFlow,
   Background,
@@ -262,7 +274,26 @@ export default function FlowEditorPage() {
     x: number;
     y: number;
   } | null>(null);
-  const [layoutDirection, setLayoutDirection] = useState<'TB' | 'LR'>('TB');
+  const flowPath = flowId ? (flowModule ? `${flowModule}/${flowId}` : flowId) : null;
+  const [layoutDirection, setLayoutDirectionState] = useState<'TB' | 'LR'>(() =>
+    getStoredLayout(flowPath)
+  );
+  useEffect(() => {
+    setLayoutDirectionState(getStoredLayout(flowPath));
+  }, [flowPath]);
+  const setLayoutDirection = useCallback(
+    (dir: 'TB' | 'LR') => {
+      setLayoutDirectionState(dir);
+      if (flowPath) {
+        try {
+          localStorage.setItem(LAYOUT_STORAGE_PREFIX + flowPath, dir);
+        } catch {
+          /* ignore */
+        }
+      }
+    },
+    [flowPath]
+  );
   const [runParamsOpen, setRunParamsOpen] = useState(false);
   const [runParamValues, setRunParamValues] = useState<Record<string, string>>({});
 

@@ -1,6 +1,6 @@
-# bench
+# Bench
 
-A tool for workflow and resource management.
+An integration and automation platform.
 
 ## Project Structure
 
@@ -8,8 +8,9 @@ A tool for workflow and resource management.
 bench/
 ├── api/             # Go backend API
 ├── ui/              # React/TypeScript frontend (Vite)
-├── docs/            # Documentation (database API, security)
-├── config.yaml      # Resource roots (see config.example.yaml)
+├── flows/           # Flow definitions (Flowpipe HCL and JSON)
+├── docs/            # Documentation (database, flows, security)
+├── config.yaml      # Resource roots and flows config (see config.example.yaml)
 ├── dev.sh           # Run API and UI together for local development
 ├── example.env
 └── .cursor/         # Cursor IDE rules and guidelines
@@ -91,9 +92,25 @@ If `DATABASE_URL` is not set, the Database page shows a setup message and the na
 
 See [docs/database.md](docs/database.md) for the full API reference and query endpoint details.
 
+## Flows (Flowpipe)
+
+The Flows page provides a visual flow editor for building pipelines that run on [Flowpipe](https://flowpipe.io). Flows are stored as JSON and generated as Flowpipe HCL (`.fp` files).
+
+### Features
+
+- **Module browser** — Organize flows in modules (subfolders) with tree view
+- **Flow editor** — Visual graph editor with drag-and-drop steps and connections
+- **Step types** — Input, output, HTTP (REST), query (database), message, sleep, transform, container, pipeline
+- **Execution** — Run flows on Flowpipe and view process history and execution details
+
+Configure `flows` in `config.yaml` with a `path` and `workspaces` (Flowpipe server URLs). If `flows` is not configured, the Flows page shows a setup message and the nav item remains available.
+
+See [docs/flows.md](docs/flows.md) for configuration, step types, and API details.
+
 ## Documentation
 
 - [docs/database.md](docs/database.md) — Database integration API reference, query endpoint, and features
+- [docs/flows.md](docs/flows.md) — Flows (Flowpipe) configuration, step types, and execution
 - [docs/filesystem.md](docs/filesystem.md) — File system resource manager API reference
 - [docs/security.md](docs/security.md) — Security concepts (API token, credentials, path traversal prevention)
 
@@ -105,7 +122,12 @@ See [docs/filesystem.md](docs/filesystem.md) for the full API reference.
 
 ## Configuration
 
-Resource roots are defined in `config.yaml` under `resources.filesystem`. Each entry has `id`, `label`, and `path` (absolute or relative to the config file). Previously: `BENCH_RESOURCES_ROOT` and `COMFYUI_PATH` environment variables. Now: configure `resources.filesystem` in `config.yaml`.
+Configuration is in `config.yaml` (see `config.example.yaml`):
+
+- **resources.filesystem** — File browser roots: `id`, `label`, `path` per entry
+- **resources.databases** — PostgreSQL connections for the Database page
+- **resources.rest** — REST API resources for the REST page and flow HTTP steps
+- **flows** — Flow storage path and Flowpipe workspace URLs for the Flows page
 
 ## Development
 

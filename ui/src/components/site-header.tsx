@@ -16,9 +16,9 @@ export function SiteHeader() {
           className="mr-2 data-[orientation=vertical]:h-4"
         />
         <div className="flex flex-1 items-center gap-3">
-          <span className="text-sm font-semibold tracking-tight">bench</span>
+          <span className="text-sm font-semibold tracking-tight">Bench</span>
           <span className="text-muted-foreground hidden text-sm md:inline">
-            Resource Manager
+            Integration Platform
           </span>
         </div>
         <Button

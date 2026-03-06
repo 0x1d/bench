@@ -56,7 +56,7 @@ const InfraEditForm = forwardRef<InfraEditFormHandle, Omit<InfraEditFormProps, '
         value={value}
         onChange={onChange}
         filename={savePath.endsWith('.tf') ? 'main.tf' : 'file.tf'}
-        className="h-full min-h-[240px] [&_.cm-editor]:h-full [&_.cm-scroller]:h-full"
+        className="h-full min-h-0 [&_.cm-editor]:h-full [&_.cm-editor]:min-h-0 [&_.cm-editor]:rounded-none [&_.cm-editor]:border-0 [&_.cm-scroller]:h-full [&_.cm-scroller]:min-h-0"
       />
     );
   }
@@ -272,7 +272,7 @@ export function InfrastructurePanel() {
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-auto p-4">
+      <div className={cn('flex min-h-0 flex-1 flex-col', (selectedNode || selectedFile) ? 'overflow-hidden p-0' : 'overflow-auto p-4')}>
         {(selectedNode || selectedFile) ? (
           <div className="flex min-h-0 flex-1 flex-col">
             <InfraEditForm

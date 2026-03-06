@@ -36,7 +36,7 @@ export function SidebarLeft({
   });
 
   return (
-    <Sidebar className={cn('border-r-0', className)} {...props}>
+    <Sidebar collapsible="icon" className={cn('border-r-0', className)} {...props}>
       <SidebarHeader>
         <NavMain items={items} />
       </SidebarHeader>

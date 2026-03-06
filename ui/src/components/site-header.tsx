@@ -1,11 +1,14 @@
-import { Moon, Sun } from 'lucide-react';
+import { Moon, Sun, Bot } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { useTheme } from '@/contexts/theme-context';
+import { useAgentChat } from '@/contexts/agent-chat-context';
+import { cn } from '@/lib/utils';
 
 export function SiteHeader() {
   const { theme, toggleTheme } = useTheme();
+  const { isOpen, setIsOpen } = useAgentChat();
 
   return (
     <header className="bg-background sticky top-0 z-20 flex h-[var(--header-height)] shrink-0 items-center border-b">
@@ -21,6 +24,18 @@ export function SiteHeader() {
             Integration Platform
           </span>
         </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setIsOpen(!isOpen)}
+          aria-label="Toggle agent chat"
+          className={cn(
+            "shrink-0",
+            isOpen && "bg-accent text-accent-foreground"
+          )}
+        >
+          <Bot className="size-4" />
+        </Button>
         <Button
           variant="ghost"
           size="icon"

@@ -51,6 +51,13 @@ interface InfrastructureConfig {
   path: string;
 }
 
+interface AgentConfig {
+  endpoint: string;
+  workingDirectory: string;
+  agent: string;
+  model: string;
+}
+
 interface WorkspaceResource {
   id: string;
   label: string;
@@ -64,6 +71,7 @@ interface ResourceFormState {
   workspaces: WorkspaceResource[];
   flows: FlowsConfig;
   infrastructure: InfrastructureConfig;
+  agent: AgentConfig;
 }
 
 type PanelMode =
@@ -76,7 +84,8 @@ type PanelMode =
   | 'add-workspace'
   | 'edit-workspace'
   | 'edit-flows'
-  | 'edit-infrastructure';
+  | 'edit-infrastructure'
+  | 'edit-agent';
 
 type DeleteTarget =
   | { type: 'filesystem'; index: number }
@@ -93,6 +102,12 @@ function emptyState(): ResourceFormState {
     workspaces: [],
     flows: { path: './flows' },
     infrastructure: { path: './workspace/infra' },
+    agent: {
+      endpoint: 'http://localhost:3001',
+      workingDirectory: '',
+      agent: 'cursor',
+      model: '',
+    },
   };
 }
 
@@ -128,6 +143,12 @@ function parseConfigToState(rawConfig: string): ResourceFormState {
       workspaces?: Array<{ id?: string; label?: string; flowpipeUrl?: string }>;
     };
     infrastructure?: { path?: string };
+    agent?: {
+      endpoint?: string;
+      workingDirectory?: string;
+      agent?: string;
+      model?: string;
+    };
   }) ?? { resources: {} };
 
   const filesystem = (parsed.resources?.filesystem ?? []).map((entry) => ({
@@ -178,7 +199,15 @@ function parseConfigToState(rawConfig: string): ResourceFormState {
     path: infraRaw?.path ?? './workspace/infra',
   };
 
-  return { filesystem, databases, rest, workspaces, flows, infrastructure };
+  const agentRaw = parsed.agent;
+  const agent: AgentConfig = {
+    endpoint: agentRaw?.endpoint ?? 'http://localhost:3001',
+    workingDirectory: agentRaw?.workingDirectory ?? '',
+    agent: agentRaw?.agent ?? 'cursor',
+    model: agentRaw?.model ?? '',
+  };
+
+  return { filesystem, databases, rest, workspaces, flows, infrastructure, agent };
 }
 
 function stateToConfig(state: ResourceFormState): string {
@@ -249,6 +278,14 @@ function stateToConfig(state: ResourceFormState): string {
       path: state.infrastructure.path.trim() || './workspace/infra',
     };
   }
+  if (state.agent.endpoint.trim() !== '') {
+    output.agent = {
+      endpoint: state.agent.endpoint.trim(),
+      workingDirectory: state.agent.workingDirectory.trim(),
+      agent: state.agent.agent.trim(),
+      model: state.agent.model.trim() || undefined,
+    };
+  }
   return yaml.dump(output, { noRefs: true, lineWidth: 120 });
 }
 
@@ -291,6 +328,12 @@ export function ResourcesConfigPage() {
     id: '',
     label: '',
     flowpipeUrl: 'http://localhost:7103',
+  });
+  const [agentDraft, setAgentDraft] = useState<AgentConfig>({
+    endpoint: 'http://localhost:3001',
+    workingDirectory: '',
+    agent: 'cursor',
+    model: '',
   });
 
   const persistState = async (newState: ResourceFormState) => {
@@ -444,6 +487,12 @@ export function ResourcesConfigPage() {
     setInfrastructureDraft(state.infrastructure);
     setPanelError(null);
     setPanelMode('edit-infrastructure');
+  };
+
+  const openEditAgent = () => {
+    setAgentDraft(state.agent);
+    setPanelError(null);
+    setPanelMode('edit-agent');
   };
 
   const closePanel = () => {
@@ -692,14 +741,46 @@ export function ResourcesConfigPage() {
         ? { ...prevState, workspaces: [...prevState.workspaces, nextEntry] }
         : panelMode === 'edit-workspace' && panelIndex != null
           ? {
-              ...prevState,
-              workspaces: prevState.workspaces.map((entry, idx) =>
-                idx === panelIndex ? nextEntry : entry
-              ),
-            }
+            ...prevState,
+            workspaces: prevState.workspaces.map((entry, idx) =>
+              idx === panelIndex ? nextEntry : entry
+            ),
+          }
           : prevState;
 
     if (nextState === prevState) return;
+
+    setState(nextState);
+    try {
+      await persistState(nextState);
+      closePanel();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Save failed');
+      setState(prevState);
+    }
+  };
+
+  const applyAgentDraft = async () => {
+    const endpoint = agentDraft.endpoint.trim();
+    const workingDirectory = agentDraft.workingDirectory.trim();
+    const agent = agentDraft.agent.trim();
+
+    if (endpoint === '' || workingDirectory === '' || agent === '') {
+      setPanelError('Endpoint, working directory, and agent type are required.');
+      return;
+    }
+
+    const prevState = state;
+    const nextState = {
+      ...prevState,
+      agent: {
+        ...agentDraft,
+        endpoint,
+        workingDirectory,
+        agent,
+        model: agentDraft.model.trim(),
+      },
+    };
 
     setState(nextState);
     try {
@@ -727,15 +808,15 @@ export function ResourcesConfigPage() {
           }
           : deleteTarget.type === 'workspace'
             ? {
-                ...prevState,
-                workspaces: prevState.workspaces.filter(
-                  (_, idx) => idx !== deleteTarget.index
-                ),
-              }
+              ...prevState,
+              workspaces: prevState.workspaces.filter(
+                (_, idx) => idx !== deleteTarget.index
+              ),
+            }
             : {
-                ...prevState,
-                rest: prevState.rest.filter((_, idx) => idx !== deleteTarget.index),
-              };
+              ...prevState,
+              rest: prevState.rest.filter((_, idx) => idx !== deleteTarget.index),
+            };
 
     setState(nextState);
     setDeleteTarget(null);
@@ -759,17 +840,19 @@ export function ResourcesConfigPage() {
             ? 'Edit database resource'
             : panelMode === 'add-rest'
               ? 'Add REST resource'
-              :     panelMode === 'edit-rest'
-              ? 'Edit REST resource'
-              : panelMode === 'add-workspace'
-                ? 'Add flow workspace'
-                : panelMode === 'edit-workspace'
-                  ? 'Edit flow workspace'
-                  : panelMode === 'edit-flows'
-                    ? 'Configure flows'
-                    : panelMode === 'edit-infrastructure'
-                      ? 'Configure infrastructure'
-                      : 'Resource';
+              : panelMode === 'edit-rest'
+                ? 'Edit REST resource'
+                : panelMode === 'add-workspace'
+                  ? 'Add flow workspace'
+                  : panelMode === 'edit-workspace'
+                    ? 'Edit flow workspace'
+                    : panelMode === 'edit-flows'
+                      ? 'Configure flows'
+                      : panelMode === 'edit-infrastructure'
+                        ? 'Configure infrastructure'
+                        : panelMode === 'edit-agent'
+                          ? 'Configure AI agent'
+                          : 'Resource';
   const panelDescription = panelMode?.includes('filesystem')
     ? 'Configure filesystem resource fields used for file browsing.'
     : panelMode?.includes('database')
@@ -782,7 +865,9 @@ export function ResourcesConfigPage() {
             ? 'Flowpipe integration: flows directory and server URL.'
             : panelMode === 'edit-infrastructure'
               ? 'Terraform configuration directory for infrastructure as code.'
-              : '';
+              : panelMode === 'edit-agent'
+                ? 'AI agent settings for the chat interface.'
+                : '';
 
   const panelBody = (
     <>
@@ -1143,6 +1228,60 @@ export function ResourcesConfigPage() {
           </div>
         )}
 
+        {panelMode === 'edit-agent' && (
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label>Endpoint</Label>
+              <Input
+                value={agentDraft.endpoint}
+                onChange={(e) =>
+                  setAgentDraft((prev) => ({ ...prev, endpoint: e.target.value }))
+                }
+                placeholder="http://localhost:3001"
+                className="font-mono"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>Working directory</Label>
+              <Input
+                value={agentDraft.workingDirectory}
+                onChange={(e) =>
+                  setAgentDraft((prev) => ({ ...prev, workingDirectory: e.target.value }))
+                }
+                placeholder="/home/user/bench/workspace"
+                className="font-mono"
+              />
+              <p className="text-xs text-muted-foreground">
+                Mandatory path where the agent will perform tasks.
+              </p>
+            </div>
+            <div className="space-y-1">
+              <Label>Agent type</Label>
+              <select
+                value={agentDraft.agent}
+                onChange={(e) =>
+                  setAgentDraft((prev) => ({ ...prev, agent: e.target.value }))
+                }
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+              >
+                <option value="cursor">Cursor</option>
+                <option value="gemini">Gemini</option>
+              </select>
+            </div>
+            <div className="space-y-1">
+              <Label>Model (optional)</Label>
+              <Input
+                value={agentDraft.model}
+                onChange={(e) =>
+                  setAgentDraft((prev) => ({ ...prev, model: e.target.value }))
+                }
+                placeholder="gemini-2.0-flash"
+                className="font-mono"
+              />
+            </div>
+          </div>
+        )}
+
         {panelError && <p className="mt-3 text-sm text-destructive">{panelError}</p>}
       </div>
 
@@ -1177,6 +1316,9 @@ export function ResourcesConfigPage() {
           {panelMode === 'edit-infrastructure' && (
             <Button onClick={applyInfrastructureDraft}>Save changes</Button>
           )}
+          {panelMode === 'edit-agent' && (
+            <Button onClick={applyAgentDraft}>Save changes</Button>
+          )}
         </div>
       </div>
     </>
@@ -1190,8 +1332,7 @@ export function ResourcesConfigPage() {
     <div className="flex w-full min-h-0 flex-1 overflow-hidden">
       <div
         className={cn(
-          'min-h-0 min-w-0 flex-1 overflow-auto pr-0 lg:pr-2',
-          panelOpen && 'lg:pr-[428px]'
+          'min-h-0 min-w-0 flex-1 overflow-auto p-4 md:p-6'
         )}
       >
         <div className="flex w-full min-h-0 flex-1 flex-col gap-6">
@@ -1409,6 +1550,43 @@ export function ResourcesConfigPage() {
 
           <section className="rounded-lg border border-border bg-card p-4">
             <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-base font-medium">AI Agent</h3>
+              <Button variant="outline" size="sm" onClick={openEditAgent}>
+                <Pencil className="size-4" />
+                Configure
+              </Button>
+            </div>
+            <div className="space-y-4 text-sm">
+              <div className="grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2">
+                <div className="flex gap-2">
+                  <span className="text-muted-foreground">Endpoint:</span>
+                  <span className="font-mono">{state.agent.endpoint}</span>
+                </div>
+                <div className="flex gap-2">
+                  <span className="text-muted-foreground">Type:</span>
+                  <span className="capitalize">{state.agent.agent}</span>
+                </div>
+                <div className="flex gap-2">
+                  <span className="text-muted-foreground">Directory:</span>
+                  <span className="font-mono truncate" title={state.agent.workingDirectory}>
+                    {state.agent.workingDirectory || '—'}
+                  </span>
+                </div>
+                {state.agent.model && (
+                  <div className="flex gap-2">
+                    <span className="text-muted-foreground">Model:</span>
+                    <span className="font-mono">{state.agent.model}</span>
+                  </div>
+                )}
+              </div>
+              <p className="text-muted-foreground text-xs">
+                AI agent configuration for the persistent chat and automated tasks.
+              </p>
+            </div>
+          </section>
+
+          <section className="rounded-lg border border-border bg-card p-4">
+            <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-medium">Flows</h3>
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={openAddWorkspace}>
@@ -1500,7 +1678,7 @@ export function ResourcesConfigPage() {
       </div>
       <div
         className={cn(
-          'bg-sidebar text-sidebar-foreground fixed right-0 bottom-0 top-[var(--header-height)] z-20 hidden min-h-0 w-[420px] flex-col overflow-auto border-l lg:flex',
+          'bg-sidebar text-sidebar-foreground relative z-20 hidden min-h-0 w-[360px] flex-col overflow-auto border-l lg:flex',
           panelOpen ? 'lg:flex' : 'lg:hidden'
         )}
       >

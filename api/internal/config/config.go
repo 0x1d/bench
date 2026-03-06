@@ -100,11 +100,20 @@ type InfrastructureConfig struct {
 	Path string `yaml:"path"` // Terraform config directory (default ./workspace/infra)
 }
 
+// AgentConfig holds settings for the AI agent service.
+type AgentConfig struct {
+	Endpoint         string `yaml:"endpoint"`
+	WorkingDirectory string `yaml:"workingDirectory"`
+	Agent            string `yaml:"agent"` // cursor or gemini
+	Model            string `yaml:"model,omitempty"`
+}
+
 // Config is the top-level config structure.
 type Config struct {
 	Resources      ResourcesConfig       `yaml:"resources"`
 	Flows          *FlowsConfig          `yaml:"flows,omitempty"`
 	Infrastructure *InfrastructureConfig `yaml:"infrastructure,omitempty"`
+	Agent          *AgentConfig          `yaml:"agent,omitempty"`
 }
 
 // FindConfigPath returns the path to config.yaml, or empty if none exists.
@@ -262,6 +271,21 @@ func validateConfig(cfg Config) error {
 				return fmt.Errorf("flows.workspaces contains duplicate id %q", ws.ID)
 			}
 			seenWorkspace[ws.ID] = struct{}{}
+		}
+	}
+	if cfg.Agent != nil {
+		if cfg.Agent.Endpoint == "" {
+			return fmt.Errorf("agent.endpoint is required")
+		}
+		if cfg.Agent.WorkingDirectory == "" {
+			return fmt.Errorf("agent.workingDirectory is required")
+		}
+		if cfg.Agent.Agent == "" {
+			return fmt.Errorf("agent.agent is required")
+		}
+		agentType := strings.ToLower(cfg.Agent.Agent)
+		if agentType != "cursor" && agentType != "gemini" {
+			return fmt.Errorf("agent.agent must be 'cursor' or 'gemini'")
 		}
 	}
 	return nil

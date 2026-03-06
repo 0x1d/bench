@@ -94,10 +94,13 @@ function findParsedBlock(
  * Convert Terraform graph DOT output to React Flow nodes and edges.
  * Uses dagre for layout. Enriches nodes with metadata from parsed files (body, sourceFile).
  */
+export type DependencyFlow = 'dependencies-at-top' | 'dependents-at-top';
+
 export function terraformGraphToNodesEdges(
   dot: string,
   parsed: ParsedTerraform,
-  direction: 'TB' | 'LR' = 'TB'
+  direction: 'TB' | 'LR' = 'TB',
+  dependencyFlow: DependencyFlow = 'dependencies-at-top'
 ): { nodes: Node[]; edges: Edge[] } {
   const { nodeIds: graphNodeIds, edges: graphEdges } = parseTerraformGraphDot(dot);
   const addrToNodeId = buildAddressToNodeIdMap(graphNodeIds);
@@ -145,11 +148,13 @@ export function terraformGraphToNodesEdges(
     const srcId = addrToNodeId.get(srcAddr);
     const tgtId = addrToNodeId.get(tgtAddr);
     if (srcId && tgtId && nodeIdSet.has(srcId) && nodeIdSet.has(tgtId)) {
+      // Keep semantic edge direction aligned with depends_on:
+      // A depends_on B => A -> B (dependent -> dependency).
       edges.push({ id: `${srcId}-${tgtId}`, source: srcId, target: tgtId });
     }
   }
 
-  return getLayoutedInfraElements(nodes, edges, direction);
+  return getLayoutedInfraElements(nodes, edges, direction, dependencyFlow);
 }
 
 const NODE_WIDTH = 220;
@@ -449,13 +454,13 @@ export function parsedToNodesEdges(parsed: ParsedTerraform): { nodes: Node[]; ed
   for (const r of parsed.resources) {
     if (r.dependsOn?.length) {
       const targets = resolveDependsOnToIds(r.dependsOn);
-      for (const srcId of targets) {
-        const sourceExists = nodes.some((n) => n.id === srcId);
-        if (sourceExists) {
+      for (const dependencyId of targets) {
+        const dependencyExists = nodes.some((n) => n.id === dependencyId);
+        if (dependencyExists) {
           edges.push({
-            id: `${srcId}-${r.id}`,
-            source: srcId,
-            target: r.id,
+            id: `${r.id}-${dependencyId}`,
+            source: r.id,
+            target: dependencyId,
           });
         }
       }
@@ -464,13 +469,13 @@ export function parsedToNodesEdges(parsed: ParsedTerraform): { nodes: Node[]; ed
   for (const d of parsed.data) {
     if (d.dependsOn?.length) {
       const targets = resolveDependsOnToIds(d.dependsOn);
-      for (const srcId of targets) {
-        const sourceExists = nodes.some((n) => n.id === srcId);
-        if (sourceExists) {
+      for (const dependencyId of targets) {
+        const dependencyExists = nodes.some((n) => n.id === dependencyId);
+        if (dependencyExists) {
           edges.push({
-            id: `${srcId}-${d.id}`,
-            source: srcId,
-            target: d.id,
+            id: `${d.id}-${dependencyId}`,
+            source: d.id,
+            target: dependencyId,
           });
         }
       }
@@ -513,7 +518,8 @@ function getNodeDimensions(node: Node): { width: number; height: number } {
 export function getLayoutedInfraElements(
   nodes: Node[],
   edges: Edge[],
-  direction: 'TB' | 'LR' = 'TB'
+  direction: 'TB' | 'LR' = 'TB',
+  dependencyFlow: DependencyFlow = 'dependencies-at-top'
 ): { nodes: Node[]; edges: Edge[] } {
   const graph = new dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
   graph.setGraph({
@@ -534,28 +540,47 @@ export function getLayoutedInfraElements(
       height: height + LAYOUT_PADDING,
     });
   });
-  edges.forEach((edge) => {
+  const layoutEdges =
+    dependencyFlow === 'dependencies-at-top'
+      ? edges.map((e) => ({ source: e.target, target: e.source }))
+      : edges;
+  layoutEdges.forEach((edge) => {
     graph.setEdge(edge.source, edge.target);
   });
 
   dagre.layout(graph);
 
   const isHorizontal = direction === 'LR';
+  const isFoundationalFlow = dependencyFlow === 'dependencies-at-top';
+  const sourcePosition = isHorizontal
+    ? isFoundationalFlow
+      ? Position.Left
+      : Position.Right
+    : isFoundationalFlow
+      ? Position.Top
+      : Position.Bottom;
+  const targetPosition = isHorizontal
+    ? isFoundationalFlow
+      ? Position.Right
+      : Position.Left
+    : isFoundationalFlow
+      ? Position.Bottom
+      : Position.Top;
   const layoutedNodes = nodes.map((node) => {
     const { width, height } = getNodeDimensions(node);
     const hasParent = 'parentId' in node && node.parentId;
     if (hasParent) {
       return {
         ...node,
-        targetPosition: (isHorizontal ? Position.Left : Position.Top) as Position,
-        sourcePosition: (isHorizontal ? Position.Right : Position.Bottom) as Position,
+        targetPosition: targetPosition as Position,
+        sourcePosition: sourcePosition as Position,
       };
     }
     const nodeWithPosition = graph.node(node.id);
     return {
       ...node,
-      targetPosition: (isHorizontal ? Position.Left : Position.Top) as Position,
-      sourcePosition: (isHorizontal ? Position.Right : Position.Bottom) as Position,
+      targetPosition: targetPosition as Position,
+      sourcePosition: sourcePosition as Position,
       position: {
         x: (nodeWithPosition?.x ?? 0) - width / 2,
         y: (nodeWithPosition?.y ?? 0) - height / 2,

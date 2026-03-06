@@ -11,6 +11,8 @@ import {
   Folder,
   FolderPlus,
   FilePlus2,
+  ArrowDown,
+  ArrowUp,
 } from 'lucide-react';
 import {
   ReactFlow,
@@ -66,6 +68,7 @@ import {
   parsedToNodesEdges,
   getLayoutedInfraElements,
   terraformGraphToNodesEdges,
+  type DependencyFlow,
 } from '@/lib/terraform-diagram';
 import { useInfrastructureView } from '@/contexts/infrastructure-view-context';
 
@@ -103,6 +106,7 @@ import { cn } from '@/lib/utils';
 type TerraformCommand = 'init' | 'plan' | 'apply' | 'destroy';
 
 const INFRA_LAYOUT_KEY = 'bench-infra-layout';
+const INFRA_DEPENDENCY_FLOW_KEY = 'bench-infra-dependency-flow';
 
 function formatMtime(ts: number): string {
   const d = new Date(ts * 1000);
@@ -321,6 +325,13 @@ export function InfrastructurePage() {
       return 'TB';
     }
   });
+  const [dependencyFlow, setDependencyFlow] = useState<DependencyFlow>(() => {
+    try {
+      return (localStorage.getItem(INFRA_DEPENDENCY_FLOW_KEY) as DependencyFlow) || 'dependencies-at-top';
+    } catch {
+      return 'dependencies-at-top';
+    }
+  });
   const [activeTab, setActiveTab] = useState<'files' | 'diagram'>('diagram');
   const [currentPath, setCurrentPath] = useState('.');
   const [showNewFile, setShowNewFile] = useState(false);
@@ -516,16 +527,17 @@ export function InfrastructurePage() {
       const { nodes, edges } = terraformGraphToNodesEdges(
         graphData.dot,
         parsedFromContext,
-        layoutDirection
+        layoutDirection,
+        dependencyFlow
       );
       return { nodes, edges };
     }
     const { nodes, edges } = parsedToNodesEdges(parsedFromContext);
     if (nodes.length > 0) {
-      return getLayoutedInfraElements(nodes, edges, layoutDirection);
+      return getLayoutedInfraElements(nodes, edges, layoutDirection, dependencyFlow);
     }
     return { nodes, edges };
-  }, [parsedFromContext, layoutDirection, graphData?.dot]);
+  }, [parsedFromContext, layoutDirection, dependencyFlow, graphData?.dot]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(diagramInitial.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(diagramInitial.edges);
@@ -561,17 +573,54 @@ export function InfrastructurePage() {
       const { nodes: n, edges: e } = terraformGraphToNodesEdges(
         graphData.dot,
         parsedFromContext,
+        next,
+        dependencyFlow
+      );
+      setNodes(n);
+      setEdges(e);
+    } else {
+      const { nodes: rawNodes, edges: rawEdges } = parsedToNodesEdges(parsedFromContext);
+      const { nodes: n, edges: e } = getLayoutedInfraElements(
+        rawNodes,
+        rawEdges,
+        next,
+        dependencyFlow
+      );
+      setNodes(n);
+      setEdges(e);
+    }
+  }, [layoutDirection, dependencyFlow, parsedFromContext, graphData?.dot, setNodes, setEdges]);
+
+  const onDependencyFlowChange = useCallback(() => {
+    const next: DependencyFlow =
+      dependencyFlow === 'dependencies-at-top' ? 'dependents-at-top' : 'dependencies-at-top';
+    setDependencyFlow(next);
+    try {
+      localStorage.setItem(INFRA_DEPENDENCY_FLOW_KEY, next);
+    } catch {
+      /* ignore */
+    }
+    if (graphData?.dot && graphData.dot.trim().length > 0) {
+      const { nodes: n, edges: e } = terraformGraphToNodesEdges(
+        graphData.dot,
+        parsedFromContext,
+        layoutDirection,
         next
       );
       setNodes(n);
       setEdges(e);
     } else {
       const { nodes: rawNodes, edges: rawEdges } = parsedToNodesEdges(parsedFromContext);
-      const { nodes: n, edges: e } = getLayoutedInfraElements(rawNodes, rawEdges, next);
+      const { nodes: n, edges: e } = getLayoutedInfraElements(
+        rawNodes,
+        rawEdges,
+        layoutDirection,
+        next
+      );
       setNodes(n);
       setEdges(e);
     }
-  }, [layoutDirection, parsedFromContext, graphData?.dot, setNodes, setEdges]);
+  }, [dependencyFlow, layoutDirection, parsedFromContext, graphData?.dot, setNodes, setEdges]);
 
   if (statusLoading || !status) {
     return (
@@ -632,7 +681,6 @@ export function InfrastructurePage() {
 
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 shadow-sm">
-        <span className="text-sm text-muted-foreground font-mono">{status.path}</span>
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'files' | 'diagram')}>
           <TabsList>
             <TabsTrigger value="diagram">Diagram</TabsTrigger>
@@ -640,20 +688,40 @@ export function InfrastructurePage() {
           </TabsList>
         </Tabs>
         {activeTab === 'diagram' && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onLayoutDirectionChange}
-            className="gap-1.5"
-            title={layoutDirection === 'TB' ? 'Switch to horizontal layout' : 'Switch to vertical layout'}
-          >
-            {layoutDirection === 'TB' ? (
-              <LayoutGrid className="size-4" />
-            ) : (
-              <Rows className="size-4" />
-            )}
-            Layout
-          </Button>
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onLayoutDirectionChange}
+              className="gap-1.5"
+              title={layoutDirection === 'TB' ? 'Switch to horizontal layout' : 'Switch to vertical layout'}
+            >
+              {layoutDirection === 'TB' ? (
+                <LayoutGrid className="size-4" />
+              ) : (
+                <Rows className="size-4" />
+              )}
+              Layout
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onDependencyFlowChange}
+              className="gap-1.5"
+              title={
+                dependencyFlow === 'dependencies-at-top'
+                  ? 'Foundational resources on top (default)'
+                  : 'Dependent resources on top'
+              }
+            >
+              {dependencyFlow === 'dependencies-at-top' ? (
+                <ArrowUp className="size-4" />
+              ) : (
+                <ArrowDown className="size-4" />
+              )}
+              {dependencyFlow === 'dependencies-at-top' ? 'Foundational' : 'Dependent'}
+            </Button>
+          </>
         )}
         <div className="ml-auto flex flex-shrink-0 items-center gap-2">
           <Button

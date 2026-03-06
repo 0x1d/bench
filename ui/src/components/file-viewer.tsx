@@ -520,7 +520,12 @@ export function FileViewer() {
           </Button>
         </div>
       </div>
-      <div className="flex min-h-0 flex-1 flex-col overflow-auto p-4">
+      <div
+        className={cn(
+          'flex min-h-0 flex-1 flex-col',
+          viewedFile?.type === 'text' ? 'overflow-hidden p-0' : 'overflow-auto p-4'
+        )}
+      >
         {loading && !objectUrl && (
           <p className="text-muted-foreground text-sm">Loading...</p>
         )}
@@ -531,42 +536,55 @@ export function FileViewer() {
           (viewedFile?.type === 'image' && objectUrl)) && viewedFile && (
           <>
             {viewedFile.type === 'text' && content != null && (
-              <Tabs
-                value={textMode}
-                onValueChange={(v) => {
-                  const mode = v as TextMode;
-                  if (mode === 'data' && editContent != null) {
-                    const emptyDefault = getEmptyStructuredDefault(editContent, showFormTab);
-                    if (emptyDefault != null) {
-                      setFormData(emptyDefault);
-                      setFormParseError(null);
-                      setTextMode('data');
-                      return;
-                    }
-                    const result = tryParseStructured(editContent, format);
-                    if (result.success) {
-                      setFormData(result.data);
-                      setFormParseError(null);
-                      setTextMode('data');
+              showFormTab ? (
+                <Tabs
+                  value={textMode}
+                  onValueChange={(v) => {
+                    const mode = v as TextMode;
+                    if (mode === 'data' && editContent != null) {
+                      const emptyDefault = getEmptyStructuredDefault(editContent, showFormTab);
+                      if (emptyDefault != null) {
+                        setFormData(emptyDefault);
+                        setFormParseError(null);
+                        setTextMode('data');
+                        return;
+                      }
+                      const result = tryParseStructured(editContent, format);
+                      if (result.success) {
+                        setFormData(result.data);
+                        setFormParseError(null);
+                        setTextMode('data');
+                      } else {
+                        setFormParseError(result.error);
+                      }
                     } else {
-                      setFormParseError(result.error);
+                      if (mode === 'content' && textMode === 'data' && formData != null) {
+                        // Reflect current form state in raw YAML/JSON before switching tabs.
+                        setEditContent(serializeStructured(formData, format));
+                      }
+                      setTextMode(mode);
                     }
-                  } else {
-                    if (mode === 'content' && textMode === 'data' && formData != null) {
-                      // Reflect current form state in raw YAML/JSON before switching tabs.
-                      setEditContent(serializeStructured(formData, format));
-                    }
-                    setTextMode(mode);
-                  }
-                }}
-                className="flex min-h-0 flex-1 flex-col"
-              >
-                <TabsList variant="line" className="mb-2 shrink-0">
-                  {showFormTab && <TabsTrigger value="data">Data</TabsTrigger>}
-                  <TabsTrigger value="content">Content</TabsTrigger>
-                </TabsList>
-                {showFormTab && (
-                  <TabsContent value="data" className="mt-0 flex-1 overflow-auto">
+                  }}
+                  className="flex min-h-0 flex-1 flex-col"
+                >
+                  <TabsList
+                    variant="line"
+                    className="flex w-full shrink-0 rounded-none border-b border-border p-0"
+                  >
+                    <TabsTrigger
+                      value="data"
+                      className="flex-1 rounded-none border-b-2 border-transparent px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:border-primary data-[state=active]:text-foreground"
+                    >
+                      Data
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="content"
+                      className="flex-1 rounded-none border-b-2 border-transparent px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:border-primary data-[state=active]:text-foreground"
+                    >
+                      Content
+                    </TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="data" className="mt-0 min-h-0 flex-1 overflow-auto p-4">
                     {formData != null ? (
                       <StructuredForm
                         data={formData}
@@ -582,16 +600,25 @@ export function FileViewer() {
                       <p className="text-muted-foreground text-sm">Loading form...</p>
                     )}
                   </TabsContent>
-                )}
-                <TabsContent value="content" className="mt-0 min-h-0 flex-1 overflow-auto">
+                  <TabsContent value="content" className="mt-0 min-h-0 flex-1 overflow-auto">
+                    <CodeEditor
+                      value={editContent ?? ''}
+                      onChange={setEditContent}
+                      filename={viewedFile.name}
+                      className="h-full min-h-0 [&_.cm-editor]:h-full [&_.cm-editor]:min-h-0 [&_.cm-editor]:rounded-none [&_.cm-editor]:border-0 [&_.cm-scroller]:h-full [&_.cm-scroller]:min-h-0"
+                    />
+                  </TabsContent>
+                </Tabs>
+              ) : (
+                <div className="flex min-h-0 flex-1 flex-col">
                   <CodeEditor
                     value={editContent ?? ''}
                     onChange={setEditContent}
                     filename={viewedFile.name}
-                    className="h-full min-h-[240px] [&_.cm-editor]:h-full [&_.cm-scroller]:h-full"
+                    className="h-full min-h-0 [&_.cm-editor]:h-full [&_.cm-editor]:min-h-0 [&_.cm-editor]:rounded-none [&_.cm-editor]:border-0 [&_.cm-scroller]:h-full [&_.cm-scroller]:min-h-0"
                   />
-                </TabsContent>
-              </Tabs>
+                </div>
+              )
             )}
             {viewedFile.type === 'image' && objectUrl && (
               <div className="flex min-h-0 flex-1 flex-col gap-4">

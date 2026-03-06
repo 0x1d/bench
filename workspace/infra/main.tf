@@ -51,7 +51,8 @@ resource "vercel_project_environment_variable" "database_url" {
 }
 
 data "vercel_project_directory" "app" {
-  path = var.vercel_deploy_path
+  path       = var.vercel_deploy_path
+  depends_on = [null_resource.main]
 }
 
 resource "vercel_deployment" "app" {
@@ -60,11 +61,7 @@ resource "vercel_deployment" "app" {
   path_prefix = var.vercel_deploy_path
   production  = true
 
-  depends_on = [
-    vercel_project.app,
-    vercel_project_environment_variable.database_url,
-    data.vercel_project_directory.app
-  ]
+  depends_on = [data.vercel_project_directory.app, render_web_service.api, vercel_project.app, vercel_project_environment_variable.database_url]
 }
 
 # -----------------------------------------------------------------------------
@@ -95,3 +92,4 @@ resource "render_web_service" "api" {
 
   depends_on = [supabase_project.db]
 }
+

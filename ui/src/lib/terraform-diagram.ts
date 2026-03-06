@@ -38,101 +38,19 @@ export function parsedToNodesEdges(parsed: ParsedTerraform): { nodes: Node[]; ed
   const edges: Edge[] = [];
   const xGap = 60;
 
-  // Module container: Providers, Variables, Outputs grouped together
+  // Module container: contains Providers, Variables, Outputs and Resources group
   const hasProviders = parsed.providers.length > 0;
   const hasVariables = parsed.variables.length > 0;
   const hasOutputs = parsed.outputs.length > 0;
-  const hasModuleGroup = hasProviders || hasVariables || hasOutputs;
-
-  if (hasModuleGroup) {
-    // Parent container
-    nodes.push({
-      id: GROUP_IDS.module,
-      type: 'infraModuleContainer',
-      position: { x: 0, y: 0 },
-      data: { label: 'Module' },
-      style: { width: CONTAINER_WIDTH, height: MODULE_CONTAINER_HEIGHT },
-      connectable: false,
-      deletable: false,
-    });
-
-    // Children: Providers, Variables, Outputs - equal padding on all sides
-    const headerHeight = 40;
-    const contentWidth = CONTAINER_WIDTH - 2 * MODULE_PADDING;
-    const childCount = [hasProviders, hasVariables, hasOutputs].filter(Boolean).length;
-    const totalBlocksWidth = childCount * GROUP_NODE_WIDTH;
-    const totalGaps = Math.max(0, childCount - 1) * MODULE_CHILD_GAP;
-    const remainingSpace = contentWidth - totalBlocksWidth - totalGaps;
-    const sidePadding = childCount > 0 ? remainingSpace / 2 : 0;
-    const childXStart = MODULE_PADDING + sidePadding;
-    const childY = headerHeight + MODULE_PADDING;
-    let childIndex = 0;
-    if (hasProviders) {
-      const childX = childXStart + childIndex * (GROUP_NODE_WIDTH + MODULE_CHILD_GAP);
-      childIndex += 1;
-      const sourceFile = parsed.providers[0]?.sourceFile ?? BLOCK_FILE_MAP.provider;
-      nodes.push({
-        id: GROUP_IDS.providers,
-        type: 'infraGroup',
-        parentId: GROUP_IDS.module,
-        extent: 'parent' as const,
-        position: { x: childX, y: childY },
-        data: {
-          label: 'Providers',
-          sourceFile,
-          childCount: parsed.providers.length,
-          items: parsed.providers.map((p) => ({ id: p.id, name: p.name })),
-        },
-        connectable: false,
-        deletable: false,
-      });
-    }
-    if (hasVariables) {
-      const childX = childXStart + childIndex * (GROUP_NODE_WIDTH + MODULE_CHILD_GAP);
-      childIndex += 1;
-      const sourceFile = parsed.variables[0]?.sourceFile ?? BLOCK_FILE_MAP.variable;
-      nodes.push({
-        id: GROUP_IDS.variables,
-        type: 'infraGroup',
-        parentId: GROUP_IDS.module,
-        extent: 'parent' as const,
-        position: { x: childX, y: childY },
-        data: {
-          label: 'Variables',
-          sourceFile,
-          childCount: parsed.variables.length,
-          items: parsed.variables.map((v) => ({ id: v.id, name: v.name })),
-        },
-        connectable: false,
-        deletable: false,
-      });
-    }
-    if (hasOutputs) {
-      const childX = childXStart + childIndex * (GROUP_NODE_WIDTH + MODULE_CHILD_GAP);
-      const outputsSourceFile = parsed.outputs[0]?.sourceFile ?? BLOCK_FILE_MAP.output;
-      nodes.push({
-        id: GROUP_IDS.outputs,
-        type: 'infraGroup',
-        parentId: GROUP_IDS.module,
-        extent: 'parent' as const,
-        position: { x: childX, y: childY },
-        data: {
-          label: 'Outputs',
-          sourceFile: outputsSourceFile,
-          childCount: parsed.outputs.length,
-          items: parsed.outputs.map((o) => ({ id: o.id, name: o.name })),
-        },
-        connectable: false,
-        deletable: false,
-      });
-    }
-  }
-
-  // Resources container: layout resources hierarchically by depends_on (dagre TB)
+  const hasConfigBlocks = hasProviders || hasVariables || hasOutputs;
   const resourceNodes = [...parsed.resources, ...parsed.data];
   const hasResources = resourceNodes.length > 0;
+  const hasModuleGroup = hasConfigBlocks || hasResources;
   const headerHeight = 40;
 
+  // Resources container: layout resources hierarchically by depends_on (dagre TB)
+  let resourcesContainerHeight = 0;
+  let resourcePositions: { r: TerraformResource | TerraformData; relX: number; relY: number }[] = [];
   if (hasResources) {
     // Build depends_on edges for resources (source -> target means "target depends on source")
     const resourceDepEdges: { source: string; target: string }[] = [];
@@ -187,43 +105,151 @@ export function parsedToNodesEdges(parsed: ParsedTerraform): { nodes: Node[]; ed
     });
     const contentWidth = maxX - minX;
     const contentHeight = maxY - minY;
-    const resourcesContainerHeight =
+    const resourcesInnerWidth = CONTAINER_WIDTH - 2 * MODULE_PADDING; // Resources container width when inset in Module
+    resourcesContainerHeight =
       headerHeight + 2 * MODULE_PADDING + contentHeight;
 
-    nodes.push({
-      id: GROUP_IDS.resources,
+    const resourcesContentWidth = resourcesInnerWidth - 2 * MODULE_PADDING;
+    const sidePadding = Math.max(0, (resourcesContentWidth - contentWidth) / 2);
+    resourcePositions = resourceNodes.map((r) => {
+      const g = resourceGraph.node(r.id);
+      return {
+        r,
+        relX: (g.x - NODE_WIDTH / 2) - minX + MODULE_PADDING + sidePadding,
+        relY: (g.y - NODE_HEIGHT / 2) - minY + headerHeight + MODULE_PADDING,
+      };
+    });
+  }
+
+  // Module container: contains config blocks and Resources group
+  if (hasModuleGroup) {
+    const moduleHeight =
+      headerHeight +
+      2 * MODULE_PADDING +
+      (hasConfigBlocks ? GROUP_NODE_HEIGHT + (hasResources ? MODULE_CHILD_GAP : 0) : 0) +
+      (hasResources ? resourcesContainerHeight : 0);
+
+    nodes.unshift({
+      id: GROUP_IDS.module,
       type: 'infraModuleContainer',
       position: { x: 0, y: 0 },
-      data: { label: 'Resources' },
-      style: { width: CONTAINER_WIDTH, height: resourcesContainerHeight },
+      data: { label: 'Module' },
+      style: { width: CONTAINER_WIDTH, height: moduleHeight },
       connectable: false,
       deletable: false,
     });
 
-    const sidePadding = Math.max(0, (CONTAINER_WIDTH - 2 * MODULE_PADDING - contentWidth) / 2);
+    // Children: Providers, Variables, Outputs
+    if (hasConfigBlocks) {
+      const contentWidth = CONTAINER_WIDTH - 2 * MODULE_PADDING;
+      const childCount = [hasProviders, hasVariables, hasOutputs].filter(Boolean).length;
+      const totalBlocksWidth = childCount * GROUP_NODE_WIDTH;
+      const totalGaps = Math.max(0, childCount - 1) * MODULE_CHILD_GAP;
+      const remainingSpace = contentWidth - totalBlocksWidth - totalGaps;
+      const sidePadding = childCount > 0 ? remainingSpace / 2 : 0;
+      const childXStart = MODULE_PADDING + sidePadding;
+      const childY = headerHeight + MODULE_PADDING;
+      let childIndex = 0;
+      if (hasProviders) {
+        const childX = childXStart + childIndex * (GROUP_NODE_WIDTH + MODULE_CHILD_GAP);
+        childIndex += 1;
+        const sourceFile = parsed.providers[0]?.sourceFile ?? BLOCK_FILE_MAP.provider;
+        nodes.push({
+          id: GROUP_IDS.providers,
+          type: 'infraGroup',
+          parentId: GROUP_IDS.module,
+          extent: 'parent' as const,
+          position: { x: childX, y: childY },
+          data: {
+            label: 'Providers',
+            sourceFile,
+            childCount: parsed.providers.length,
+            items: parsed.providers.map((p) => ({ id: p.id, name: p.name })),
+          },
+          connectable: false,
+          deletable: false,
+        });
+      }
+      if (hasVariables) {
+        const childX = childXStart + childIndex * (GROUP_NODE_WIDTH + MODULE_CHILD_GAP);
+        childIndex += 1;
+        const sourceFile = parsed.variables[0]?.sourceFile ?? BLOCK_FILE_MAP.variable;
+        nodes.push({
+          id: GROUP_IDS.variables,
+          type: 'infraGroup',
+          parentId: GROUP_IDS.module,
+          extent: 'parent' as const,
+          position: { x: childX, y: childY },
+          data: {
+            label: 'Variables',
+            sourceFile,
+            childCount: parsed.variables.length,
+            items: parsed.variables.map((v) => ({ id: v.id, name: v.name })),
+          },
+          connectable: false,
+          deletable: false,
+        });
+      }
+      if (hasOutputs) {
+        const childX = childXStart + childIndex * (GROUP_NODE_WIDTH + MODULE_CHILD_GAP);
+        const outputsSourceFile = parsed.outputs[0]?.sourceFile ?? BLOCK_FILE_MAP.output;
+        nodes.push({
+          id: GROUP_IDS.outputs,
+          type: 'infraGroup',
+          parentId: GROUP_IDS.module,
+          extent: 'parent' as const,
+          position: { x: childX, y: childY },
+          data: {
+            label: 'Outputs',
+            sourceFile: outputsSourceFile,
+            childCount: parsed.outputs.length,
+            items: parsed.outputs.map((o) => ({ id: o.id, name: o.name })),
+          },
+          connectable: false,
+          deletable: false,
+        });
+      }
+    }
 
-    resourceNodes.forEach((r) => {
-      const isData = 'body' in r && r.id.startsWith('data-');
-      const type = isData ? 'infraData' : 'infraResource';
-      const base = isData ? (r as TerraformData) : (r as TerraformResource);
-      const g = resourceGraph.node(r.id);
-      const relX = (g.x - NODE_WIDTH / 2) - minX + MODULE_PADDING + sidePadding;
-      const relY = (g.y - NODE_HEIGHT / 2) - minY + headerHeight + MODULE_PADDING;
+    // Resources container as child of Module (inset by MODULE_PADDING for equal padding)
+    if (hasResources) {
+      const resourcesY =
+        headerHeight +
+        MODULE_PADDING +
+        (hasConfigBlocks ? GROUP_NODE_HEIGHT + MODULE_CHILD_GAP : 0);
+      const resourcesWidth = CONTAINER_WIDTH - 2 * MODULE_PADDING;
       nodes.push({
-        id: r.id,
-        type,
-        parentId: GROUP_IDS.resources,
+        id: GROUP_IDS.resources,
+        type: 'infraModuleContainer',
+        parentId: GROUP_IDS.module,
         extent: 'parent' as const,
-        position: { x: relX, y: relY },
-        data: {
-          id: base.id,
-          type: base.type,
-          name: base.name,
-          body: base.body,
-          ...(base.sourceFile != null && { sourceFile: base.sourceFile }),
-        },
+        position: { x: MODULE_PADDING, y: resourcesY },
+        data: { label: 'Resources' },
+        style: { width: resourcesWidth, height: resourcesContainerHeight },
+        connectable: false,
+        deletable: false,
       });
-    });
+      // Resource nodes as children of Resources container (parent must exist first)
+      resourcePositions.forEach(({ r, relX, relY }) => {
+        const isData = 'body' in r && r.id.startsWith('data-');
+        const type = isData ? 'infraData' : 'infraResource';
+        const base = isData ? (r as TerraformData) : (r as TerraformResource);
+        nodes.push({
+          id: r.id,
+          type,
+          parentId: GROUP_IDS.resources,
+          extent: 'parent' as const,
+          position: { x: relX, y: relY },
+          data: {
+            id: base.id,
+            type: base.type,
+            name: base.name,
+            body: base.body,
+            ...(base.sourceFile != null && { sourceFile: base.sourceFile }),
+          },
+        });
+      });
+    }
   }
 
   // Terraform modules - individual nodes (different from Module container)
@@ -268,25 +294,11 @@ export function parsedToNodesEdges(parsed: ParsedTerraform): { nodes: Node[]; ed
     }
   }
 
-  // Flow edges for dagre layout: Module (top) -> Resources (bottom) -> terraform modules
-  if (hasModuleGroup && hasResources) {
-    edges.push({
-      id: `${GROUP_IDS.module}-${GROUP_IDS.resources}`,
-      source: GROUP_IDS.module,
-      target: GROUP_IDS.resources,
-    });
-  }
-  if (hasModuleGroup && !hasResources && parsed.modules.length > 0) {
+  // Flow edges for dagre layout: Module (top) -> terraform modules
+  if (hasModuleGroup && parsed.modules.length > 0) {
     edges.push({
       id: `${GROUP_IDS.module}-${parsed.modules[0].id}`,
       source: GROUP_IDS.module,
-      target: parsed.modules[0].id,
-    });
-  }
-  if (hasResources && parsed.modules.length > 0) {
-    edges.push({
-      id: `${GROUP_IDS.resources}-${parsed.modules[0].id}`,
-      source: GROUP_IDS.resources,
       target: parsed.modules[0].id,
     });
   }

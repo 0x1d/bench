@@ -9,11 +9,11 @@ type Root struct {
 
 // ResourceEntry represents a file or directory in a listing.
 type ResourceEntry struct {
-	Name   string `json:"name"`
-	Path   string `json:"path"`
-	IsDir  bool   `json:"isDir"`
-	Size   int64  `json:"size,omitempty"`
-	Mtime  int64  `json:"mtime,omitempty"`
+	Name  string `json:"name"`
+	Path  string `json:"path"`
+	IsDir bool   `json:"isDir"`
+	Size  int64  `json:"size,omitempty"`
+	Mtime int64  `json:"mtime,omitempty"`
 }
 
 // RootsResponse is the response for GET /api/resources/roots.

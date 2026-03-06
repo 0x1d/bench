@@ -1,0 +1,24 @@
+# Copy to terraform.tfvars and fill in your values.
+# Never commit terraform.tfvars (it may contain secrets).
+
+# Supabase - https://supabase.com/dashboard
+supabase_access_token     = "sbp_..."
+supabase_organization_id  = "your-org-id"
+supabase_database_password = "your-secure-password"
+supabase_region           = "us-east-1"
+
+# Vercel - https://vercel.com/account/tokens
+# Set VERCEL_API_TOKEN env var, or use a .env file
+vercel_team_id      = null  # or "team_xxx" for team account
+vercel_project_name = "bench-app"
+vercel_framework   = "nextjs"
+vercel_git_repo    = "owner/repo"
+vercel_deploy_path = "../ui"  # path to app dir, relative to workspace/infra
+
+# Koyeb - https://app.koyeb.com/account/api
+# Set KOYEB_TOKEN env var
+koyeb_app_name     = "bench-koyeb"
+koyeb_service_name = "bench-service"
+koyeb_git_repo     = "github.com/koyeb/example-golang"
+koyeb_git_branch   = "main"
+koyeb_region       = "fra"

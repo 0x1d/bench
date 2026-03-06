@@ -16,10 +16,10 @@ import (
 )
 
 var (
-	ErrRestNotFound   = errors.New("REST resource not found")
-	ErrInvalidPath    = errors.New("invalid path")
-	ErrSpecNotFound   = errors.New("OpenAPI spec not found")
-	ErrPathTraversal  = errors.New("path traversal not allowed")
+	ErrRestNotFound  = errors.New("REST resource not found")
+	ErrInvalidPath   = errors.New("invalid path")
+	ErrSpecNotFound  = errors.New("OpenAPI spec not found")
+	ErrPathTraversal = errors.New("path traversal not allowed")
 )
 
 // Service provides REST resource operations.

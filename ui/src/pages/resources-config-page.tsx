@@ -47,6 +47,10 @@ interface FlowsConfig {
   path: string;
 }
 
+interface InfrastructureConfig {
+  path: string;
+}
+
 interface WorkspaceResource {
   id: string;
   label: string;
@@ -59,6 +63,7 @@ interface ResourceFormState {
   rest: RestResource[];
   workspaces: WorkspaceResource[];
   flows: FlowsConfig;
+  infrastructure: InfrastructureConfig;
 }
 
 type PanelMode =
@@ -70,7 +75,8 @@ type PanelMode =
   | 'edit-rest'
   | 'add-workspace'
   | 'edit-workspace'
-  | 'edit-flows';
+  | 'edit-flows'
+  | 'edit-infrastructure';
 
 type DeleteTarget =
   | { type: 'filesystem'; index: number }
@@ -86,6 +92,7 @@ function emptyState(): ResourceFormState {
     rest: [],
     workspaces: [],
     flows: { path: './flows' },
+    infrastructure: { path: './workspace/infra' },
   };
 }
 
@@ -120,6 +127,7 @@ function parseConfigToState(rawConfig: string): ResourceFormState {
       path?: string;
       workspaces?: Array<{ id?: string; label?: string; flowpipeUrl?: string }>;
     };
+    infrastructure?: { path?: string };
   }) ?? { resources: {} };
 
   const filesystem = (parsed.resources?.filesystem ?? []).map((entry) => ({
@@ -165,7 +173,12 @@ function parseConfigToState(rawConfig: string): ResourceFormState {
     path: flowsRaw?.path ?? './flows',
   };
 
-  return { filesystem, databases, rest, workspaces, flows };
+  const infraRaw = parsed.infrastructure;
+  const infrastructure: InfrastructureConfig = {
+    path: infraRaw?.path ?? './workspace/infra',
+  };
+
+  return { filesystem, databases, rest, workspaces, flows, infrastructure };
 }
 
 function stateToConfig(state: ResourceFormState): string {
@@ -231,6 +244,11 @@ function stateToConfig(state: ResourceFormState): string {
       workspaces: workspacesOut.length > 0 ? workspacesOut : undefined,
     };
   }
+  if (state.infrastructure.path.trim() !== '') {
+    output.infrastructure = {
+      path: state.infrastructure.path.trim() || './workspace/infra',
+    };
+  }
   return yaml.dump(output, { noRefs: true, lineWidth: 120 });
 }
 
@@ -266,6 +284,9 @@ export function ResourcesConfigPage() {
   const [flowsDraft, setFlowsDraft] = useState<FlowsConfig>({
     path: './flows',
   });
+  const [infrastructureDraft, setInfrastructureDraft] = useState<InfrastructureConfig>({
+    path: './workspace/infra',
+  });
   const [workspaceDraft, setWorkspaceDraft] = useState<WorkspaceResource>({
     id: '',
     label: '',
@@ -278,6 +299,7 @@ export function ResourcesConfigPage() {
     await saveConfig(nextConfig);
     await refetchStatus();
     queryClient.invalidateQueries({ queryKey: ['flows', 'workspaces'] });
+    queryClient.invalidateQueries({ queryKey: ['infrastructure'] });
   };
 
   useEffect(() => {
@@ -416,6 +438,12 @@ export function ResourcesConfigPage() {
     setFlowsDraft(state.flows);
     setPanelError(null);
     setPanelMode('edit-flows');
+  };
+
+  const openEditInfrastructure = () => {
+    setInfrastructureDraft(state.infrastructure);
+    setPanelError(null);
+    setPanelMode('edit-infrastructure');
   };
 
   const closePanel = () => {
@@ -618,6 +646,25 @@ export function ResourcesConfigPage() {
     }
   };
 
+  const applyInfrastructureDraft = async () => {
+    const path = infrastructureDraft.path.trim() || './workspace/infra';
+
+    const prevState = state;
+    const nextState = {
+      ...prevState,
+      infrastructure: { path },
+    };
+
+    setState(nextState);
+    try {
+      await persistState(nextState);
+      closePanel();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Save failed');
+      setState(prevState);
+    }
+  };
+
   const applyWorkspaceDraft = async () => {
     const id = workspaceDraft.id.trim();
     if (id === '') {
@@ -720,7 +767,9 @@ export function ResourcesConfigPage() {
                   ? 'Edit flow workspace'
                   : panelMode === 'edit-flows'
                     ? 'Configure flows'
-                    : 'Resource';
+                    : panelMode === 'edit-infrastructure'
+                      ? 'Configure infrastructure'
+                      : 'Resource';
   const panelDescription = panelMode?.includes('filesystem')
     ? 'Configure filesystem resource fields used for file browsing.'
     : panelMode?.includes('database')
@@ -731,7 +780,9 @@ export function ResourcesConfigPage() {
           ? 'Flowpipe profile: named config for pipeline execution (host, port, etc.). Init adds block to flows/workspaces.fpc.'
           : panelMode === 'edit-flows'
             ? 'Flowpipe integration: flows directory and server URL.'
-            : '';
+            : panelMode === 'edit-infrastructure'
+              ? 'Terraform configuration directory for infrastructure as code.'
+              : '';
 
   const panelBody = (
     <>
@@ -1015,6 +1066,25 @@ export function ResourcesConfigPage() {
           </div>
         )}
 
+        {panelMode === 'edit-infrastructure' && (
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label>Infrastructure directory</Label>
+              <Input
+                value={infrastructureDraft.path}
+                onChange={(e) =>
+                  setInfrastructureDraft((prev) => ({ ...prev, path: e.target.value }))
+                }
+                placeholder="./workspace/infra"
+                className="font-mono"
+              />
+              <p className="text-xs text-muted-foreground">
+                Path for Terraform .tf files. Relative to config directory.
+              </p>
+            </div>
+          </div>
+        )}
+
         {(panelMode === 'add-database' || panelMode === 'edit-database') && (
           <div className="space-y-3">
             <div className="space-y-1">
@@ -1104,6 +1174,9 @@ export function ResourcesConfigPage() {
           {panelMode === 'edit-flows' && (
             <Button onClick={applyFlowsDraft}>Save changes</Button>
           )}
+          {panelMode === 'edit-infrastructure' && (
+            <Button onClick={applyInfrastructureDraft}>Save changes</Button>
+          )}
         </div>
       </div>
     </>
@@ -1125,7 +1198,7 @@ export function ResourcesConfigPage() {
           <div className="rounded-lg border border-border bg-card p-4">
             <h2 className="text-lg font-medium tracking-tight">Resources</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Configure filesystem roots, database resources, REST API endpoints, and flows (Flowpipe).
+              Configure filesystem roots, database resources, REST API endpoints, infrastructure (Terraform), and flows (Flowpipe).
             </p>
           </div>
 
@@ -1313,6 +1386,25 @@ export function ResourcesConfigPage() {
                 </table>
               </div>
             )}
+          </section>
+
+          <section className="rounded-lg border border-border bg-card p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-base font-medium">Infrastructure</h3>
+              <Button variant="outline" size="sm" onClick={openEditInfrastructure}>
+                <Pencil className="size-4" />
+                Configure
+              </Button>
+            </div>
+            <div className="space-y-2 text-sm">
+              <div className="flex gap-2">
+                <span className="text-muted-foreground">Path:</span>
+                <span className="font-mono">{state.infrastructure.path || './workspace/infra'}</span>
+              </div>
+              <p className="text-muted-foreground">
+                Terraform configuration directory for infrastructure as code.
+              </p>
+            </div>
           </section>
 
           <section className="rounded-lg border border-border bg-card p-4">

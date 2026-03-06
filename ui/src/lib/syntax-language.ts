@@ -43,6 +43,7 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   env: 'bash',
   fp: 'hcl',
   fpc: 'hcl',
+  tf: 'hcl',
   gitignore: 'plaintext',
   dockerignore: 'plaintext',
   log: 'plaintext',

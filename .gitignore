@@ -35,4 +35,9 @@ temp/
 workspace/flows/.flowpipe/
 workspace/flows/local/
 
+# Terraform (state and provider cache, keep .terraform.lock.hcl and .tf files)
+workspace/infra/.terraform/
+workspace/infra/terraform.tfstate
+workspace/infra/terraform.tfstate.backup
+
 server

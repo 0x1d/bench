@@ -47,6 +47,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { FlowStepNode } from '@/components/flow-step-node';
+import { FlowPalette } from '@/components/flow-palette';
 import { flowStepIcons } from '@/lib/flow-step-icons';
 import {
   Popover,
@@ -761,7 +762,64 @@ export default function FlowEditorPage() {
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <div className="flow-editor-canvas h-full min-h-[300px] rounded-lg border border-border overflow-hidden">
+        <div className="flow-editor-canvas flex flex-1 min-h-[300px] gap-2 overflow-hidden">
+          <FlowPalette
+            hasInputStep={nodes.some(
+              (n) => ((n.data as { step?: FlowStep })?.step?.type ?? '') === 'input'
+            )}
+            onAdd={(type) => {
+              const id = `step_${type}_${Date.now()}`;
+              const configs: Record<string, Record<string, unknown>> = {
+                http: { restId: '', method: 'GET', path: '/' },
+                query: { databaseId: '', sql: '' },
+                input: { params: [] },
+                message: { notifier: 'default', text: 'Hello from bench!' },
+                sleep: { duration: '5s' },
+                transform: { value: '' },
+                container: { image: 'alpine:latest', cmd: ['echo', 'hello'] },
+                pipeline: { pipelineRef: '', args: {} },
+                output: { outputs: [{ name: 'result', value: '' }] },
+              };
+              const labels: Record<string, string> = {
+                http: 'HTTP request',
+                query: 'Query',
+                input: 'Input',
+                message: 'Message',
+                sleep: 'Sleep',
+                transform: 'Transform',
+                container: 'Container',
+                pipeline: 'Pipeline',
+                output: 'Output',
+              };
+              const step: FlowStep = {
+                id,
+                type,
+                label: labels[type],
+                config: configs[type],
+              };
+              const label = getUniqueLabel(nodes, step.label || step.id);
+              const stepWithLabel = { ...step, label };
+              const newNode: Node = {
+                id: step.id,
+                type: 'flowStep',
+                position: { x: 0, y: 0 },
+                data: {
+                  stepType: step.type,
+                  label: stepWithLabel.label || step.id,
+                  step: stepWithLabel,
+                  onAddNextStep: (nodeId: string, e: React.MouseEvent) => {
+                    setConnectFromSource({ sourceId: nodeId, x: e.clientX, y: e.clientY });
+                  },
+                },
+              };
+              const nextNodes = [...nodes, newNode];
+              const layouted = getLayoutedElements(nextNodes, edges, layoutDirection);
+              setNodes(layouted.nodes);
+              setEdges(layouted.edges);
+            }}
+            className="shrink-0 w-40"
+          />
+          <div className="flex-1 min-h-0 rounded-lg border border-border overflow-hidden">
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -789,34 +847,6 @@ export default function FlowEditorPage() {
             <Background />
             <Controls />
             <FitViewOnPanelExpand />
-            <Panel position="top-left">
-              <AddStepButtons
-                hasInputStep={nodes.some(
-                  (n) => ((n.data as { step?: FlowStep })?.step?.type ?? '') === 'input'
-                )}
-                onAdd={(step) => {
-                  const label = getUniqueLabel(nodes, step.label || step.id);
-                  const stepWithLabel = { ...step, label };
-                  const newNode: Node = {
-                    id: step.id,
-                    type: 'flowStep',
-                    position: { x: 0, y: 0 },
-                    data: {
-                      stepType: step.type,
-                      label: stepWithLabel.label || step.id,
-                      step: stepWithLabel,
-                      onAddNextStep: (nodeId: string, e: React.MouseEvent) => {
-                        setConnectFromSource({ sourceId: nodeId, x: e.clientX, y: e.clientY });
-                      }
-                    },
-                  };
-                  const nextNodes = [...nodes, newNode];
-                  const layouted = getLayoutedElements(nextNodes, edges, layoutDirection);
-                  setNodes(layouted.nodes);
-                  setEdges(layouted.edges);
-                }}
-              />
-            </Panel>
             <Panel position="top-right">
               <div className="flex bg-card border border-border rounded-lg shadow-sm">
                 <Button
@@ -840,6 +870,7 @@ export default function FlowEditorPage() {
               </div>
             </Panel>
           </ReactFlow>
+          </div>
         </div>
       </div>
 
@@ -1005,86 +1036,3 @@ export default function FlowEditorPage() {
   );
 }
 
-function AddStepButtons({
-  hasInputStep,
-  onAdd,
-}: {
-  hasInputStep: boolean;
-  onAdd: (step: FlowStep) => void;
-}) {
-  const addStep = (type: 'http' | 'query' | 'input' | 'message' | 'sleep' | 'transform' | 'container' | 'pipeline' | 'output') => {
-    // eslint-disable-next-line react-hooks/purity -- Date.now() runs only on user click, not during render
-    const id = `step_${type}_${Date.now()}`;
-    const configs: Record<string, Record<string, unknown>> = {
-      http: { restId: '', method: 'GET', path: '/' },
-      query: { databaseId: '', sql: '' },
-      input: { params: [] },
-      message: { notifier: 'default', text: 'Hello from bench!' },
-      sleep: { duration: '5s' },
-      transform: { value: '' },
-      container: { image: 'alpine:latest', cmd: ['echo', 'hello'] },
-      pipeline: { pipelineRef: '', args: {} },
-      output: { outputs: [{ name: 'result', value: '' }] },
-    };
-    const labels: Record<string, string> = {
-      http: 'HTTP request',
-      query: 'Query',
-      input: 'Input',
-      message: 'Message',
-      sleep: 'Sleep',
-      transform: 'Transform',
-      container: 'Container',
-      pipeline: 'Pipeline',
-      output: 'Output',
-    };
-    onAdd({
-      id,
-      type,
-      label: labels[type],
-      config: configs[type],
-    });
-  };
-
-  const stepTypes = [
-    ...(!hasInputStep ? (['input'] as const) : []),
-    'http',
-    'query',
-    'message',
-    'sleep',
-    'transform',
-    'container',
-    'pipeline',
-    'output',
-  ] as const;
-  const labels: Record<string, string> = {
-    http: 'HTTP',
-    query: 'Query',
-    input: 'Input',
-    message: 'Message',
-    sleep: 'Sleep',
-    transform: 'Transform',
-    container: 'Container',
-    pipeline: 'Pipeline',
-    output: 'Output',
-  };
-
-  return (
-    <div className="flex gap-2 rounded-lg border border-border bg-card px-4 py-3 shadow-sm">
-      {stepTypes.map((type) => {
-        const Icon = flowStepIcons[type];
-        return (
-          <Button
-            key={type}
-            variant="outline"
-            size="sm"
-            onClick={() => addStep(type)}
-            className="gap-1.5"
-          >
-            {Icon && <Icon className="size-4" />}
-            {labels[type]}
-          </Button>
-        );
-      })}
-    </div>
-  );
-}

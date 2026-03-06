@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Activity, Boxes, Database, FolderOpen, Globe, Workflow } from 'lucide-react';
+import { Activity, Boxes, Database, FolderOpen, Globe, Server, Workflow } from 'lucide-react';
 import { NavMain } from '@/components/nav-main';
 import { cn } from '@/lib/utils';
 import {
@@ -16,6 +16,7 @@ const navItems = [
   { title: 'Database', url: '#database', icon: Database },
   { title: 'REST', url: '#rest', icon: Globe },
   { title: 'Flows', url: '#flows', icon: Workflow },
+  { title: 'Infrastructure', url: '#infrastructure', icon: Server },
 ];
 
 export function SidebarLeft({
@@ -25,9 +26,12 @@ export function SidebarLeft({
 }: React.ComponentProps<typeof Sidebar> & { currentHash?: string }) {
   const items = navItems.map((item) => {
     const hash = item.url.slice(1);
-    const isActive = hash === 'flows'
-      ? currentHash === 'flows' || currentHash.startsWith('flows/')
-      : currentHash === hash;
+    const isActive =
+      hash === 'flows'
+        ? currentHash === 'flows' || currentHash.startsWith('flows/')
+        : hash === 'infrastructure'
+          ? currentHash === 'infrastructure' || currentHash.startsWith('infrastructure/')
+          : currentHash === hash;
     return { ...item, isActive };
   });
 

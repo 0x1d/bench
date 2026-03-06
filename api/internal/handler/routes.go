@@ -49,4 +49,12 @@ func RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/flows/{id}/run", HandleFlowRun)
 	mux.HandleFunc("GET /api/flows/processes", HandleFlowProcesses)
 	mux.HandleFunc("GET /api/flows/executions/{execId}", HandleFlowExecution)
+	// Infrastructure routes
+	mux.HandleFunc("GET /api/infrastructure/status", HandleInfrastructureStatus)
+	mux.HandleFunc("GET /api/infrastructure/graph", HandleInfrastructureGraph)
+	mux.HandleFunc("POST /api/infrastructure/save-file", HandleInfrastructureSaveFile)
+	mux.HandleFunc("POST /api/infrastructure/init", HandleInfrastructureInit)
+	mux.HandleFunc("POST /api/infrastructure/plan", HandleInfrastructurePlan)
+	mux.HandleFunc("POST /api/infrastructure/apply", HandleInfrastructureApply)
+	mux.HandleFunc("POST /api/infrastructure/destroy", HandleInfrastructureDestroy)
 }

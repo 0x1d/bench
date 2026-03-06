@@ -955,3 +955,85 @@ export async function fetchFlowExecution(
   }
   return response.json();
 }
+
+// Infrastructure (Terraform)
+
+export interface InfrastructureStatusResponse {
+  configured: boolean;
+  path: string;
+  terraformAvailable: boolean;
+}
+
+export async function fetchInfrastructureStatus(): Promise<InfrastructureStatusResponse> {
+  const response = await fetch(`${API_BASE}/infrastructure/status`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch infrastructure status: ${response.status}`);
+  }
+  return response.json();
+}
+
+export interface TerraformGraphResponse {
+  dot: string;
+}
+
+/**
+ * Fetches the Terraform resource dependency graph (DOT format) from terraform graph.
+ */
+export async function fetchTerraformGraph(): Promise<TerraformGraphResponse> {
+  const response = await fetch(`${API_BASE}/infrastructure/graph`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch terraform graph: ${response.status}`);
+  }
+  return response.json();
+}
+
+/**
+ * Saves a file to the infrastructure directory and runs terraform fmt.
+ */
+export async function saveInfrastructureFile(path: string, content: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/infrastructure/save-file`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path, content }),
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Save failed: ${response.status}`);
+  }
+}
+
+/**
+ * Runs a Terraform command (init, plan, apply, destroy) and streams output to the callback.
+ * Returns the full output text when done.
+ */
+export async function runTerraformCommand(
+  command: 'init' | 'plan' | 'apply' | 'destroy',
+  onChunk: (text: string) => void
+): Promise<string> {
+  const response = await fetch(`${API_BASE}/infrastructure/${command}`, {
+    method: 'POST',
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Terraform ${command} failed: ${response.status}`);
+  }
+  const reader = response.body?.getReader();
+  if (!reader) {
+    const text = await response.text();
+    return text;
+  }
+  const decoder = new TextDecoder();
+  let fullText = '';
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = decoder.decode(value, { stream: true });
+      fullText += chunk;
+      onChunk(chunk);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return fullText;
+}

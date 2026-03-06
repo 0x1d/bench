@@ -40,15 +40,15 @@ type TablesResponse struct {
 
 // TableDataResponse is the response for table data with pagination.
 type TableDataResponse struct {
-	Columns []string   `json:"columns"`
-	Rows    [][]any    `json:"rows"`
-	Total   int        `json:"total"`
+	Columns []string `json:"columns"`
+	Rows    [][]any  `json:"rows"`
+	Total   int      `json:"total"`
 }
 
 // CreateTableRequest is the request body for creating a table.
 type CreateTableRequest struct {
-	Name    string           `json:"name"`
-	Columns []ColumnDef      `json:"columns"`
+	Name    string      `json:"name"`
+	Columns []ColumnDef `json:"columns"`
 }
 
 // ColumnDef defines a column for table creation.

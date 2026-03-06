@@ -1038,11 +1038,11 @@ func (s *Service) SyncWorkspacesToFPC() error {
 
 // WorkspaceDirEntry represents a module or flow in a workspace directory listing.
 type WorkspaceDirEntry struct {
-	Name   string `json:"name"`
-	Path   string `json:"path"`
-	Type   string `json:"type"` // "module" or "flow"
-	Steps  int    `json:"steps,omitempty"`
-	Mtime  int64  `json:"mtime,omitempty"`
+	Name  string `json:"name"`
+	Path  string `json:"path"`
+	Type  string `json:"type"` // "module" or "flow"
+	Steps int    `json:"steps,omitempty"`
+	Mtime int64  `json:"mtime,omitempty"`
 }
 
 // WorkspaceTreeEntry is a WorkspaceDirEntry with optional children for tree view.

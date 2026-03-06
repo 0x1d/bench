@@ -26,6 +26,8 @@ const NODE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = 
 export const InfraProviderNode = memo(function InfraProviderNode({
   data,
   selected,
+  targetPosition = Position.Top,
+  sourcePosition = Position.Bottom,
 }: NodeProps) {
   const Icon = NODE_ICONS.provider;
   const label = (data?.label as string) ?? (data?.name as string) ?? 'Provider';
@@ -38,7 +40,7 @@ export const InfraProviderNode = memo(function InfraProviderNode({
         selected ? 'border-primary' : 'border-border hover:border-muted-foreground/50'
       )}
     >
-      <Handle type="target" position={Position.Top} className="!bg-primary" />
+      <Handle type="target" position={targetPosition} className="!bg-primary" />
       <Icon className="size-4 shrink-0 text-muted-foreground" />
       <div className="flex flex-col min-w-0 flex-1 leading-tight">
         <span className="truncate text-sm font-medium">{label}</span>
@@ -46,7 +48,7 @@ export const InfraProviderNode = memo(function InfraProviderNode({
           {source || version ? `${source} ${version}` : 'provider'}
         </span>
       </div>
-      <Handle type="source" position={Position.Bottom} className="!bg-primary" />
+      <Handle type="source" position={sourcePosition} className="!bg-primary" />
     </div>
   );
 });
@@ -54,6 +56,8 @@ export const InfraProviderNode = memo(function InfraProviderNode({
 export const InfraVariableNode = memo(function InfraVariableNode({
   data,
   selected,
+  targetPosition = Position.Top,
+  sourcePosition = Position.Bottom,
 }: NodeProps) {
   const Icon = NODE_ICONS.variable;
   const label = (data?.label as string) ?? (data?.name as string) ?? 'Variable';
@@ -64,10 +68,10 @@ export const InfraVariableNode = memo(function InfraVariableNode({
         selected ? 'border-primary' : 'border-border hover:border-muted-foreground/50'
       )}
     >
-      <Handle type="target" position={Position.Top} className="!bg-primary" />
+      <Handle type="target" position={targetPosition} className="!bg-primary" />
       <Icon className="size-4 shrink-0 text-muted-foreground" />
       <span className="truncate text-sm font-medium font-mono">{label}</span>
-      <Handle type="source" position={Position.Bottom} className="!bg-primary" />
+      <Handle type="source" position={sourcePosition} className="!bg-primary" />
     </div>
   );
 });
@@ -75,6 +79,8 @@ export const InfraVariableNode = memo(function InfraVariableNode({
 export const InfraResourceNode = memo(function InfraResourceNode({
   data,
   selected,
+  targetPosition = Position.Top,
+  sourcePosition = Position.Bottom,
 }: NodeProps) {
   const Icon = NODE_ICONS.resource;
   const type = (data?.type as string) ?? 'resource';
@@ -86,13 +92,13 @@ export const InfraResourceNode = memo(function InfraResourceNode({
         selected ? 'border-primary' : 'border-border hover:border-muted-foreground/50'
       )}
     >
-      <Handle type="target" position={Position.Top} className="!bg-primary" />
+      <Handle type="target" position={targetPosition} className="!bg-primary" />
       <Icon className="size-4 shrink-0 text-muted-foreground" />
       <div className="flex flex-col min-w-0 flex-1 leading-tight">
         <span className="truncate text-sm font-medium">{name}</span>
         <span className="text-[10px] text-muted-foreground font-mono truncate">{type}</span>
       </div>
-      <Handle type="source" position={Position.Bottom} className="!bg-primary" />
+      <Handle type="source" position={sourcePosition} className="!bg-primary" />
     </div>
   );
 });
@@ -100,6 +106,8 @@ export const InfraResourceNode = memo(function InfraResourceNode({
 export const InfraDataNode = memo(function InfraDataNode({
   data,
   selected,
+  targetPosition = Position.Top,
+  sourcePosition = Position.Bottom,
 }: NodeProps) {
   const Icon = NODE_ICONS.data;
   const type = (data?.type as string) ?? 'data';
@@ -111,13 +119,13 @@ export const InfraDataNode = memo(function InfraDataNode({
         selected ? 'border-primary' : 'border-border hover:border-muted-foreground/50'
       )}
     >
-      <Handle type="target" position={Position.Top} className="!bg-primary" />
+      <Handle type="target" position={targetPosition} className="!bg-primary" />
       <Icon className="size-4 shrink-0 text-muted-foreground" />
       <div className="flex flex-col min-w-0 flex-1 leading-tight">
         <span className="truncate text-sm font-medium">{name}</span>
         <span className="text-[10px] text-muted-foreground font-mono truncate">data.{type}</span>
       </div>
-      <Handle type="source" position={Position.Bottom} className="!bg-primary" />
+      <Handle type="source" position={sourcePosition} className="!bg-primary" />
     </div>
   );
 });
@@ -125,6 +133,8 @@ export const InfraDataNode = memo(function InfraDataNode({
 export const InfraModuleNode = memo(function InfraModuleNode({
   data,
   selected,
+  targetPosition = Position.Top,
+  sourcePosition = Position.Bottom,
 }: NodeProps) {
   const Icon = NODE_ICONS.module;
   const name = (data?.name as string) ?? (data?.label as string) ?? 'module';
@@ -135,10 +145,10 @@ export const InfraModuleNode = memo(function InfraModuleNode({
         selected ? 'border-primary' : 'border-border hover:border-muted-foreground/50'
       )}
     >
-      <Handle type="target" position={Position.Top} className="!bg-primary" />
+      <Handle type="target" position={targetPosition} className="!bg-primary" />
       <Icon className="size-4 shrink-0 text-muted-foreground" />
       <span className="truncate text-sm font-medium font-mono">{name}</span>
-      <Handle type="source" position={Position.Bottom} className="!bg-primary" />
+      <Handle type="source" position={sourcePosition} className="!bg-primary" />
     </div>
   );
 });
@@ -146,6 +156,8 @@ export const InfraModuleNode = memo(function InfraModuleNode({
 export const InfraOutputNode = memo(function InfraOutputNode({
   data,
   selected,
+  targetPosition = Position.Top,
+  sourcePosition = Position.Bottom,
 }: NodeProps) {
   const Icon = NODE_ICONS.output;
   const name = (data?.name as string) ?? (data?.label as string) ?? 'output';
@@ -156,10 +168,10 @@ export const InfraOutputNode = memo(function InfraOutputNode({
         selected ? 'border-primary' : 'border-border hover:border-muted-foreground/50'
       )}
     >
-      <Handle type="target" position={Position.Top} className="!bg-primary" />
+      <Handle type="target" position={targetPosition} className="!bg-primary" />
       <Icon className="size-4 shrink-0 text-muted-foreground" />
       <span className="truncate text-sm font-medium font-mono">{name}</span>
-      <Handle type="source" position={Position.Bottom} className="!bg-primary" />
+      <Handle type="source" position={sourcePosition} className="!bg-primary" />
     </div>
   );
 });

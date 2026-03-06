@@ -972,6 +972,21 @@ export async function fetchInfrastructureStatus(): Promise<InfrastructureStatusR
   return response.json();
 }
 
+export interface TerraformGraphResponse {
+  dot: string;
+}
+
+/**
+ * Fetches the Terraform resource dependency graph (DOT format) from terraform graph.
+ */
+export async function fetchTerraformGraph(): Promise<TerraformGraphResponse> {
+  const response = await fetch(`${API_BASE}/infrastructure/graph`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch terraform graph: ${response.status}`);
+  }
+  return response.json();
+}
+
 /**
  * Saves a file to the infrastructure directory and runs terraform fmt.
  */

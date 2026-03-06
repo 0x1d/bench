@@ -78,6 +78,43 @@ func HandleInfrastructureDestroy(w http.ResponseWriter, r *http.Request) {
 	runTerraformCommand(w, "destroy", "-auto-approve")
 }
 
+// GraphResponse is the JSON response for GET /api/infrastructure/graph.
+type GraphResponse struct {
+	Dot string `json:"dot"`
+}
+
+// HandleInfrastructureGraph runs terraform graph and returns the DOT output.
+func HandleInfrastructureGraph(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if !config.InfrastructureConfigured() {
+		http.Error(w, "infrastructure not configured", http.StatusBadRequest)
+		return
+	}
+
+	dir := config.InfrastructurePath()
+	if dir == "" {
+		http.Error(w, "infrastructure path not configured", http.StatusBadRequest)
+		return
+	}
+
+	cmd := exec.Command("terraform", "graph")
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "TF_IN_AUTOMATION=1")
+
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("terraform graph failed: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(GraphResponse{Dot: strings.TrimSpace(string(out))})
+}
+
 func runTerraformCommand(w http.ResponseWriter, args ...string) {
 	if !config.InfrastructureConfigured() {
 		http.Error(w, "infrastructure not configured", http.StatusBadRequest)

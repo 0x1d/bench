@@ -13,7 +13,3 @@ output "vercel_deployment_url" {
   description = "Vercel deployment URL"
 }
 
-output "render_web_service_url" {
-  value       = render_web_service.api.url
-  description = "Render web service URL"
-}

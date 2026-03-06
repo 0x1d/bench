@@ -51,50 +51,33 @@ variable "vercel_deploy_path" {
   description = "Path to app directory for deployment"
 }
 
-# Render
-variable "render_web_service_name" {
+# Koyeb
+variable "koyeb_app_name" {
   type        = string
-  default     = "bench-api"
-  description = "Render web service name"
+  default     = "bench-koyeb"
+  description = "Koyeb app name"
 }
 
-variable "render_plan" {
+variable "koyeb_service_name" {
   type        = string
-  default     = "starter"
-  description = "Render plan (starter, standard, pro, etc.)"
+  default     = "bench-service"
+  description = "Koyeb service name"
 }
 
-variable "render_region" {
+variable "koyeb_git_repo" {
   type        = string
-  default     = "oregon"
-  description = "Render region (frankfurt, ohio, oregon, singapore, virginia)"
+  default     = "github.com/koyeb/example-golang"
+  description = "Git repository for Koyeb service (e.g. github.com/owner/repo)"
 }
 
-variable "render_repo_url" {
-  type        = string
-  description = "GitHub repo URL for Render (e.g. https://github.com/owner/repo)"
-}
-
-variable "render_branch" {
+variable "koyeb_git_branch" {
   type        = string
   default     = "main"
-  description = "Git branch for Render deployments"
+  description = "Git branch for Koyeb deployments"
 }
 
-variable "render_runtime" {
+variable "koyeb_region" {
   type        = string
-  default     = "node"
-  description = "Render native runtime (node, python, ruby, go, rust, elixir)"
-}
-
-variable "render_build_command" {
-  type        = string
-  default     = "npm install"
-  description = "Render build command"
-}
-
-variable "render_start_command" {
-  type        = string
-  default     = "npm start"
-  description = "Render start command"
+  default     = "fra"
+  description = "Koyeb region (fra, par, ams, etc.)"
 }

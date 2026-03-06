@@ -16,15 +16,14 @@ import { ansiToSegments } from '@/lib/ansi-to-html';
 import { cn } from '@/lib/utils';
 
 const STORAGE_KEY = 'bench-infrastructure-panel-width';
-const MIN_WIDTH = 280;
-const MAX_WIDTH = 500;
+const MIN_WIDTH = 200;
 
 function getInitialWidth(): number {
   if (typeof window === 'undefined') return 360;
   const stored = localStorage.getItem(STORAGE_KEY);
   if (stored) {
     const n = parseInt(stored, 10);
-    if (Number.isFinite(n)) return Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, n));
+    if (Number.isFinite(n)) return Math.max(MIN_WIDTH, n);
   }
   return 360;
 }
@@ -131,7 +130,7 @@ export function InfrastructurePanel() {
     startWidthRef.current = width;
     const onMove = (moveEvent: MouseEvent) => {
       const delta = startXRef.current - moveEvent.clientX;
-      const next = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, startWidthRef.current + delta));
+      const next = Math.max(MIN_WIDTH, startWidthRef.current + delta);
       setWidth(next);
       localStorage.setItem(STORAGE_KEY, String(next));
     };

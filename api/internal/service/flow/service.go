@@ -333,11 +333,14 @@ func (s *Service) generateHCL(flow *model.Flow) (string, error) {
 			return "", err
 		}
 
-		// Inject depends_on block into the stepHCL if there are dependencies
+		// Build extra attributes: common step attributes + depends_on
+		var extras strings.Builder
+		if commonHCL := s.commonAttrsHCL(step); commonHCL != "" {
+			extras.WriteString(commonHCL)
+		}
 		if len(step.DependsOn) > 0 {
 			var deps []string
 			for _, depID := range step.DependsOn {
-				// Find the corresponding step to get its type
 				var depStep *model.FlowStep
 				for _, searchStep := range flow.Steps {
 					if searchStep.ID == depID {
@@ -350,9 +353,11 @@ func (s *Service) generateHCL(flow *model.Flow) (string, error) {
 				}
 			}
 			if len(deps) > 0 {
-				depsStr := "    depends_on = [" + strings.Join(deps, ", ") + "]\n  }\n\n"
-				stepHCL = strings.Replace(stepHCL, "  }\n\n", depsStr, 1)
+				extras.WriteString("    depends_on = [" + strings.Join(deps, ", ") + "]\n")
 			}
+		}
+		if extras.Len() > 0 {
+			stepHCL = strings.Replace(stepHCL, "  }\n\n", extras.String()+"  }\n\n", 1)
 		}
 
 		b.WriteString(stepHCL)
@@ -428,6 +433,118 @@ func (s *Service) stepInput(step model.FlowStep) (string, error) {
 		b.WriteString("  }\n\n")
 	}
 	return b.String(), nil
+}
+
+// commonAttrsHCL returns HCL for common step attributes from config.commonAttributes.
+// See https://flowpipe.io/docs/flowpipe-hcl/step#common-step-arguments
+func (s *Service) commonAttrsHCL(step model.FlowStep) string {
+	raw, _ := step.Config["commonAttributes"].(map[string]any)
+	if raw == nil {
+		return ""
+	}
+	var b strings.Builder
+
+	if v, ok := raw["title"].(string); ok && v != "" {
+		b.WriteString(fmt.Sprintf("    title = %q\n", strings.ReplaceAll(v, `\`, `\\`)))
+	}
+	if v, ok := raw["description"].(string); ok && v != "" {
+		b.WriteString(fmt.Sprintf("    description = %q\n", strings.ReplaceAll(v, `\`, `\\`)))
+	}
+	if v := raw["timeout"]; v != nil {
+		switch x := v.(type) {
+		case string:
+			if x != "" {
+				b.WriteString(fmt.Sprintf("    timeout = %q\n", strings.ReplaceAll(x, `\`, `\\`)))
+			}
+		case float64:
+			b.WriteString(fmt.Sprintf("    timeout = %d\n", int(x)))
+		}
+	}
+	if v, ok := raw["if"].(string); ok && v != "" {
+		b.WriteString(fmt.Sprintf("    if = %s\n", v))
+	}
+	if v, ok := raw["for_each"].(string); ok && v != "" {
+		b.WriteString(fmt.Sprintf("    for_each = %s\n", v))
+	}
+	if v, ok := raw["max_concurrency"].(float64); ok && v > 0 {
+		b.WriteString(fmt.Sprintf("    max_concurrency = %d\n", int(v)))
+	}
+
+	// error block
+	if errMap, ok := raw["error"].(map[string]any); ok && errMap["enabled"] == true {
+		b.WriteString("    error {\n")
+		if ignore, _ := errMap["ignore"].(bool); ignore {
+			b.WriteString("      ignore = true\n")
+		}
+		if v, _ := errMap["if"].(string); v != "" {
+			b.WriteString(fmt.Sprintf("      if = %s\n", v))
+		}
+		b.WriteString("    }\n")
+	}
+
+	// loop block
+	if loopMap, ok := raw["loop"].(map[string]any); ok && loopMap["enabled"] == true {
+		b.WriteString("    loop {\n")
+		if v, _ := loopMap["until"].(string); v != "" {
+			b.WriteString(fmt.Sprintf("      until = %s\n", v))
+		}
+		b.WriteString("    }\n")
+	}
+
+	// retry block
+	if retryMap, ok := raw["retry"].(map[string]any); ok && retryMap["enabled"] == true {
+		b.WriteString("    retry {\n")
+		if v, ok := retryMap["max_attempts"].(float64); ok && v > 0 {
+			b.WriteString(fmt.Sprintf("      max_attempts = %d\n", int(v)))
+		}
+		if v, ok := retryMap["strategy"].(string); ok && v != "" {
+			b.WriteString(fmt.Sprintf("      strategy = %q\n", v))
+		}
+		if v, ok := retryMap["min_interval"].(float64); ok && v > 0 {
+			b.WriteString(fmt.Sprintf("      min_interval = %d\n", int(v)))
+		}
+		if v, _ := retryMap["if"].(string); v != "" {
+			b.WriteString(fmt.Sprintf("      if = %s\n", v))
+		}
+		b.WriteString("    }\n")
+	}
+
+	// throw block
+	if throwMap, ok := raw["throw"].(map[string]any); ok && throwMap["enabled"] == true {
+		b.WriteString("    throw {\n")
+		if v, _ := throwMap["if"].(string); v != "" {
+			b.WriteString(fmt.Sprintf("      if = %s\n", v))
+		}
+		if v, _ := throwMap["message"].(string); v != "" {
+			b.WriteString(fmt.Sprintf("      message = %q\n", strings.ReplaceAll(v, `\`, `\\`)))
+		}
+		b.WriteString("    }\n")
+	}
+
+	// output block (per-step output)
+	if outMap, ok := raw["output"].(map[string]any); ok && outMap["enabled"] == true {
+		if outputs, ok := outMap["outputs"].([]any); ok {
+			for _, o := range outputs {
+				om, ok := o.(map[string]any)
+				if !ok {
+					continue
+				}
+				name, _ := om["name"].(string)
+				value, _ := om["value"].(string)
+				if name == "" {
+					name = "result"
+				}
+				if value == "" {
+					value = "null"
+				}
+				b.WriteString(fmt.Sprintf("    output %q {\n", name))
+				b.WriteString(fmt.Sprintf("      value = %s\n", value))
+				b.WriteString("    }\n")
+			}
+		}
+	}
+
+	return b.String()
 }
 
 func (s *Service) stepHTTP(step model.FlowStep) (string, error) {

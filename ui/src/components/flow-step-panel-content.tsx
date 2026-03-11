@@ -23,6 +23,7 @@ import {
 } from '@/lib/openapi';
 import { useMemo } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
+import { CommonStepAttributes } from '@/components/common-step-attributes';
 import type { Flow, FlowStep, RestResource } from '@/services/api';
 import type { ResolvedSchemaProperty } from '@/lib/openapi';
 
@@ -127,6 +128,8 @@ export function FlowStepPanelContent({
         setLabel={setLabel}
         config={config}
         setConfig={setConfig}
+        flow={flow}
+        currentStepId={step.id}
         onSave={() => handleSave()}
         onClose={onClose}
       />
@@ -667,6 +670,13 @@ function HttpStepConfig({
         </>
       )}
 
+      <CommonStepAttributes
+        config={config}
+        setConfig={setConfig}
+        flow={flow}
+        currentStepId={currentStepId}
+      />
+
       <div className="flex gap-2 pt-4 border-t border-border justify-end">
         <Button variant="outline" size="sm" onClick={onClose}>
           Cancel
@@ -789,6 +799,13 @@ function QueryStepConfig({
           Comma-separated param references for $1, $2, etc. (e.g. param.user_id)
         </p>
       </div>
+
+      <CommonStepAttributes
+        config={config}
+        setConfig={setConfig}
+        flow={flow}
+        currentStepId={currentStepId}
+      />
 
       <div className="flex gap-2 pt-4 border-t border-border justify-end">
         <Button variant="outline" size="sm" onClick={onClose}>
@@ -1115,6 +1132,13 @@ function MessageStepConfig({
         />
       </div>
 
+      <CommonStepAttributes
+        config={config}
+        setConfig={setConfig}
+        flow={flow}
+        currentStepId={currentStepId}
+      />
+
       <div className="flex gap-2 pt-4 border-t border-border justify-end">
         <Button variant="outline" size="sm" onClick={onClose}>
           Cancel
@@ -1132,6 +1156,8 @@ function SleepStepConfig({
   setLabel,
   config,
   setConfig,
+  flow,
+  currentStepId,
   onSave,
   onClose,
 }: {
@@ -1139,6 +1165,8 @@ function SleepStepConfig({
   setLabel: (v: string) => void;
   config: Record<string, unknown>;
   setConfig: (v: Record<string, unknown>) => void;
+  flow?: Flow | null;
+  currentStepId?: string;
   onSave: () => void;
   onClose: () => void;
 }) {
@@ -1174,6 +1202,13 @@ function SleepStepConfig({
           Go duration string or milliseconds (e.g. 5s, 100ms, 1m).
         </p>
       </div>
+
+      <CommonStepAttributes
+        config={config}
+        setConfig={setConfig}
+        flow={flow}
+        currentStepId={currentStepId}
+      />
 
       <div className="flex gap-2 pt-4 border-t border-border justify-end">
         <Button variant="outline" size="sm" onClick={onClose}>
@@ -1240,6 +1275,13 @@ function TransformStepConfig({
           HCL expression (e.g. jsonencode(step.http.foo.response_body) or step.query.bar.rows).
         </p>
       </div>
+
+      <CommonStepAttributes
+        config={config}
+        setConfig={setConfig}
+        flow={flow}
+        currentStepId={currentStepId}
+      />
 
       <div className="flex gap-2 pt-4 border-t border-border justify-end">
         <Button variant="outline" size="sm" onClick={onClose}>
@@ -1386,6 +1428,13 @@ function ContainerStepConfig({
         />
       </div>
 
+      <CommonStepAttributes
+        config={config}
+        setConfig={setConfig}
+        flow={flow}
+        currentStepId={currentStepId}
+      />
+
       <div className="flex gap-2 pt-4 border-t border-border justify-end">
         <Button variant="outline" size="sm" onClick={onClose}>
           Cancel
@@ -1515,6 +1564,13 @@ function PipelineStepConfig({
           JSON map of argument names to values (e.g. {JSON.stringify({ param1: 'value' })}).
         </p>
       </div>
+
+      <CommonStepAttributes
+        config={config}
+        setConfig={setConfig}
+        flow={flow}
+        currentStepId={currentStepId}
+      />
 
       <div className="flex gap-2 pt-4 border-t border-border justify-end">
         <Button variant="outline" size="sm" onClick={onClose}>

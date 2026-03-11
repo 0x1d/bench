@@ -21,6 +21,8 @@ import { DatabasePage } from '@/pages/database-page';
 import { FlowsPage } from '@/pages/flows-page';
 import FlowEditorPage from '@/pages/flow-editor-page';
 import { InfrastructurePage } from '@/pages/infrastructure-page';
+import { AgentChatProvider } from '@/contexts/agent-chat-context';
+import { AgentChat } from '@/components/agent-chat';
 import { cn } from '@/lib/utils';
 import { Toaster } from 'sonner';
 
@@ -125,74 +127,79 @@ export function App() {
 
   return (
     <ThemeProvider>
-      <UploadProvider>
-        <FileViewProvider>
-        <DatabaseViewProvider>
-          <FlowViewProvider>
-          <InfrastructureViewProvider>
-            <ClearFileViewOnNavigate hash={hash} />
-            <ClearDatabaseViewOnNavigate hash={hash} />
-            <ClearFlowViewOnNavigate hash={hash} />
-            <ClearInfrastructureViewOnNavigate hash={hash} />
-            <GlobalEscapeHandler />
-            <div className="[--header-height:calc(--spacing(14))] h-svh overflow-hidden flex flex-col">
-              <SidebarProvider className="flex flex-col min-h-0 flex-1 overflow-hidden">
-                <SiteHeader />
-                <div className="flex flex-1 min-h-0 overflow-hidden">
-                  <SidebarLeft
-                    currentHash={hash}
-                    className="top-[var(--header-height)] h-[calc(100svh-var(--header-height))]"
-                  />
-                  <SidebarInset
-                    className={cn(
-                      'min-h-0',
-                      hash.startsWith('flows/') ? 'overflow-hidden' : 'overflow-auto'
-                    )}
-                  >
-                    <section
-                      id="main"
-                      className={
-                        hash === 'filesystem' || hash === 'database' || hash === 'resources' || hash === 'rest' || hash === 'infrastructure' || isFlowsSection(hash)
-                          ? 'flex min-h-0 flex-1 flex-col items-stretch p-4 md:p-6'
-                          : 'flex flex-1 items-start justify-center p-4 md:min-h-min'
-                      }
-                    >
-                      {hash === 'filesystem' && <FilesystemPage />}
-                      {hash === 'resources' && <ResourcesConfigPage />}
-                      {hash === 'rest' && <RestPage />}
-                      {hash === 'database' && <DatabasePage />}
-                      {hash === 'flows' && <FlowsPage />}
-                      {hash.startsWith('flows/') && <FlowEditorPage />}
-                      {hash === 'infrastructure' && <InfrastructurePage />}
-                      {hash !== 'filesystem' && hash !== 'resources' && hash !== 'rest' && hash !== 'database' && hash !== 'infrastructure' && !isFlowsSection(hash) && <StatusPage />}
-                    </section>
-                  </SidebarInset>
-                  <FileViewer />
-                  {hash === 'database' && <DatabasePanel />}
-                  {(hash === 'flows' || hash.startsWith('flows/')) && <FlowStepPanel />}
-                  {hash === 'infrastructure' && <InfrastructurePanel />}
-                </div>
-              </SidebarProvider>
-            </div>
-          </InfrastructureViewProvider>
-          </FlowViewProvider>
-        </DatabaseViewProvider>
-        </FileViewProvider>
-        <UploadProgress />
-        <Toaster
-          position="top-center"
-          closeButton
-          richColors
-          theme="dark"
-          toastOptions={{
-            style: {
-              background: '#1f2335',
-              border: '1px solid #3b4261',
-              color: '#c0caf5',
-            },
-          }}
-        />
-      </UploadProvider>
+      <AgentChatProvider>
+        <UploadProvider>
+          <FileViewProvider>
+            <DatabaseViewProvider>
+              <FlowViewProvider>
+                <InfrastructureViewProvider>
+                  <ClearFileViewOnNavigate hash={hash} />
+                  <ClearDatabaseViewOnNavigate hash={hash} />
+                  <ClearFlowViewOnNavigate hash={hash} />
+                  <ClearInfrastructureViewOnNavigate hash={hash} />
+                  <GlobalEscapeHandler />
+                  <div className="[--header-height:calc(--spacing(14))] h-svh overflow-hidden flex flex-col">
+                    <SidebarProvider className="flex flex-col min-h-0 flex-1 overflow-hidden">
+                      <SiteHeader />
+                      <div className="flex flex-1 min-h-0 overflow-hidden">
+                        <SidebarLeft
+                          currentHash={hash}
+                          className="top-[var(--header-height)] h-[calc(100svh-var(--header-height))]"
+                        />
+                        <SidebarInset
+                          className={cn(
+                            'min-h-0',
+                            (hash.startsWith('flows/') || hash === 'resources') ? 'overflow-hidden' : 'overflow-auto'
+                          )}
+                        >
+                          <section
+                            id="main"
+                            className={
+                              hash === 'resources'
+                                ? 'flex min-h-0 flex-1 flex-col items-stretch'
+                                : hash === 'filesystem' || hash === 'database' || hash === 'rest' || hash === 'infrastructure' || isFlowsSection(hash)
+                                  ? 'flex min-h-0 flex-1 flex-col items-stretch p-4 md:p-6'
+                                  : 'flex flex-1 items-start justify-center p-4 md:min-h-min'
+                            }
+                          >
+                            {hash === 'filesystem' && <FilesystemPage />}
+                            {hash === 'resources' && <ResourcesConfigPage />}
+                            {hash === 'rest' && <RestPage />}
+                            {hash === 'database' && <DatabasePage />}
+                            {hash === 'flows' && <FlowsPage />}
+                            {hash.startsWith('flows/') && <FlowEditorPage />}
+                            {hash === 'infrastructure' && <InfrastructurePage />}
+                            {hash !== 'filesystem' && hash !== 'resources' && hash !== 'rest' && hash !== 'database' && hash !== 'infrastructure' && !isFlowsSection(hash) && <StatusPage />}
+                          </section>
+                        </SidebarInset>
+                        <FileViewer />
+                        {hash === 'database' && <DatabasePanel />}
+                        {(hash === 'flows' || hash.startsWith('flows/')) && <FlowStepPanel />}
+                        {hash === 'infrastructure' && <InfrastructurePanel />}
+                        <AgentChat />
+                      </div>
+                    </SidebarProvider>
+                  </div>
+                </InfrastructureViewProvider>
+              </FlowViewProvider>
+            </DatabaseViewProvider>
+          </FileViewProvider>
+          <UploadProgress />
+          <Toaster
+            position="top-center"
+            closeButton
+            richColors
+            theme="dark"
+            toastOptions={{
+              style: {
+                background: '#1f2335',
+                border: '1px solid #3b4261',
+                color: '#c0caf5',
+              },
+            }}
+          />
+        </UploadProvider>
+      </AgentChatProvider>
     </ThemeProvider>
   );
 }

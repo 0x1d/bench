@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"os"
 	"strings"
 )
 
@@ -37,7 +38,9 @@ func ValidateBaseURL(rawURL string) error {
 	// Normalize for comparison
 	hostLower := strings.ToLower(host)
 	if hostLower == "localhost" || strings.HasSuffix(hostLower, ".localhost") {
-		return ErrBlockedURL{Reason: "localhost is not allowed"}
+		if os.Getenv("BENCH_ALLOW_INTERNAL_REST") != "true" {
+			return ErrBlockedURL{Reason: "localhost is not allowed"}
+		}
 	}
 
 	// Check if host is a direct IP address
@@ -57,7 +60,9 @@ func ValidateBaseURL(rawURL string) error {
 
 	for _, ip := range ips {
 		if isBlockedIP(ip) {
-			return ErrBlockedURL{Reason: fmt.Sprintf("private or loopback address %s is not allowed", ip.String())}
+			if os.Getenv("BENCH_ALLOW_INTERNAL_REST") != "true" {
+				return ErrBlockedURL{Reason: fmt.Sprintf("private or loopback address %s is not allowed", ip.String())}
+			}
 		}
 	}
 

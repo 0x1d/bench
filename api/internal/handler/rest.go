@@ -78,7 +78,7 @@ type ProxyRequest struct {
 	Method  string            `json:"method"`
 	Path    string            `json:"path"`
 	Headers map[string]string `json:"headers,omitempty"`
-	Body    []byte            `json:"body,omitempty"`
+	Body    string            `json:"body,omitempty"`
 }
 
 // HandleRestProxy forwards a request to the target REST API.

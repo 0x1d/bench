@@ -41,3 +41,5 @@ workspace/infra/terraform.tfstate
 workspace/infra/terraform.tfstate.backup
 
 server
+
+agent.env

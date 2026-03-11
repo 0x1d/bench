@@ -27,6 +27,10 @@ resources:
       label: ComfyUI API
       baseUrl: http://host.docker.internal:3000
       openapiSpec: ./workspace/rest/comfyui.yaml
+    - id: agent
+      label: AI Agent
+      baseUrl: http://agent:3001
+      openapiSpec: ./workspace/rest/agent.yaml
 
 flows:
   path: ./workspace/flows
@@ -37,3 +41,8 @@ flows:
 
 infrastructure:
   path: ./workspace/infra
+
+agent:
+  endpoint: http://localhost:3001
+  workingDirectory: /workspace
+  agent: cursor

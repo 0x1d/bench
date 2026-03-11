@@ -1,0 +1,195 @@
+openapi: 3.1.0
+info:
+  title: Agent Service
+  description: HTTP wrapper for AI Agent CLIs
+  version: 2.1.0
+  contact:
+    name: Bench Support
+    url: https://github.com/bench-labs/bench
+servers:
+  - url: http://localhost:3000
+    description: Local development server
+paths:
+  /:
+    get:
+      operationId: getServiceInfo
+      summary: Service Information
+      description: Returns information about the agent service, including available endpoints and usage examples.
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RootResponse'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+  /health:
+    get:
+      operationId: checkHealth
+      summary: Health Check
+      description: Returns the health status of the service.
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+  /api/prompt:
+    post:
+      operationId: executePrompt
+      summary: Execute AI Agent
+      description: Executes an AI agent with a given prompt. Supports both JSON and plain text request bodies.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PromptRequest'
+          text/plain:
+            schema:
+              type: string
+              description: The prompt to execute.
+      responses:
+        '200':
+          description: Successful execution
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PromptResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PromptResponse'
+        '500':
+          description: Internal server error during execution
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PromptResponse'
+components:
+  schemas:
+    PromptRequest:
+      type: object
+      required:
+        - prompt
+      properties:
+        prompt:
+          type: string
+          description: The instruction or query for the agent.
+        agent:
+          type: string
+          enum: [cursor, gemini]
+          description: Specifies which agent to use. Defaults to "cursor" or the AGENT environment variable.
+        model:
+          type: string
+          description: Specific model name to use (optional).
+        outputFormat:
+          type: string
+          default: json
+          description: Desired output format.
+        sessionId:
+          type: string
+          description: Optional session ID to resume an existing conversation.
+        workingDirectory:
+          type: string
+          description: Optional directory where the agent should operate.
+        timeout:
+          type: integer
+          description: Execution timeout in milliseconds.
+    PromptResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: Indicates if the execution was successful.
+        output:
+          type: string
+          description: The stdout content from the agent CLI.
+        session_id:
+          type: string
+          description: The session ID associated with the execution.
+        error:
+          type: string
+          description: Error message if the execution failed or encountered issues.
+        type:
+          type: string
+          description: Category of the response (Cursor specific).
+        subtype:
+          type: string
+          description: Sub-category of the response (Cursor specific).
+        is_error:
+          type: boolean
+          description: Detailed error flag (Cursor specific).
+        duration_ms:
+          type: integer
+          format: int64
+          description: Total duration of the request in milliseconds.
+        duration_api_ms:
+          type: integer
+          format: int64
+          description: Duration of the API call in milliseconds.
+        request_id:
+          type: string
+          description: Unique identifier for the request.
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+    RootResponse:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        version:
+          type: string
+        endpoints:
+          type: object
+          additionalProperties:
+            type: string
+        usage:
+          type: object
+          properties:
+            JSON request:
+              $ref: '#/components/schemas/UsageInfo'
+            Plain text request:
+              $ref: '#/components/schemas/UsageInfo'
+    UsageInfo:
+      type: object
+      properties:
+        method:
+          type: string
+        url:
+          type: string
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+        body:
+          oneOf:
+            - type: string
+            - type: object
+              additionalProperties: true

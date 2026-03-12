@@ -134,6 +134,82 @@ func TestGenerateHCL_NoOutputStep(t *testing.T) {
 	t.Logf("HCL (no output):\n%s", hcl)
 }
 
+func TestGenerateHCL_CommonStepAttributes(t *testing.T) {
+	wd, _ := os.Getwd()
+	configPath := filepath.Join(wd, "..", "..", "..", "..", "config.yaml")
+	if _, err := os.Stat(configPath); err != nil {
+		configPath = filepath.Join(wd, "..", "..", "..", "config.yaml")
+	}
+	os.Setenv("BENCH_CONFIG", configPath)
+	defer os.Unsetenv("BENCH_CONFIG")
+
+	commonAttrs := map[string]any{
+		"title":            "My HTTP Step",
+		"description":      "Fetches data",
+		"timeout":          "30s",
+		"if":               "param.enabled == true",
+		"max_concurrency":  float64(5),
+		"error": map[string]any{
+			"enabled": true,
+			"ignore":  true,
+		},
+		"retry": map[string]any{
+			"enabled":       true,
+			"max_attempts":  float64(3),
+			"strategy":      "exponential",
+			"min_interval":  float64(1000),
+		},
+	}
+
+	flow := &model.Flow{
+		ID:   "common_attrs_test",
+		Name: "Common Attrs Test",
+		Steps: []model.FlowStep{
+			{
+				ID:   "http1",
+				Label: "fetch",
+				Type: "http",
+				Config: map[string]any{
+					"restId":       "test",
+					"method":       "GET",
+					"path":         "/api",
+					"commonAttributes": commonAttrs,
+				},
+			},
+		},
+	}
+	s := NewService()
+	hcl, err := s.generateHCL(flow)
+	if err != nil {
+		t.Fatalf("generateHCL with common attrs: %v", err)
+	}
+	if !strings.Contains(hcl, `title = "My HTTP Step"`) {
+		t.Errorf("HCL should contain title, got:\n%s", hcl)
+	}
+	if !strings.Contains(hcl, `description = "Fetches data"`) {
+		t.Errorf("HCL should contain description, got:\n%s", hcl)
+	}
+	if !strings.Contains(hcl, `timeout = "30s"`) {
+		t.Errorf("HCL should contain timeout, got:\n%s", hcl)
+	}
+	if !strings.Contains(hcl, `if = param.enabled == true`) {
+		t.Errorf("HCL should contain if condition, got:\n%s", hcl)
+	}
+	if !strings.Contains(hcl, `max_concurrency = 5`) {
+		t.Errorf("HCL should contain max_concurrency, got:\n%s", hcl)
+	}
+	if !strings.Contains(hcl, "error {") {
+		t.Errorf("HCL should contain error block, got:\n%s", hcl)
+	}
+	if !strings.Contains(hcl, "ignore = true") {
+		t.Errorf("HCL should contain ignore in error block, got:\n%s", hcl)
+	}
+	if !strings.Contains(hcl, "retry {") {
+		t.Errorf("HCL should contain retry block, got:\n%s", hcl)
+	}
+	t.Logf("HCL:\n%s", hcl)
+}
+
 func TestSyncFromJSON(t *testing.T) {
 	wd, _ := os.Getwd()
 	configPath := filepath.Join(wd, "..", "..", "..", "..", "config.yaml")

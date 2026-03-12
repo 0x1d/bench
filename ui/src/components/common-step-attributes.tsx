@@ -1,9 +1,10 @@
+import { useState } from 'react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { FlowExpressionInput } from '@/components/flow-expression-input';
 import { FlowCodeEditor } from '@/components/flow-code-editor';
-import { Plus, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { Flow } from '@/services/api';
 
@@ -78,6 +79,47 @@ function setCommon(
   return { ...config, commonAttributes: next };
 }
 
+function hasText(value: string | undefined): boolean {
+  return (value ?? '').trim().length > 0;
+}
+
+function hasCommonData(common: CommonStepAttributesConfig): boolean {
+  if (hasText(common.title)) return true;
+  if (hasText(common.description)) return true;
+  if (common.timeout != null && (typeof common.timeout !== 'string' || hasText(common.timeout))) return true;
+  if (hasText(common.if)) return true;
+  if (hasText(common.for_each)) return true;
+  if (typeof common.max_concurrency === 'number') return true;
+
+  if (common.error?.enabled) return true;
+  if (common.error?.ignore === true) return true;
+  if (hasText(common.error?.if)) return true;
+
+  if (common.loop?.enabled) return true;
+  if (hasText(common.loop?.until)) return true;
+
+  if (common.retry?.enabled) return true;
+  if (typeof common.retry?.max_attempts === 'number') return true;
+  if (hasText(common.retry?.strategy)) return true;
+  if (typeof common.retry?.min_interval === 'number') return true;
+  if (hasText(common.retry?.if)) return true;
+
+  if (common.throw?.enabled) return true;
+  if (hasText(common.throw?.if)) return true;
+  if (hasText(common.throw?.message)) return true;
+
+  if (common.output?.enabled) return true;
+  if (
+    (common.output?.outputs ?? []).some(
+      (o) => hasText(o.name) || hasText(o.value)
+    )
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
 export function CommonStepAttributes({
   config,
   setConfig,
@@ -85,6 +127,10 @@ export function CommonStepAttributes({
   currentStepId = '',
 }: CommonStepAttributesProps) {
   const common = getCommon(config);
+  const hasData = hasCommonData(common);
+  const stepKey = currentStepId || '__default__';
+  const [collapsedByStep, setCollapsedByStep] = useState<Record<string, boolean>>({});
+  const isExpanded = collapsedByStep[stepKey] !== undefined ? !collapsedByStep[stepKey] : hasData;
 
   const update = (updates: Partial<CommonStepAttributesConfig>) => {
     setConfig(setCommon(config, updates));
@@ -92,10 +138,29 @@ export function CommonStepAttributes({
 
   return (
     <div className="space-y-4 rounded-lg border border-border bg-muted/10 p-3">
-      <p className="text-xs font-medium text-muted-foreground">
-        Common step attributes
-      </p>
+      <button
+        type="button"
+        onClick={() =>
+          setCollapsedByStep((previous) => ({
+            ...previous,
+            [stepKey]: isExpanded,
+          }))
+        }
+        className="flex w-full items-center justify-between text-left"
+        aria-expanded={isExpanded}
+      >
+        <span className="text-xs font-medium text-muted-foreground">
+          Common step attributes
+        </span>
+        {isExpanded ? (
+          <ChevronDown className="size-4 text-muted-foreground" />
+        ) : (
+          <ChevronRight className="size-4 text-muted-foreground" />
+        )}
+      </button>
 
+      {isExpanded && (
+        <>
       {/* Simple attributes */}
       <div className="space-y-3">
         <div className="space-y-2">
@@ -495,6 +560,8 @@ export function CommonStepAttributes({
           </div>
         )}
       </div>
+        </>
+      )}
     </div>
   );
 }

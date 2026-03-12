@@ -14,19 +14,13 @@ import (
 
 	"github.com/0x1d/bench/api/internal/config"
 	"github.com/0x1d/bench/api/internal/model"
-	"github.com/0x1d/bench/api/internal/service/rest"
+	"github.com/0x1d/bench/api/internal/service/flow/hclgen"
 )
 
 var (
 	idChars   = regexp.MustCompile(`^[a-z0-9_-]+$`)
 	slugChars = regexp.MustCompile(`^[a-z0-9_-]+$`)
 )
-
-// isVirtualStep returns true for input/output steps that contribute param/output blocks, not step blocks.
-func isVirtualStep(t string) bool {
-	t = strings.TrimSpace(strings.ToLower(t))
-	return t == "input" || t == "output"
-}
 
 const (
 	modContent = `mod "bench" {
@@ -181,21 +175,26 @@ func (s *Service) Save(flow *model.Flow) error {
 		return fmt.Errorf("invalid flow id: %s", flow.ID)
 	}
 
-	// Write JSON
+	// Generate HCL first and validate before writing (avoids inconsistent state)
+	hclBytes, err := hclgen.Generate(flow, s.defaultDatabaseID())
+	if err != nil {
+		return err
+	}
+	if err := hclgen.ValidateHCL(hclBytes, flow.ID+".fp"); err != nil {
+		return fmt.Errorf("generated invalid HCL: %w", err)
+	}
+
+	// Write JSON atomically
 	jsonData, err := json.MarshalIndent(flow, "", "  ")
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(s.jsonPath(flow.ID), jsonData, 0644); err != nil {
+	if err := hclgen.WriteFileAtomically(s.jsonPath(flow.ID), jsonData, 0644); err != nil {
 		return err
 	}
 
-	// Generate and write HCL
-	hcl, err := s.generateHCL(flow)
-	if err != nil {
-		return err
-	}
-	if err := os.WriteFile(s.fpPath(flow.ID), []byte(hcl), 0644); err != nil {
+	// Write HCL atomically
+	if err := hclgen.WriteFileAtomically(s.fpPath(flow.ID), hclBytes, 0644); err != nil {
 		return err
 	}
 
@@ -205,30 +204,6 @@ func (s *Service) Save(flow *model.Flow) error {
 	}
 	s.touchRootMod()
 	return nil
-}
-
-func normalizeStepName(label, id string) string {
-	if label == "" {
-		return id
-	}
-	s := strings.ToLower(label)
-	var b strings.Builder
-	for _, c := range s {
-		if (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') {
-			b.WriteRune(c)
-		} else {
-			b.WriteRune('_')
-		}
-	}
-	res := b.String()
-	for strings.Contains(res, "__") {
-		res = strings.ReplaceAll(res, "__", "_")
-	}
-	res = strings.Trim(res, "_")
-	if res == "" {
-		return id
-	}
-	return res
 }
 
 // Delete removes a flow.
@@ -247,596 +222,14 @@ func (s *Service) Delete(id string) error {
 	return nil
 }
 
-// generateHCL produces Flowpipe pipeline HCL from a flow.
-func (s *Service) generateHCL(flow *model.Flow) (string, error) {
-	var b strings.Builder
-	pipelineName := s.pipelineName(flow)
-	b.WriteString(fmt.Sprintf("pipeline %q {\n", pipelineName))
-	if flow.Name != "" {
-		b.WriteString(fmt.Sprintf("  title = %q\n\n", flow.Name))
+// GenerateHCL produces Flowpipe pipeline HCL from a flow.
+// Used by tests and for debugging. Save uses this internally.
+func (s *Service) GenerateHCL(flow *model.Flow) (string, error) {
+	b, err := hclgen.Generate(flow, s.defaultDatabaseID())
+	if err != nil {
+		return "", err
 	}
-
-	// Emit param blocks from input steps (defines pipeline parameters).
-	// Input is virtual: it only contributes params to the pipeline, not a step block.
-	for _, step := range flow.Steps {
-		if strings.EqualFold(step.Type, "input") {
-			hcl, err := s.stepInput(step)
-			if err != nil {
-				return "", err
-			}
-			b.WriteString(hcl)
-		}
-	}
-
-	// Scan for used databases to generate connection parameters
-	usedDBs := make(map[string]bool)
-	for _, step := range flow.Steps {
-		if strings.EqualFold(step.Type, "query") {
-			dbID, _ := step.Config["databaseId"].(string)
-			if dbID == "" {
-				dbID = s.defaultDatabaseID()
-			}
-			if dbID != "" {
-				usedDBs[dbID] = true
-			}
-		}
-	}
-
-	for dbID := range usedDBs {
-		b.WriteString(fmt.Sprintf("  param \"conn_%s\" {\n", dbID))
-		b.WriteString("    type = string\n")
-		b.WriteString("  }\n\n")
-	}
-
-	stepIDs := make(map[string]bool)
-	for _, step := range flow.Steps {
-		stepIDs[step.ID] = true
-	}
-
-	for _, step := range flow.Steps {
-		// Input and output are virtual: they contribute param/output blocks, not step blocks.
-		stepType := strings.TrimSpace(strings.ToLower(step.Type))
-		stepType = strings.Join(strings.Fields(stepType), " ")
-		if isVirtualStep(step.Type) {
-			continue
-		}
-		b.WriteString(fmt.Sprintf("\n  // Step: %s (%s)\n", step.Label, step.ID))
-
-		var stepHCL string
-		var err error
-
-		switch stepType {
-		case "http":
-			stepHCL, err = s.stepHTTP(step)
-		case "query":
-			stepHCL, err = s.stepQuery(step)
-		case "message":
-			stepHCL, err = s.stepMessage(step)
-		case "sleep":
-			stepHCL, err = s.stepSleep(step)
-		case "transform":
-			stepHCL, err = s.stepTransform(step)
-		case "container":
-			stepHCL, err = s.stepContainer(step)
-		case "pipeline":
-			stepHCL, err = s.stepPipeline(step)
-		case "input", "output":
-			continue
-		default:
-			if isVirtualStep(step.Type) {
-				continue
-			}
-			return "", fmt.Errorf("unsupported step type: %s", step.Type)
-		}
-
-		if err != nil {
-			return "", err
-		}
-
-		// Build extra attributes: common step attributes + depends_on
-		var extras strings.Builder
-		if commonHCL := s.commonAttrsHCL(step); commonHCL != "" {
-			extras.WriteString(commonHCL)
-		}
-		if len(step.DependsOn) > 0 {
-			var deps []string
-			for _, depID := range step.DependsOn {
-				var depStep *model.FlowStep
-				for _, searchStep := range flow.Steps {
-					if searchStep.ID == depID {
-						depStep = &searchStep
-						break
-					}
-				}
-				if depStep != nil && !strings.EqualFold(depStep.Type, "input") {
-					deps = append(deps, fmt.Sprintf("step.%s.%s", stepTypeKey(depStep.Type), normalizeStepName(depStep.Label, depStep.ID)))
-				}
-			}
-			if len(deps) > 0 {
-				extras.WriteString("    depends_on = [" + strings.Join(deps, ", ") + "]\n")
-			}
-		}
-		if extras.Len() > 0 {
-			stepHCL = strings.Replace(stepHCL, "  }\n\n", extras.String()+"  }\n\n", 1)
-		}
-
-		b.WriteString(stepHCL)
-	}
-
-	// Emit output blocks only from Output steps (virtual nodes). Do NOT add a default output
-	// block when there are no Output steps — output blocks are added only when the user
-	// explicitly adds an Output node in the UI.
-	for _, step := range flow.Steps {
-		if !strings.EqualFold(strings.TrimSpace(step.Type), "output") {
-			continue
-		}
-		outputs, _ := step.Config["outputs"].([]any)
-		for _, o := range outputs {
-			om, ok := o.(map[string]any)
-			if !ok {
-				continue
-			}
-			name, _ := om["name"].(string)
-			value, _ := om["value"].(string)
-			if name == "" {
-				name = "result"
-			}
-			if value == "" {
-				value = "null"
-			}
-			b.WriteString(fmt.Sprintf("\n  output %q {\n", name))
-			b.WriteString(fmt.Sprintf("    value = %s\n", value))
-			b.WriteString("  }\n")
-		}
-	}
-
-	b.WriteString("\n}\n")
-	return b.String(), nil
-}
-
-func (s *Service) stepInput(step model.FlowStep) (string, error) {
-	params, _ := step.Config["params"].([]any)
-	if len(params) == 0 {
-		return "", nil
-	}
-	var b strings.Builder
-	for _, p := range params {
-		pm, ok := p.(map[string]any)
-		if !ok {
-			continue
-		}
-		name, _ := pm["name"].(string)
-		if name == "" {
-			continue
-		}
-		paramType, _ := pm["type"].(string)
-		if paramType == "" {
-			paramType = "any"
-		}
-		desc, _ := pm["description"].(string)
-		def, hasDef := pm["default"]
-		b.WriteString(fmt.Sprintf("  param %q {\n", name))
-		b.WriteString(fmt.Sprintf("    type = %s\n", paramType))
-		if desc != "" {
-			b.WriteString(fmt.Sprintf("    description = %q\n", strings.ReplaceAll(desc, `\`, `\\`)))
-		}
-		if hasDef && def != nil && def != "" {
-			switch v := def.(type) {
-			case string:
-				b.WriteString(fmt.Sprintf("    default = %q\n", strings.ReplaceAll(v, `\`, `\\`)))
-			case float64:
-				b.WriteString(fmt.Sprintf("    default = %v\n", v))
-			case bool:
-				b.WriteString(fmt.Sprintf("    default = %v\n", v))
-			}
-		}
-		b.WriteString("  }\n\n")
-	}
-	return b.String(), nil
-}
-
-// commonAttrsHCL returns HCL for common step attributes from config.commonAttributes.
-// See https://flowpipe.io/docs/flowpipe-hcl/step#common-step-arguments
-func (s *Service) commonAttrsHCL(step model.FlowStep) string {
-	raw, _ := step.Config["commonAttributes"].(map[string]any)
-	if raw == nil {
-		return ""
-	}
-	var b strings.Builder
-
-	if v, ok := raw["title"].(string); ok && v != "" {
-		b.WriteString(fmt.Sprintf("    title = %q\n", strings.ReplaceAll(v, `\`, `\\`)))
-	}
-	if v, ok := raw["description"].(string); ok && v != "" {
-		b.WriteString(fmt.Sprintf("    description = %q\n", strings.ReplaceAll(v, `\`, `\\`)))
-	}
-	if v := raw["timeout"]; v != nil {
-		switch x := v.(type) {
-		case string:
-			if x != "" {
-				b.WriteString(fmt.Sprintf("    timeout = %q\n", strings.ReplaceAll(x, `\`, `\\`)))
-			}
-		case float64:
-			b.WriteString(fmt.Sprintf("    timeout = %d\n", int(x)))
-		}
-	}
-	if v, ok := raw["if"].(string); ok && v != "" {
-		b.WriteString(fmt.Sprintf("    if = %s\n", v))
-	}
-	if v, ok := raw["for_each"].(string); ok && v != "" {
-		b.WriteString(fmt.Sprintf("    for_each = %s\n", v))
-	}
-	if v, ok := raw["max_concurrency"].(float64); ok && v > 0 {
-		b.WriteString(fmt.Sprintf("    max_concurrency = %d\n", int(v)))
-	}
-
-	// error block
-	if errMap, ok := raw["error"].(map[string]any); ok && errMap["enabled"] == true {
-		b.WriteString("    error {\n")
-		if ignore, _ := errMap["ignore"].(bool); ignore {
-			b.WriteString("      ignore = true\n")
-		}
-		if v, _ := errMap["if"].(string); v != "" {
-			b.WriteString(fmt.Sprintf("      if = %s\n", v))
-		}
-		b.WriteString("    }\n")
-	}
-
-	// loop block
-	if loopMap, ok := raw["loop"].(map[string]any); ok && loopMap["enabled"] == true {
-		b.WriteString("    loop {\n")
-		if v, _ := loopMap["until"].(string); v != "" {
-			b.WriteString(fmt.Sprintf("      until = %s\n", v))
-		}
-		b.WriteString("    }\n")
-	}
-
-	// retry block
-	if retryMap, ok := raw["retry"].(map[string]any); ok && retryMap["enabled"] == true {
-		b.WriteString("    retry {\n")
-		if v, ok := retryMap["max_attempts"].(float64); ok && v > 0 {
-			b.WriteString(fmt.Sprintf("      max_attempts = %d\n", int(v)))
-		}
-		if v, ok := retryMap["strategy"].(string); ok && v != "" {
-			b.WriteString(fmt.Sprintf("      strategy = %q\n", v))
-		}
-		if v, ok := retryMap["min_interval"].(float64); ok && v > 0 {
-			b.WriteString(fmt.Sprintf("      min_interval = %d\n", int(v)))
-		}
-		if v, _ := retryMap["if"].(string); v != "" {
-			b.WriteString(fmt.Sprintf("      if = %s\n", v))
-		}
-		b.WriteString("    }\n")
-	}
-
-	// throw block
-	if throwMap, ok := raw["throw"].(map[string]any); ok && throwMap["enabled"] == true {
-		b.WriteString("    throw {\n")
-		if v, _ := throwMap["if"].(string); v != "" {
-			b.WriteString(fmt.Sprintf("      if = %s\n", v))
-		}
-		if v, _ := throwMap["message"].(string); v != "" {
-			b.WriteString(fmt.Sprintf("      message = %q\n", strings.ReplaceAll(v, `\`, `\\`)))
-		}
-		b.WriteString("    }\n")
-	}
-
-	// output block (per-step output)
-	if outMap, ok := raw["output"].(map[string]any); ok && outMap["enabled"] == true {
-		if outputs, ok := outMap["outputs"].([]any); ok {
-			for _, o := range outputs {
-				om, ok := o.(map[string]any)
-				if !ok {
-					continue
-				}
-				name, _ := om["name"].(string)
-				value, _ := om["value"].(string)
-				if name == "" {
-					name = "result"
-				}
-				if value == "" {
-					value = "null"
-				}
-				b.WriteString(fmt.Sprintf("    output %q {\n", name))
-				b.WriteString(fmt.Sprintf("      value = %s\n", value))
-				b.WriteString("    }\n")
-			}
-		}
-	}
-
-	return b.String()
-}
-
-func (s *Service) stepHTTP(step model.FlowStep) (string, error) {
-	restID, _ := step.Config["restId"].(string)
-	method, _ := step.Config["method"].(string)
-	path, _ := step.Config["path"].(string)
-	body, _ := step.Config["body"].(string)
-
-	if restID == "" {
-		restID = "__unconfigured__"
-	}
-	if method == "" {
-		method = "GET"
-	}
-	if path == "" {
-		path = "/"
-	}
-
-	// HCL: jsonencode({ method = "GET", path = "/...", body = "...", headers = {...} })
-	bodyArg := ""
-	headersArg := ""
-	if body != "" {
-		bodyArg = fmt.Sprintf(`, body = %q`, strings.ReplaceAll(body, `\`, `\\`))
-		headersArg = `, headers = { "Content-Type" = "application/json" }`
-	}
-	proxyObj := fmt.Sprintf(`{ method = %q, path = %q%s%s }`, strings.ToUpper(method), path, bodyArg, headersArg)
-
-	// Try to get direct configuration from REST entry
-	restSvc := rest.NewService()
-	entry, err := restSvc.GetEntry(restID)
-	if err == nil && entry != nil && entry.BaseURL != "" {
-		// Use direct URL from config
-		targetURL := strings.TrimSuffix(entry.BaseURL, "/") + "/" + strings.TrimPrefix(path, "/")
-
-		var b strings.Builder
-		stepName := normalizeStepName(step.Label, step.ID)
-		b.WriteString(fmt.Sprintf("  step \"http\" %q {\n", stepName))
-		b.WriteString(fmt.Sprintf("    url    = %q\n", targetURL))
-		b.WriteString(fmt.Sprintf("    method = %q\n", strings.ToLower(method)))
-		if body != "" {
-			b.WriteString(fmt.Sprintf("    request_body = %q\n", strings.ReplaceAll(body, `\`, `\\`)))
-		}
-
-		// Apply request headers: Content-Type for JSON body (honors OpenAPI media type) and auth from config
-		hasHeaders := body != "" || entry.Auth != nil
-		if hasHeaders {
-			b.WriteString("    request_headers = {\n")
-			if body != "" {
-				b.WriteString("      \"Content-Type\" = \"application/json\"\n")
-			}
-			if entry.Auth != nil {
-				switch entry.Auth.Type {
-				case config.RestAuthBasic:
-					b.WriteString(fmt.Sprintf("      \"Authorization\" = \"Basic ${base64encode(\"%s:%s\")}\"\n", entry.Auth.Username, entry.Auth.Password))
-				case config.RestAuthBearer:
-					b.WriteString(fmt.Sprintf("      \"Authorization\" = \"Bearer %s\"\n", entry.Auth.Token))
-				case config.RestAuthAPIKey:
-					name := entry.Auth.Name
-					if name == "" {
-						name = "X-API-Key"
-					}
-					if strings.ToLower(entry.Auth.In) != "query" {
-						b.WriteString(fmt.Sprintf("      %q = %q\n", name, entry.Auth.Value))
-					}
-				}
-			}
-			b.WriteString("    }\n")
-
-			if entry.Auth != nil && entry.Auth.Type == config.RestAuthAPIKey && strings.ToLower(entry.Auth.In) == "query" {
-				b.WriteString("    # Note: apiKey in query added to URL\n")
-			}
-		}
-		b.WriteString("  }\n\n")
-		return b.String(), nil
-	}
-
-	// Fallback: use Bench API Proxy
-	apiURL := os.Getenv("BENCH_API_URL")
-	if apiURL == "" {
-		apiURL = "http://localhost:8080"
-	} else if !strings.HasPrefix(apiURL, "http://") && !strings.HasPrefix(apiURL, "https://") {
-		apiURL = "http://" + apiURL
-	}
-
-	var b strings.Builder
-	stepName := normalizeStepName(step.Label, step.ID)
-	b.WriteString(fmt.Sprintf("  step \"http\" %q {\n", stepName))
-	b.WriteString(fmt.Sprintf("    url    = %q\n", apiURL+"/api/rest/"+restID+"/proxy"))
-	b.WriteString("    method = \"post\"\n")
-	b.WriteString("    request_body = jsonencode(" + proxyObj + ")\n")
-	b.WriteString("    request_headers = {\n")
-	b.WriteString("      \"Content-Type\" = \"application/json\"\n")
-	b.WriteString("    }\n")
-	b.WriteString("  }\n\n")
-	return b.String(), nil
-}
-
-func (s *Service) stepQuery(step model.FlowStep) (string, error) {
-	sql, _ := step.Config["sql"].(string)
-	dbID, _ := step.Config["databaseId"].(string)
-	argsRaw, _ := step.Config["args"]
-
-	if sql == "" {
-		sql = "SELECT 1"
-	}
-	if dbID == "" {
-		dbID = s.defaultDatabaseID()
-	}
-	if dbID == "" {
-		return "", fmt.Errorf("step %s: no database configured; select a database in step config", step.ID)
-	}
-
-	databaseArg := fmt.Sprintf("connection.postgres[param.conn_%s]", dbID)
-
-	var b strings.Builder
-	stepName := normalizeStepName(step.Label, step.ID)
-	b.WriteString(fmt.Sprintf("  step \"query\" %q {\n", stepName))
-	b.WriteString(fmt.Sprintf("    sql      = %q\n", strings.ReplaceAll(sql, `"`, `\"`)))
-	b.WriteString(fmt.Sprintf("    database = %s\n", databaseArg))
-	if argsRaw != nil {
-		if args, ok := argsRaw.([]any); ok && len(args) > 0 {
-			argStrs := make([]string, 0, len(args))
-			for _, a := range args {
-				s, ok := a.(string)
-				if !ok {
-					continue
-				}
-				if strings.HasPrefix(s, "param.") || strings.HasPrefix(s, "step.") {
-					argStrs = append(argStrs, s)
-				} else {
-					escaped := strings.ReplaceAll(s, `\`, `\\`)
-					escaped = strings.ReplaceAll(escaped, `"`, `\"`)
-					argStrs = append(argStrs, fmt.Sprintf("%q", escaped))
-				}
-			}
-			if len(argStrs) > 0 {
-				b.WriteString("    args     = [" + strings.Join(argStrs, ", ") + "]\n")
-			}
-		}
-	}
-	b.WriteString("  }\n\n")
-	return b.String(), nil
-}
-
-func (s *Service) stepMessage(step model.FlowStep) (string, error) {
-	notifier, _ := step.Config["notifier"].(string)
-	text, _ := step.Config["text"].(string)
-
-	if notifier == "" {
-		notifier = "notifier.default" // Ensure we prefix with notifier. if missing
-	} else if !strings.HasPrefix(notifier, "notifier.") {
-		notifier = "notifier." + notifier
-	}
-
-	if text == "" {
-		text = "Hello from bench!"
-	}
-
-	var b strings.Builder
-	stepName := normalizeStepName(step.Label, step.ID)
-	b.WriteString(fmt.Sprintf("  step \"message\" %q {\n", stepName))
-	b.WriteString(fmt.Sprintf("    notifier = %s\n", notifier))
-
-	// Text might contain interpolations, wrap in HCL string block
-	escapedText := strings.ReplaceAll(text, `\`, `\\`)
-	escapedText = strings.ReplaceAll(escapedText, `"`, `\"`)
-	b.WriteString(fmt.Sprintf("    text     = %q\n", escapedText))
-
-	b.WriteString("  }\n\n")
-	return b.String(), nil
-}
-
-func (s *Service) stepSleep(step model.FlowStep) (string, error) {
-	duration, _ := step.Config["duration"].(string)
-	if duration == "" {
-		duration = "5s"
-	}
-
-	var b strings.Builder
-	stepName := normalizeStepName(step.Label, step.ID)
-	b.WriteString(fmt.Sprintf("  step \"sleep\" %q {\n", stepName))
-	b.WriteString(fmt.Sprintf("    duration = %q\n", strings.ReplaceAll(duration, `\`, `\\`)))
-	b.WriteString("  }\n\n")
-	return b.String(), nil
-}
-
-func (s *Service) stepTransform(step model.FlowStep) (string, error) {
-	value, _ := step.Config["value"].(string)
-	if value == "" {
-		value = "null"
-	}
-
-	var b strings.Builder
-	stepName := normalizeStepName(step.Label, step.ID)
-	b.WriteString(fmt.Sprintf("  step \"transform\" %q {\n", stepName))
-	// Value is HCL; if it looks like a simple literal, emit as-is; otherwise wrap in heredoc or quote
-	value = strings.TrimSpace(value)
-	if value == "" {
-		value = "null"
-	}
-	b.WriteString(fmt.Sprintf("    value = %s\n", value))
-	b.WriteString("  }\n\n")
-	return b.String(), nil
-}
-
-func (s *Service) stepContainer(step model.FlowStep) (string, error) {
-	image, _ := step.Config["image"].(string)
-	source, _ := step.Config["source"].(string)
-	cmdRaw, _ := step.Config["cmd"]
-
-	if image == "" && source == "" {
-		image = "alpine:latest"
-	}
-
-	var b strings.Builder
-	stepName := normalizeStepName(step.Label, step.ID)
-	b.WriteString(fmt.Sprintf("  step \"container\" %q {\n", stepName))
-	if image != "" {
-		b.WriteString(fmt.Sprintf("    image = %q\n", strings.ReplaceAll(image, `\`, `\\`)))
-	}
-	if source != "" {
-		b.WriteString(fmt.Sprintf("    source = %q\n", strings.ReplaceAll(source, `\`, `\\`)))
-	}
-	if cmdRaw != nil {
-		if cmd, ok := cmdRaw.([]any); ok && len(cmd) > 0 {
-			var parts []string
-			for _, c := range cmd {
-				if str, ok := c.(string); ok {
-					escaped := strings.ReplaceAll(str, `\`, `\\`)
-					escaped = strings.ReplaceAll(escaped, `"`, `\"`)
-					parts = append(parts, fmt.Sprintf("%q", escaped))
-				}
-			}
-			if len(parts) > 0 {
-				b.WriteString("    cmd = [" + strings.Join(parts, ", ") + "]\n")
-			}
-		}
-	}
-	envRaw, hasEnv := step.Config["env"]
-	if hasEnv && envRaw != nil {
-		if envMap, ok := envRaw.(map[string]any); ok && len(envMap) > 0 {
-			b.WriteString("    env = {\n")
-			for k, v := range envMap {
-				if vs, ok := v.(string); ok {
-					escaped := strings.ReplaceAll(vs, `\`, `\\`)
-					escaped = strings.ReplaceAll(escaped, `"`, `\"`)
-					b.WriteString(fmt.Sprintf("      %q = %q\n", k, escaped))
-				}
-			}
-			b.WriteString("    }\n")
-		}
-	}
-	b.WriteString("  }\n\n")
-	return b.String(), nil
-}
-
-func (s *Service) stepPipeline(step model.FlowStep) (string, error) {
-	pipelineRef, _ := step.Config["pipelineRef"].(string)
-	argsRaw, _ := step.Config["args"]
-
-	if pipelineRef == "" {
-		return "", fmt.Errorf("step %s: pipeline reference is required", step.ID)
-	}
-
-	var b strings.Builder
-	stepName := normalizeStepName(step.Label, step.ID)
-	b.WriteString(fmt.Sprintf("  step \"pipeline\" %q {\n", stepName))
-	b.WriteString(fmt.Sprintf("    pipeline = pipeline.%s\n", pipelineRef))
-	if argsRaw != nil {
-		if args, ok := argsRaw.(map[string]any); ok && len(args) > 0 {
-			b.WriteString("    args = {\n")
-			for k, v := range args {
-				switch val := v.(type) {
-				case string:
-					if strings.HasPrefix(val, "param.") || strings.HasPrefix(val, "step.") {
-						b.WriteString(fmt.Sprintf("      %q = %s\n", k, val))
-					} else {
-						escaped := strings.ReplaceAll(val, `\`, `\\`)
-						escaped = strings.ReplaceAll(escaped, `"`, `\"`)
-						b.WriteString(fmt.Sprintf("      %q = %q\n", k, escaped))
-					}
-				case float64:
-					b.WriteString(fmt.Sprintf("      %q = %v\n", k, val))
-				case bool:
-					b.WriteString(fmt.Sprintf("      %q = %v\n", k, val))
-				}
-			}
-			b.WriteString("    }\n")
-		}
-	}
-	b.WriteString("  }\n\n")
-	return b.String(), nil
+	return string(b), nil
 }
 
 func parsePostgresURL(s string) (host string, port int, username, password, db, sslmode string) {
@@ -1045,14 +438,6 @@ func (s *Service) uniqueSlugInDir(dir, baseSlug, excludeID string) string {
 	}
 }
 
-func (s *Service) pipelineName(flow *model.Flow) string {
-	slug := s.slugFromName(flow.Name)
-	if slug != "" {
-		return slug
-	}
-	return flow.ID
-}
-
 func (s *Service) validID(id string) bool {
 	return len(id) > 0 && idChars.MatchString(id)
 }
@@ -1061,27 +446,6 @@ func (s *Service) generateID() string {
 	b := make([]byte, 8)
 	_, _ = rand.Read(b)
 	return "flow_" + hex.EncodeToString(b)
-}
-
-func stepTypeKey(t string) string {
-	switch t {
-	case "http":
-		return "http"
-	case "query":
-		return "query"
-	case "message":
-		return "message"
-	case "sleep":
-		return "sleep"
-	case "transform":
-		return "transform"
-	case "container":
-		return "container"
-	case "pipeline":
-		return "pipeline"
-	default:
-		return t
-	}
 }
 
 func flowsBasePath() string {
@@ -1454,19 +818,22 @@ func (s *Service) SaveInModule(modulePath string, flow *model.Flow) error {
 	}
 	jsonPath := filepath.Join(dir, flow.ID+".json")
 	fpPath := filepath.Join(dir, flow.ID+".fp")
-	// Generate HCL first so we don't write JSON if HCL generation fails (avoids inconsistent state).
-	hcl, err := s.generateHCL(flow)
+	// Generate HCL first and validate before writing (avoids inconsistent state)
+	hclBytes, err := hclgen.Generate(flow, s.defaultDatabaseID())
 	if err != nil {
 		return err
+	}
+	if err := hclgen.ValidateHCL(hclBytes, flow.ID+".fp"); err != nil {
+		return fmt.Errorf("generated invalid HCL: %w", err)
 	}
 	jsonData, err := json.MarshalIndent(flow, "", "  ")
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(jsonPath, jsonData, 0644); err != nil {
+	if err := hclgen.WriteFileAtomically(jsonPath, jsonData, 0644); err != nil {
 		return err
 	}
-	if err := os.WriteFile(fpPath, []byte(hcl), 0644); err != nil {
+	if err := hclgen.WriteFileAtomically(fpPath, hclBytes, 0644); err != nil {
 		return err
 	}
 	flowsRoot := flowsBasePath()

@@ -4,19 +4,19 @@ overview: Refactor Bench flow `.fp` generation from ad-hoc string writes to a ty
 todos:
   - id: map-current-gen
     content: Map current JSON->HCL path and isolate generator responsibilities from flow service.
-    status: pending
+    status: completed
   - id: define-typed-ir
     content: Define typed intermediate flow generation model and strict config validation rules.
-    status: pending
+    status: completed
   - id: build-hcl-ast-emitter
     content: Implement hclwrite-based emitter with per-step registry and deterministic output ordering.
-    status: pending
+    status: completed
   - id: add-validation-and-atomic-write
     content: Validate generated HCL before write and enforce atomic, consistent save semantics.
-    status: pending
+    status: completed
   - id: upgrade-test-suite
     content: Add golden and structural parse tests for all key step/common-attribute scenarios.
-    status: pending
+    status: completed
 isProject: false
 ---
 

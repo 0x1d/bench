@@ -35,6 +35,7 @@ func RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/database/tables", HandleDatabaseTablesCreate)
 	mux.HandleFunc("POST /api/database/query", HandleDatabaseQuery)
 	// Flow routes (more specific paths first)
+	mux.HandleFunc("GET /api/flows/hcl-schema", HandleFlowHCLSchema)
 	mux.HandleFunc("GET /api/flows/workspaces", HandleFlowWorkspacesList)
 	mux.HandleFunc("GET /api/flows/entries", HandleFlowEntries)
 	mux.HandleFunc("GET /api/flows/module", HandleFlowGetModule)

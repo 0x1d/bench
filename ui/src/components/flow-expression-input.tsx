@@ -14,8 +14,7 @@ import { cn } from '@/lib/utils';
 
 function completionSource(flow: Flow | null, currentStepId: string) {
   return (context: import('@codemirror/autocomplete').CompletionContext) => {
-    const text = context.state.sliceDoc(0, context.pos);
-    const inferred = inferCompletionContext(text, context.pos);
+    const inferred = inferCompletionContext(context);
     if (!inferred && !context.explicit) return null;
 
     let items: CompletionItem[] = [];

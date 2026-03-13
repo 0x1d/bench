@@ -10,9 +10,27 @@ import (
 	"github.com/0x1d/bench/api/internal/config"
 	"github.com/0x1d/bench/api/internal/model"
 	"github.com/0x1d/bench/api/internal/service/flow"
+	"github.com/0x1d/bench/api/internal/service/flow/hclgen"
 )
 
 var flowSvc = flow.NewService()
+
+// HandleFlowHCLSchema returns the HCL schema for flow expression autocomplete.
+// Schema aligns with hclgen step types and attributes.
+func HandleFlowHCLSchema(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(struct {
+		StepTypes     []string            `json:"stepTypes"`
+		StepAttributes map[string][]string `json:"stepAttributes"`
+	}{
+		StepTypes:     hclgen.StepTypes(),
+		StepAttributes: hclgen.StepAttributes(),
+	})
+}
 
 // HandleFlowWorkspacesList returns configured flow workspaces.
 func HandleFlowWorkspacesList(w http.ResponseWriter, r *http.Request) {

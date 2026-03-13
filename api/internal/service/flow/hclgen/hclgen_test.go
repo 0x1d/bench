@@ -114,3 +114,54 @@ func TestGenerate_GoldenFixtures(t *testing.T) {
 		})
 	}
 }
+
+func TestGenerate_HTTPBasicAuth_ProducesValidHCL(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	configYAML := `resources:
+  filesystem: []
+  databases: []
+  rest:
+    - id: upstream
+      label: Upstream API
+      baseUrl: https://api.example.com
+      auth:
+        type: basic
+        username: alice
+        password: s3cr3t
+flows:
+  path: flows
+`
+	if err := os.WriteFile(configPath, []byte(configYAML), 0644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	t.Setenv("BENCH_CONFIG", configPath)
+
+	flow := &model.Flow{
+		ID:   "basic_auth_flow",
+		Name: "Basic Auth Flow",
+		Steps: []model.FlowStep{
+			{
+				ID:    "http1",
+				Type:  "http",
+				Label: "call api",
+				Config: map[string]any{
+					"restId": "upstream",
+					"method": "GET",
+					"path":   "/health",
+				},
+			},
+		},
+	}
+
+	got, err := Generate(flow, "")
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	if err := ValidateHCL(got, "basic_auth_flow.fp"); err != nil {
+		t.Fatalf("generated invalid HCL for basic auth: %v\n%s", err, string(got))
+	}
+	if !strings.Contains(string(got), "Basic YWxpY2U6czNjcjN0") {
+		t.Fatalf("expected encoded basic auth header in output, got:\n%s", string(got))
+	}
+}

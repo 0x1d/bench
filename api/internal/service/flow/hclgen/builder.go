@@ -1,6 +1,7 @@
 package hclgen
 
 import (
+	"encoding/base64"
 	"fmt"
 	"os"
 	"sort"
@@ -195,10 +196,11 @@ func emitHTTP(sb *hclwrite.Body, step StepIR, _ *model.Flow, _ map[string]*model
 			if entry.Auth != nil {
 				switch entry.Auth.Type {
 				case config.RestAuthBasic:
-					val := fmt.Sprintf("Basic ${base64encode(\"%s:%s\")}", entry.Auth.Username, entry.Auth.Password)
+					encoded := base64.StdEncoding.EncodeToString([]byte(entry.Auth.Username + ":" + entry.Auth.Password))
+					val := "Basic " + encoded
 					attrs = append(attrs, hclwrite.ObjectAttrTokens{
 						Name:  hclwrite.TokensForValue(cty.StringVal("Authorization")),
-						Value: tokensFromExpression(val),
+						Value: hclwrite.TokensForValue(cty.StringVal(val)),
 					})
 				case config.RestAuthBearer:
 					attrs = append(attrs, hclwrite.ObjectAttrTokens{

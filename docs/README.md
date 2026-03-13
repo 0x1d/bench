@@ -5,3 +5,4 @@
 - **[flows.md](flows.md)** — Flows (Flowpipe integration): visual editor, modules, step types, execution, API reference
 - **[rest.md](rest.md)** — REST resource: Swagger-like test client, OpenAPI spec, proxy
 - **[security.md](security.md)** — Security: API authentication, database credentials, filesystem path traversal prevention, token handling, deployment checklist
+- **[schema-registry-plan.md](schema-registry-plan.md)** — Schema registry implementation plan: OpenAPI, AsyncAPI, JSON Schema; flow integration; phased rollout

@@ -137,115 +137,18 @@ resources:
 
 ## 5. Implementation Phases
 
-### Phase 1: Schema Registry Core (API)
+See [TASKS.md](./TASKS.md) for the task breakdown and status.
 
-**Scope**: Add schema registry without changing REST behavior.
+| Phase | Deliverable | Effort |
+|-------|-------------|--------|
+| 1 | Schema registry API (list, get, content) | Small |
+| 2 | REST uses schemaId; backward compat | Small |
+| 3 | Schema config UI, standalone schemas | Medium |
+| 4 | Schema type abstraction (OpenAPI + AsyncAPI parsers) | Medium |
+| 5 | AsyncAPI flow integration, messaging step | Large |
+| 6 | JSON Schema support | Medium |
 
-1. **Config**
-   - Add `resources.schemas[]` with `id`, `label`, `type`, `source.path`.
-   - Keep `resources.rest[].openapiSpec` as-is.
-
-2. **API**
-   - New `internal/config` helpers: `SchemaEntries()`, `SchemaByID()`.
-   - New `internal/model/schema.go`: `SchemaEntry`, `SchemaResource`.
-   - New `internal/service/schema/service.go`: `List()`, `Get()`, `Content()`.
-   - New handlers: `HandleSchemaList`, `HandleSchemaGet`, `HandleSchemaContent`.
-   - Routes: `GET /api/schemas`, `GET /api/schemas/{id}`, `GET /api/schemas/{id}/content`.
-
-3. **Security**
-   - Reuse path traversal checks from REST spec loading.
-   - Schema paths resolved relative to config dir; reject `..` and absolute paths outside.
-
-**Deliverable**: API can list and serve schema content; no UI changes yet.
-
----
-
-### Phase 2: REST Migration to Schema Registry
-
-**Scope**: REST resources can use `schemaId`; `GET /api/rest/{id}/spec` resolves via registry.
-
-1. **Config**
-   - Add `schemaId` to `RestEntry`; validate that referenced schema exists and is `type: openapi`.
-   - If `schemaId` set, use registry; else fall back to `openapiSpec` path.
-
-2. **REST Service**
-   - `Spec(id)`: If entry has `schemaId`, call schema service; else read file from `openapiSpec`.
-
-3. **UI**
-   - No changes required for REST page or flow HTTP step (they still call `/api/rest/{id}/spec`).
-
-**Deliverable**: Config can use `schemaId`; existing `openapiSpec` still works.
-
----
-
-### Phase 3: Schema Registry UI & Standalone Schemas
-
-**Scope**: Expose schema registry in UI; allow standalone schemas (not tied to REST).
-
-1. **UI**
-   - New "Schemas" section in Resources config (or sidebar) to list/add/edit schema entries.
-   - Schema detail view: show type, source, validation status.
-   - Optional: Schema browser page (like REST page but for any schema type).
-
-2. **Resources Config Page**
-   - Add `schemas` array to config editor; CRUD for schema entries.
-   - REST resource form: add `schemaId` dropdown (filtered to `openapi` type); keep `openapiSpec` as fallback.
-
-**Deliverable**: Users can manage schemas in config; REST can reference them.
-
----
-
-### Phase 4: Schema Type Abstraction (Parsers)
-
-**Scope**: Abstract schema parsing so UI can handle multiple types.
-
-1. **UI lib**
-   - `ui/src/lib/schema-registry.ts`:
-     - `detectSchemaType(content: string): 'openapi' | 'asyncapi' | 'json-schema' | 'unknown'`
-     - `parseSchema(content: string, type: string): SchemaParsed` — union type with `openapi` | `asyncapi` | `json-schema` variants.
-   - Keep `openapi.ts` for OpenAPI-specific helpers; add `asyncapi.ts` for AsyncAPI parsing.
-
-2. **API**
-   - Optional: `GET /api/schemas/{id}/parsed` returns normalized structure (operations, channels, etc.) so UI doesn't need to parse raw content.
-   - Or: UI fetches content and parses client-side (current pattern).
-
-**Deliverable**: Parsing layer supports OpenAPI + AsyncAPI; JSON Schema later.
-
----
-
-### Phase 5: AsyncAPI & Future Step Types
-
-**Scope**: AsyncAPI support; new flow step types (e.g., Kafka publish).
-
-1. **Config**
-   - Add `resources.messaging[]` or similar for Kafka/MQTT brokers (future).
-   - Messaging resource references `schemaId` (AsyncAPI).
-
-2. **Flow**
-   - New step type: `message` (already exists for notifier) or `kafka` / `publish` for event publishing.
-   - Step config: `schemaId`, `channel`/`topic`, `payload` (form from AsyncAPI message schema).
-
-3. **UI**
-   - AsyncAPI parser: extract channels, operations, message schemas.
-   - Flow step panel: when step uses AsyncAPI schema, show channel/topic picker and payload form.
-
-**Deliverable**: AsyncAPI schemas usable in flows for event-driven steps.
-
----
-
-### Phase 6: JSON Schema & Validation
-
-**Scope**: Standalone JSON Schema support for validation and future features.
-
-1. **Config**
-   - Support `type: json-schema` in schema registry.
-
-2. **Use cases**
-   - Transform step: validate output against schema.
-   - Config validation: validate `config.yaml` against a schema.
-   - Future: AI-generated flows validated against schema.
-
-**Deliverable**: JSON Schema schemas registered and usable for validation.
+**Recommended order**: Phases 1–3 deliver immediate value (cleaner config, schema reuse). Phases 4–6 enable AsyncAPI and JSON Schema for future features.
 
 ---
 
@@ -350,18 +253,3 @@ ui/
 - **gRPC/Protobuf**: Schema type for `.proto` files; future gRPC step.
 - **Schema validation API**: `POST /api/schemas/validate` — validate payload against schema.
 - **OpenAPI codegen**: Generate clients from registered OpenAPI schemas.
-
----
-
-## 12. Summary
-
-| Phase | Deliverable | Effort |
-|-------|-------------|--------|
-| 1 | Schema registry API (list, get, content) | Small |
-| 2 | REST uses schemaId; backward compat | Small |
-| 3 | Schema config UI, standalone schemas | Medium |
-| 4 | Schema type abstraction (OpenAPI + AsyncAPI parsers) | Medium |
-| 5 | AsyncAPI flow integration, messaging step | Large |
-| 6 | JSON Schema support | Medium |
-
-**Recommended order**: Phases 1–3 deliver immediate value (cleaner config, schema reuse). Phases 4–6 enable AsyncAPI and JSON Schema for future features.

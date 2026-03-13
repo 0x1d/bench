@@ -61,9 +61,4 @@ Use this skill when implementing features from Bench implementation plans (e.g. 
 
 ## Adding New Plans
 
-When creating a new plan:
-
-1. Create `docs/plans/{name}/` with README, plan.md, TASKS.md
-2. Create `specs/` with one spec per task
-3. Each spec: Task ID, Prerequisites, Context, Steps, Files, Acceptance criteria, Validation
-4. Add plan to `docs/plans/README.md`
+Use the **plan-creation** skill to create new plans. It covers: when to create a plan, folder structure, plan.md sections, phase/task breakdown, spec format, and registration.

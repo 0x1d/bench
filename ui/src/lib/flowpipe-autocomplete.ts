@@ -1,32 +1,19 @@
+import { syntaxTree } from '@codemirror/language';
+import type { CompletionContext } from '@codemirror/autocomplete';
 import type { Flow } from '@/services/api';
 import { normalizeStepName } from '@/lib/utils';
+import { STEP_ATTRIBUTES as SCHEMA_ATTRIBUTES, STEP_TYPES } from '@/lib/flow-hcl-schema';
 
 /** Step type to Flowpipe HCL step block key (e.g. http, query, message). */
 function stepTypeKey(type: string): string {
-  switch (type) {
-    case 'http':
-    case 'query':
-    case 'message':
-    case 'transform':
-    case 'container':
-    case 'pipeline':
-    case 'sleep':
-      return type;
-    default:
-      return type;
-  }
+  const t = type?.toLowerCase().trim() ?? '';
+  return STEP_TYPES.includes(t as (typeof STEP_TYPES)[number]) ? t : type;
 }
 
-/** Attributes available per step type for autocomplete (e.g. step.http.foo.response_body). */
-const STEP_ATTRIBUTES: Record<string, string[]> = {
-  http: ['response_body', 'response_status', 'request_body'],
-  query: ['rows'],
-  message: [],
-  transform: ['output'],
-  container: ['stdout', 'stderr', 'lines', 'exit_code', 'container_id'],
-  pipeline: ['output'],
-  sleep: [],
-};
+/** Attributes per step type from hclgen schema. */
+const STEP_ATTRIBUTES: Record<string, string[]> = Object.fromEntries(
+  Object.entries(SCHEMA_ATTRIBUTES).map(([k, v]) => [k, [...v]])
+);
 
 /** HCL functions from Flowpipe (Terraform-compatible). */
 const HCL_FUNCTIONS = [
@@ -135,6 +122,19 @@ export function getCompletionsForStep(
         }
       }
     }
+    // Connection params (param.conn_<id>) from query steps, per hclgen
+    const usedDBs = new Set<string>();
+    for (const step of flow.steps) {
+      if (step.type?.toLowerCase() !== 'query') continue;
+      const dbId = (step.config?.databaseId as string) ?? '';
+      if (dbId) usedDBs.add(dbId);
+    }
+    for (const dbId of usedDBs) {
+      const ref = `param.conn_${dbId}`;
+      if (!prefix || ref.startsWith(prefix) || ref.toLowerCase().includes(prefix.toLowerCase())) {
+        items.push({ label: ref, detail: `DB connection`, apply: ref });
+      }
+    }
   }
 
   if (context === 'function') {
@@ -150,10 +150,71 @@ export function getCompletionsForStep(
 }
 
 /**
- * Infers completion context from the text before the cursor.
- * Returns { context, prefix } for filtering.
+ * Infers completion context from the text before the cursor using AST when available.
+ * Uses the HCL Lezer parser (from codemirror-lang-hcl) for AST-based inference when
+ * the editor state has an HCL syntax tree; falls back to regex for partial/invalid input.
  */
-export function inferCompletionContext(text: string, cursorPos: number): { context: 'step' | 'param' | 'function'; prefix: string } | null {
+export function inferCompletionContext(
+  cmContext: CompletionContext
+): { context: 'step' | 'param' | 'function'; prefix: string } | null {
+  const text = cmContext.state.sliceDoc(0, cmContext.pos);
+  const cursorPos = cmContext.pos;
+
+  // Try AST-based inference when we have a syntax tree (HCL mode)
+  const tree = syntaxTree(cmContext.state);
+  if (tree.length > 0) {
+    const inferred = inferFromAST(tree, cursorPos, {
+      sliceDoc: (a, b) => cmContext.state.sliceDoc(a, b),
+    });
+    if (inferred) return inferred;
+  }
+
+  // Fallback: regex-based inference for partial input or non-HCL mode
+  return inferFromRegex(text, cursorPos);
+}
+
+function inferFromAST(
+  tree: ReturnType<typeof syntaxTree>,
+  pos: number,
+  state: { sliceDoc: (from: number, to: number) => string }
+): { context: 'step' | 'param' | 'function'; prefix: string } | null {
+  try {
+    const cursor = tree.cursorAt(pos);
+    let exprNode: { from: number; to: number } | null = null;
+
+    for (let d = 0; d < 30; d++) {
+      const name = cursor.node.type.name;
+      if (name === 'VariableExpr' || name === 'GetAttr') {
+        exprNode = { from: cursor.node.from, to: cursor.node.to };
+      }
+      if (name === 'FunctionCall') {
+        const from = cursor.node.from;
+        const to = Math.max(cursor.node.to, pos);
+        const text = state.sliceDoc(from, to);
+        const fnMatch = text.match(/^([a-z0-9_]+)\s*\(/i);
+        if (fnMatch) {
+          const beforeCursor = text.slice(0, pos - from);
+          const prefixMatch = beforeCursor.match(/([a-z0-9_]*)$/i);
+          return { context: 'function', prefix: prefixMatch?.[1] ?? '' };
+        }
+      }
+      if (!cursor.parent()) break;
+    }
+
+    if (exprNode) {
+      const text = state.sliceDoc(exprNode.from, Math.max(exprNode.to, pos));
+      return inferFromRegex(text, pos - exprNode.from);
+    }
+  } catch {
+    // Parser may fail on incomplete input
+  }
+  return null;
+}
+
+function inferFromRegex(
+  text: string,
+  cursorPos: number
+): { context: 'step' | 'param' | 'function'; prefix: string } | null {
   const before = text.slice(0, cursorPos);
   const stepMatch = before.match(/step\.([a-z0-9_.]*)$/i);
   if (stepMatch) {

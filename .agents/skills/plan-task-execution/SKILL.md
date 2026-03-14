@@ -12,16 +12,16 @@ Use this skill when implementing features from Bench implementation plans (e.g. 
 |----------|---------|
 | `docs/plans/` | Root for all implementation plans |
 | `docs/plans/{plan}/README.md` | Overview, current status, quick links |
-| `docs/plans/{plan}/plan.md` | Full design document (frontmatter: status, created, updated) |
+| `docs/plans/{plan}/plan.md` | Full design document (frontmatter: state, created, updated) |
 | `docs/plans/{plan}/TASKS.md` | Task index with checkboxes and spec links |
 | `docs/plans/{plan}/specs/` | Task specs — execution plans per task |
 | `docs/plans/{plan}/specs/{id}.md` | Spec for one task (frontmatter + steps, files, acceptance) |
 
 ## Frontmatter (Plans & Tasks)
 
-**Plan** (plan.md, TASKS.md, README.md): `status` (draft | ready | in_progress | complete), `created`, `updated`
+**Plan** (plan.md, TASKS.md, README.md): `state` (DRAFT | READY | IN_PROGRESS | DONE), `created`, `updated`
 
-**Task spec**: `id`, `phase`, `title`, `state` (todo | in_progress | done), `dependsOn` (array of task IDs), `created`, `updated`
+**Task spec**: `id`, `phase`, `title`, `state` (TODO | IN_PROGRESS | DONE), `dependsOn` (array of task IDs), `created`, `updated`
 
 ## Workflow
 
@@ -43,11 +43,11 @@ Use this skill when implementing features from Bench implementation plans (e.g. 
    - Satisfy all acceptance criteria
    - Run pre-commit quality gate (`go vet`, `go test`, `pnpm lint`, `pnpm build`)
 
-5. **Update status**:
+5. **Update state**:
    - Change `[ ]` to `[x]` for the completed task in `TASKS.md`
-   - In the spec file: set `state: done` and `updated: YYYY-MM-DD` in frontmatter
+   - In the spec file: set `state: DONE` and `updated: YYYY-MM-DD` in frontmatter
    - If a phase is complete, set phase status to `DONE`
-   - Update `updated` and `status` in plan.md, TASKS.md, README.md frontmatter (set `status: in_progress` when starting implementation; `complete` when done)
+   - Update `updated` and `state` in plan.md, TASKS.md, README.md frontmatter (set `state: IN_PROGRESS` when starting implementation; `DONE` when done)
 
 ## Rules
 

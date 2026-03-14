@@ -45,20 +45,20 @@ Add **frontmatter** at the top:
 
 ```yaml
 ---
-status: draft | ready | in_progress | complete
+state: DRAFT | READY | IN_PROGRESS | DONE
 created: YYYY-MM-DD
 updated: YYYY-MM-DD
 ---
 ```
 
-**Plan status**:
+**Plan state**:
 
-| Status | Meaning |
-|--------|---------|
-| `draft` | Specs and plan being worked on; not ready for implementation |
-| `ready` | Plan and specs complete; ready for development |
-| `in_progress` | Implementation being worked on |
-| `complete` | Plan fully implemented |
+| State | Meaning |
+|-------|---------|
+| `DRAFT` | Specs and plan being worked on; not ready for implementation |
+| `READY` | Plan and specs complete; ready for development |
+| `IN_PROGRESS` | Implementation being worked on |
+| `DONE` | Plan fully implemented |
 
 Include these sections:
 
@@ -97,11 +97,11 @@ Task ID format: `{phase}.{index}` (e.g. 1.1, 1.2, 2.1)
 
 ## 4. Create TASKS.md (Task Index)
 
-Add **frontmatter** (use same `status` as plan.md):
+Add **frontmatter** (use same `state` as plan.md):
 
 ```yaml
 ---
-status: draft | ready | in_progress | complete
+state: DRAFT | READY | IN_PROGRESS | DONE
 created: YYYY-MM-DD
 updated: YYYY-MM-DD
 ---
@@ -149,7 +149,7 @@ Add **frontmatter** with task metadata:
 id: "{id}"
 phase: {n}
 title: {Title}
-state: todo | in_progress | done
+state: TODO | IN_PROGRESS | DONE
 dependsOn: ["1.1", "1.2"]   # task IDs that must be done first; [] for first task
 created: YYYY-MM-DD
 updated: YYYY-MM-DD
@@ -190,7 +190,7 @@ cd api && go vet ./... && go test ./...
 
 ### Spec Rules
 
-- **Frontmatter**: Include `id`, `phase`, `title`, `state`, `dependsOn`, `created`, `updated`
+- **Frontmatter**: Include `id`, `phase`, `title`, `state` (TODO | IN_PROGRESS | DONE), `dependsOn`, `created`, `updated`
 - **dependsOn**: Array of task IDs; use `[]` for tasks with no prerequisites; cross-phase deps use prior phase's last task (e.g. `["1.5"]` for first task of phase 2)
 - **Context**: Enough for an agent to understand without reading the full plan
 - **Steps**: Numbered, concrete, actionable
@@ -206,7 +206,7 @@ Add **frontmatter** (same as plan.md):
 
 ```yaml
 ---
-status: draft | ready | in_progress | complete
+state: DRAFT | READY | IN_PROGRESS | DONE
 created: YYYY-MM-DD
 updated: YYYY-MM-DD
 ---
@@ -259,13 +259,13 @@ Add a row to `docs/plans/README.md` in the Plans table:
 ## Checklist
 
 - [ ] On a feature branch (create one if not)
-- [ ] plan.md, TASKS.md, README.md have frontmatter (status, created, updated)
+- [ ] plan.md, TASKS.md, README.md have frontmatter (state, created, updated)
 - [ ] plan.md has all sections
 - [ ] Phases are ordered by dependency
 - [ ] Each task has a spec file with frontmatter (id, phase, title, state, dependsOn, created, updated)
 - [ ] Specs have Context, Steps, Files, Acceptance, Validation
 - [ ] dependsOn correctly chains tasks (cross-phase: last task of prior phase)
 - [ ] TASKS.md links every task to its spec
-- [ ] README.md has status table and quick links
+- [ ] README.md has state table and quick links
 - [ ] Plan registered in docs/plans/README.md
 - [ ] Plan committed and pushed to feature branch

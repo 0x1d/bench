@@ -1,5 +1,5 @@
 ---
-status: ready
+state: READY
 created: 2025-03-13
 updated: 2025-03-13
 ---
@@ -33,9 +33,9 @@ updated: 2025-03-13
 
 1. **Pick a task** from [TASKS.md](./TASKS.md) — check `dependsOn` in spec frontmatter; only pick tasks whose dependencies are done
 2. **Check off** `[ ]` → `[x]` in TASKS.md when done
-3. **Update spec frontmatter**: set `state: done` and `updated: YYYY-MM-DD` in the spec file
+3. **Update spec frontmatter**: set `state: DONE` and `updated: YYYY-MM-DD` in the spec file
 4. **Update phase status** when a phase is complete (`TODO` → `IN_PROGRESS` → `DONE`)
-5. **Update `updated`** and `status` in plan.md, TASKS.md, and README.md frontmatter when making progress (status: `draft` → `ready` when specs done; `ready` → `in_progress` when implementation starts; `in_progress` → `complete` when done)
+5. **Update `updated`** and `state` in plan.md, TASKS.md, and README.md frontmatter when making progress (state: `DRAFT` → `READY` when specs done; `READY` → `IN_PROGRESS` when implementation starts; `IN_PROGRESS` → `DONE` when done)
 
 ## Summary
 

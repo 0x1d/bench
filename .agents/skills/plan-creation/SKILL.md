@@ -150,7 +150,7 @@ Add **frontmatter** with task metadata:
 id: "{id}"
 phase: {n}
 title: {Title}
-state: TODO | IN_PROGRESS | DONE
+state: TODO | IN_PROGRESS | DONE | DEFERRED
 dependsOn: ["1.1", "1.2"]   # task IDs that must be done first; [] for first task
 created: YYYY-MM-DD
 updated: YYYY-MM-DD
@@ -191,7 +191,7 @@ cd api && go vet ./... && go test ./...
 
 ### Spec Rules
 
-- **Frontmatter**: Include `id`, `phase`, `title`, `state` (TODO | IN_PROGRESS | DONE), `dependsOn`, `created`, `updated`
+- **Frontmatter**: Include `id`, `phase`, `title`, `state` (TODO | IN_PROGRESS | DONE | DEFERRED), `dependsOn`, `created`, `updated`
 - **dependsOn**: Array of task IDs; use `[]` for tasks with no prerequisites; cross-phase deps use prior phase's last task (e.g. `["1.5"]` for first task of phase 2)
 - **Context**: Enough for an agent to understand without reading the full plan
 - **Steps**: Numbered, concrete, actionable

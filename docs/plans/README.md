@@ -13,12 +13,14 @@ Plans and tasks use **YAML frontmatter** for metadata:
 
 | Field | Plans | Tasks |
 |-------|-------|-------|
-| `state` | DRAFT \| READY \| IN_PROGRESS \| DONE | TODO \| IN_PROGRESS \| DONE |
+| `state` | DRAFT \| READY \| IN_PROGRESS \| DONE | TODO \| IN_PROGRESS \| DONE \| DEFERRED |
 | `created` | YYYY-MM-DD | YYYY-MM-DD |
 | `updated` | YYYY-MM-DD | YYYY-MM-DD |
 | `dependsOn` | — | `["1.1", "2.3"]` — task IDs that must be done first |
 
 **Plan state**: `DRAFT` (specs/plan in progress) → `READY` (ready for dev) → `IN_PROGRESS` (implementation) → `DONE` (done).
+
+**Task state**: `DEFERRED` = out of scope for now; skip when picking tasks.
 
 Tasks also use markdown checkboxes in TASKS.md: `[ ]` not started, `[x]` done.
 Phase status: `TODO` | `IN_PROGRESS` | `DONE`

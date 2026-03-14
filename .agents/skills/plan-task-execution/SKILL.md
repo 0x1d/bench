@@ -21,12 +21,12 @@ Use this skill when implementing features from Bench implementation plans (e.g. 
 
 **Plan** (plan.md, TASKS.md, README.md): `state` (DRAFT | READY | IN_PROGRESS | DONE), `created`, `updated`
 
-**Task spec**: `id`, `phase`, `title`, `state` (TODO | IN_PROGRESS | DONE), `dependsOn` (array of task IDs), `created`, `updated`
+**Task spec**: `id`, `phase`, `title`, `state` (TODO | IN_PROGRESS | DONE | DEFERRED), `dependsOn` (array of task IDs), `created`, `updated`
 
 ## Workflow
 
 1. **Pick a task** from `TASKS.md`:
-   - Choose one with `[ ]` (not done)
+   - Choose one with `[ ]` (not done) and `state: TODO` or `state: IN_PROGRESS` (skip DEFERRED)
    - Check `dependsOn` in the spec frontmatter — all listed tasks must be done first
    - Only pick tasks whose dependencies are satisfied
 

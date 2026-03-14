@@ -1,5 +1,5 @@
 ---
-state: in_progress
+status: ready
 created: 2025-03-13
 updated: 2025-03-13
 ---

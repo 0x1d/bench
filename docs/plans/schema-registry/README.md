@@ -1,5 +1,5 @@
 ---
-state: in_progress
+status: ready
 created: 2025-03-13
 updated: 2025-03-13
 ---
@@ -35,7 +35,7 @@ updated: 2025-03-13
 2. **Check off** `[ ]` → `[x]` in TASKS.md when done
 3. **Update spec frontmatter**: set `state: done` and `updated: YYYY-MM-DD` in the spec file
 4. **Update phase status** when a phase is complete (`TODO` → `IN_PROGRESS` → `DONE`)
-5. **Update `updated`** in plan.md, TASKS.md, and README.md frontmatter when making progress
+5. **Update `updated`** and `status` in plan.md, TASKS.md, and README.md frontmatter when making progress (status: `draft` → `ready` when specs done; `ready` → `in_progress` when implementation starts; `in_progress` → `complete` when done)
 
 ## Summary
 

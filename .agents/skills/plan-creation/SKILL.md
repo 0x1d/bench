@@ -6,6 +6,16 @@ description: Create implementation plans with tasks and specs. Use when starting
 
 Use this skill when creating a new implementation plan for Bench. Plans live in `docs/plans/` and consist of a design document, task index, and executable task specs.
 
+## Feature Branch
+
+Plans **must** be created and developed on a feature branch.
+
+- If already on a feature branch (e.g. `feat/schema-registry`, `cursor/schema-registry-plan-f701`), proceed.
+- If on `main` or another non-feature branch, create a feature branch first:
+  - `git checkout -b feat/{plan-name}` or `feat/{short-description}`
+  - Follow project branch naming: `feat/`, `fix/`, `chore/`
+- Commit plan files to the feature branch; do not add plans directly to `main`.
+
 ## When to Create a Plan
 
 - New feature spanning API + UI (e.g. schema registry, new resource type)
@@ -35,11 +45,20 @@ Add **frontmatter** at the top:
 
 ```yaml
 ---
-state: draft | in_progress | done
+status: draft | ready | in_progress | complete
 created: YYYY-MM-DD
 updated: YYYY-MM-DD
 ---
 ```
+
+**Plan status**:
+
+| Status | Meaning |
+|--------|---------|
+| `draft` | Specs and plan being worked on; not ready for implementation |
+| `ready` | Plan and specs complete; ready for development |
+| `in_progress` | Implementation being worked on |
+| `complete` | Plan fully implemented |
 
 Include these sections:
 
@@ -78,11 +97,11 @@ Task ID format: `{phase}.{index}` (e.g. 1.1, 1.2, 2.1)
 
 ## 4. Create TASKS.md (Task Index)
 
-Add **frontmatter**:
+Add **frontmatter** (use same `status` as plan.md):
 
 ```yaml
 ---
-state: in_progress
+status: draft | ready | in_progress | complete
 created: YYYY-MM-DD
 updated: YYYY-MM-DD
 ---
@@ -187,7 +206,7 @@ Add **frontmatter** (same as plan.md):
 
 ```yaml
 ---
-state: in_progress
+status: draft | ready | in_progress | complete
 created: YYYY-MM-DD
 updated: YYYY-MM-DD
 ---
@@ -239,7 +258,8 @@ Add a row to `docs/plans/README.md` in the Plans table:
 
 ## Checklist
 
-- [ ] plan.md, TASKS.md, README.md have frontmatter (state, created, updated)
+- [ ] On a feature branch (create one if not)
+- [ ] plan.md, TASKS.md, README.md have frontmatter (status, created, updated)
 - [ ] plan.md has all sections
 - [ ] Phases are ordered by dependency
 - [ ] Each task has a spec file with frontmatter (id, phase, title, state, dependsOn, created, updated)
@@ -248,3 +268,4 @@ Add a row to `docs/plans/README.md` in the Plans table:
 - [ ] TASKS.md links every task to its spec
 - [ ] README.md has status table and quick links
 - [ ] Plan registered in docs/plans/README.md
+- [ ] Plan committed and pushed to feature branch

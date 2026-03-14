@@ -1,7 +1,7 @@
 ---
 state: READY
 created: 2025-03-13
-updated: 2025-03-13
+updated: 2025-03-14
 ---
 
 # Schema Registry — Task Tracker
@@ -89,26 +89,7 @@ updated: 2025-03-13
 
 ---
 
-## Phase 5: AsyncAPI & Future Step Types
-
-**Phase status**: TODO  
-**Deliverable**: AsyncAPI schemas usable in flows for event-driven steps.
-
-### Config
-
-- [ ] **5.1** Add resources.messaging[] — [specs/5.1-messaging-config.md](specs/5.1-messaging-config.md)
-
-### Flow
-
-- [ ] **5.2** Kafka/publish step type and HCL — [specs/5.2-kafka-step.md](specs/5.2-kafka-step.md)
-
-### UI
-
-- [ ] **5.3** AsyncAPI integration in flow step panel — [specs/5.3-asyncapi-ui.md](specs/5.3-asyncapi-ui.md)
-
----
-
-## Phase 6: JSON Schema & Validation
+## Phase 5: JSON Schema & Validation
 
 **Phase status**: TODO  
 **Deliverable**: JSON Schema schemas registered and usable for validation.
@@ -116,6 +97,16 @@ updated: 2025-03-13
 ### Config & API
 
 - [ ] **6.1** JSON Schema support and optional validation — [specs/6.1-json-schema.md](specs/6.1-json-schema.md)
+
+---
+
+## Deferred (Future)
+
+Kafka/messaging step and AsyncAPI flow integration — not in current scope. Specs kept for reference:
+
+- [specs/5.1-messaging-config.md](specs/5.1-messaging-config.md)
+- [specs/5.2-kafka-step.md](specs/5.2-kafka-step.md)
+- [specs/5.3-asyncapi-ui.md](specs/5.3-asyncapi-ui.md)
 
 ---
 
@@ -127,7 +118,6 @@ updated: 2025-03-13
 | 2 | 3 | 0 | TODO |
 | 3 | 3 | 0 | TODO |
 | 4 | 2 | 0 | TODO |
-| 5 | 3 | 0 | TODO |
-| 6 | 1 | 0 | TODO |
+| 5 | 1 | 0 | TODO |
 
 Metadata in frontmatter (`updated`).

@@ -1,7 +1,7 @@
 ---
 state: READY
 created: 2025-03-13
-updated: 2025-03-13
+updated: 2025-03-14
 ---
 
 # Schema Registry Implementation Plan
@@ -151,10 +151,11 @@ See [TASKS.md](./TASKS.md) for the task breakdown and status.
 | 2 | REST uses schemaId; backward compat | Small |
 | 3 | Schema config UI, standalone schemas | Medium |
 | 4 | Schema type abstraction (OpenAPI + AsyncAPI parsers) | Medium |
-| 5 | AsyncAPI flow integration, messaging step | Large |
-| 6 | JSON Schema support | Medium |
+| 5 | JSON Schema support | Medium |
 
-**Recommended order**: Phases 1–3 deliver immediate value (cleaner config, schema reuse). Phases 4–6 enable AsyncAPI and JSON Schema for future features.
+**Deferred** (not in current scope): Kafka/messaging step, AsyncAPI flow integration — see Future Enhancements.
+
+**Recommended order**: Phases 1–3 deliver immediate value (cleaner config, schema reuse). Phases 4–5 enable AsyncAPI and JSON Schema.
 
 ---
 
@@ -253,6 +254,7 @@ ui/
 
 ## 11. Future Enhancements
 
+- **Kafka/messaging step**: `resources.messaging[]`, Kafka/publish flow step, AsyncAPI UI in flow panel — deferred from current scope.
 - **Schema versioning**: Multiple versions per schema ID.
 - **Remote URLs**: `source.url` for fetching specs from URLs (with caching).
 - **Inline schemas**: `source.inline` for small schemas in config.

@@ -44,7 +44,6 @@ Every spec has **frontmatter** (YAML between `---`) and body sections.
 | 3.3 | [3.3-schema-browser.md](3.3-schema-browser.md) | 3 — Schema Browser (optional) |
 | 4.1 | [4.1-schema-registry-lib.md](4.1-schema-registry-lib.md) | 4 — Schema Registry Lib |
 | 4.2 | [4.2-asyncapi-lib.md](4.2-asyncapi-lib.md) | 4 — AsyncAPI Lib |
-| 5.1 | [5.1-messaging-config.md](5.1-messaging-config.md) | 5 — Messaging Config |
-| 5.2 | [5.2-kafka-step.md](5.2-kafka-step.md) | 5 — Kafka Step |
-| 5.3 | [5.3-asyncapi-ui.md](5.3-asyncapi-ui.md) | 5 — AsyncAPI UI |
-| 6.1 | [6.1-json-schema.md](6.1-json-schema.md) | 6 — JSON Schema |
+| 6.1 | [6.1-json-schema.md](6.1-json-schema.md) | 5 — JSON Schema |
+
+**Deferred** (specs for reference): [5.1](5.1-messaging-config.md) · [5.2](5.2-kafka-step.md) · [5.3](5.3-asyncapi-ui.md)

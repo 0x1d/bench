@@ -1,7 +1,7 @@
 ---
 state: READY
 created: 2025-03-13
-updated: 2025-03-13
+updated: 2025-03-14
 ---
 
 # Schema Registry Plan
@@ -24,10 +24,11 @@ updated: 2025-03-13
 | 2 | TODO | REST uses schemaId; backward compat |
 | 3 | TODO | Schema config UI, standalone schemas |
 | 4 | TODO | Schema type abstraction (parsers) |
-| 5 | TODO | AsyncAPI flow integration |
-| 6 | TODO | JSON Schema support |
+| 5 | TODO | JSON Schema support |
 
-**Next up**: Phase 1 — implement schema registry API.
+**Deferred**: Kafka/messaging step, AsyncAPI flow integration
+
+**Next up**: Phase 1 — implement schema registry API. Kafka step deferred.
 
 ## How to Use This Plan
 

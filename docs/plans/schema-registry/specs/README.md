@@ -12,7 +12,7 @@ Every spec has **frontmatter** (YAML between `---`) and body sections.
 |-------|------|-------------|
 | `id` | string | Task ID (e.g. `"1.1"`) |
 | `phase` | number | Phase number |
-| `title` | string | Short title |
+| `title` | string | Short title (do not include phase; use `phase` field) |
 | `state` | string | `todo` \| `in_progress` \| `done` |
 | `dependsOn` | string[] | Task IDs that must be done first |
 | `optional` | boolean | (optional) Task is optional |

@@ -129,7 +129,7 @@ Add **frontmatter** with task metadata:
 ---
 id: "{id}"
 phase: {n}
-title: Phase {n} — {Title}
+title: {Title}
 state: todo | in_progress | done
 dependsOn: ["1.1", "1.2"]   # task IDs that must be done first; [] for first task
 created: YYYY-MM-DD
@@ -138,7 +138,7 @@ updated: YYYY-MM-DD
 ```
 
 ```markdown
-# Task {id}: Phase {n} — {Title}
+# Task {id}: {Title}
 
 ## Context
 

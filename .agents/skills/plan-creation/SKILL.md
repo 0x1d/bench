@@ -10,11 +10,12 @@ Use this skill when creating a new implementation plan for Bench. Plans live in 
 
 Plans **must** be created and developed on a feature branch.
 
-- If already on a feature branch (e.g. `feat/schema-registry`, `cursor/schema-registry-plan-f701`), proceed.
-- If on `main` or another non-feature branch, create a feature branch first:
-  - `git checkout -b feat/{plan-name}` or `feat/{short-description}`
-  - Follow project branch naming: `feat/`, `fix/`, `chore/`
-- Commit plan files to the feature branch; do not add plans directly to `main`.
+- **Branch name**: `feat/{feature-name}` — name after the feature, not the plan (e.g. `feat/schema-registry`, not `feat/schema-registry-plan`).
+- If already on a feature branch for this plan, proceed.
+- If on `main` or another non-feature branch, create a feature branch: `git checkout -b feat/{feature-name}`
+- Follow project branch naming: `feat/`, `fix/`, `chore/`
+- **When the plan is created**: Commit all plan files to the feature branch and push: `git add docs/plans/... && git commit -m "docs: add {feature} implementation plan" && git push -u origin feat/{feature-name}`
+- Do not add plans directly to `main`.
 
 ## When to Create a Plan
 
@@ -268,4 +269,4 @@ Add a row to `docs/plans/README.md` in the Plans table:
 - [ ] TASKS.md links every task to its spec
 - [ ] README.md has state table and quick links
 - [ ] Plan registered in docs/plans/README.md
-- [ ] Plan committed and pushed to feature branch
+- [ ] Plan committed and pushed to feature branch (`git add`, `git commit`, `git push -u origin feat/{feature-name}`)

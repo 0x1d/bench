@@ -54,6 +54,10 @@ Use this skill when implementing features from Bench implementation plans (e.g. 
    - Push to the feature branch: `git push`
    - Do this after every task
 
+## Coordination
+
+When multiple agents may work on the same plan, use the **agent-coordination** skill: claim tasks by setting `state: IN_PROGRESS` and pushing before implementing.
+
 ## Rules
 
 - **Do not skip the spec** — the spec is the execution plan; read it first.

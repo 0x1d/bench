@@ -31,6 +31,16 @@ Use `kebab-case` for plan name (e.g. `schema-registry`, `oauth-providers`).
 
 ## 1. Create plan.md (Design Document)
 
+Add **frontmatter** at the top:
+
+```yaml
+---
+state: draft | in_progress | done
+created: YYYY-MM-DD
+updated: YYYY-MM-DD
+---
+```
+
 Include these sections:
 
 | Section | Purpose |
@@ -68,12 +78,22 @@ Task ID format: `{phase}.{index}` (e.g. 1.1, 1.2, 2.1)
 
 ## 4. Create TASKS.md (Task Index)
 
+Add **frontmatter**:
+
+```yaml
+---
+state: in_progress
+created: YYYY-MM-DD
+updated: YYYY-MM-DD
+---
+```
+
 ```markdown
 # Plan Name — Task Tracker
 
 **Status legend**: `[ ]` Not started · `[x]` Done · Phase: `TODO` | `IN_PROGRESS` | `DONE`
 
-**Task specs**: Each task has an execution plan in [specs/](specs/). Read the spec before starting.
+**Task specs**: Each task has an execution plan in [specs/](specs/). Task metadata (state, dependsOn) is in spec frontmatter.
 
 ---
 
@@ -103,12 +123,22 @@ Each spec file: `specs/{phase}.{index}-{slug}.md` (e.g. `1.1-config.md`)
 
 ### Spec Template
 
+Add **frontmatter** with task metadata:
+
+```yaml
+---
+id: "{id}"
+phase: {n}
+title: Phase {n} — {Title}
+state: todo | in_progress | done
+dependsOn: ["1.1", "1.2"]   # task IDs that must be done first; [] for first task
+created: YYYY-MM-DD
+updated: YYYY-MM-DD
+---
+```
+
 ```markdown
 # Task {id}: Phase {n} — {Title}
-
-**Task ID**: {id}
-**Phase**: {n} — {Phase name}
-**Prerequisites**: {task ids or "None"}
 
 ## Context
 
@@ -141,16 +171,27 @@ cd api && go vet ./... && go test ./...
 
 ### Spec Rules
 
+- **Frontmatter**: Include `id`, `phase`, `title`, `state`, `dependsOn`, `created`, `updated`
+- **dependsOn**: Array of task IDs; use `[]` for tasks with no prerequisites; cross-phase deps use prior phase's last task (e.g. `["1.5"]` for first task of phase 2)
 - **Context**: Enough for an agent to understand without reading the full plan
 - **Steps**: Numbered, concrete, actionable
 - **Files**: Exhaustive list; agent should only touch these
 - **Acceptance**: Verifiable; use checkboxes
 - **Validation**: Commands that must pass (vet, test, lint, build)
-- **Prerequisites**: List task IDs that must be done first
 
 Reference: `docs/plans/schema-registry/specs/1.1-config.md`
 
 ## 6. Create README.md (Plan Overview)
+
+Add **frontmatter** (same as plan.md):
+
+```yaml
+---
+state: in_progress
+created: YYYY-MM-DD
+updated: YYYY-MM-DD
+---
+```
 
 ```markdown
 # Plan Title
@@ -184,7 +225,8 @@ Reference: `docs/plans/schema-registry/specs/1.1-config.md`
 
 ## 7. Create specs/README.md
 
-- Explain spec format (Task ID, Prerequisites, Context, Steps, Files, Acceptance, Validation)
+- Document **frontmatter** fields: `id`, `phase`, `title`, `state`, `dependsOn`, `created`, `updated`
+- Explain body sections: Context, Steps, Files, Acceptance, Validation
 - Table: ID | Spec | Phase for all specs
 
 ## 8. Register the Plan
@@ -197,10 +239,12 @@ Add a row to `docs/plans/README.md` in the Plans table:
 
 ## Checklist
 
+- [ ] plan.md, TASKS.md, README.md have frontmatter (state, created, updated)
 - [ ] plan.md has all sections
 - [ ] Phases are ordered by dependency
-- [ ] Each task has a spec file
+- [ ] Each task has a spec file with frontmatter (id, phase, title, state, dependsOn, created, updated)
 - [ ] Specs have Context, Steps, Files, Acceptance, Validation
+- [ ] dependsOn correctly chains tasks (cross-phase: last task of prior phase)
 - [ ] TASKS.md links every task to its spec
 - [ ] README.md has status table and quick links
 - [ ] Plan registered in docs/plans/README.md

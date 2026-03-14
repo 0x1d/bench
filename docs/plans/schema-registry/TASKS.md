@@ -1,8 +1,14 @@
+---
+state: in_progress
+created: 2025-03-13
+updated: 2025-03-13
+---
+
 # Schema Registry — Task Tracker
 
 **Status legend**: `[ ]` Not started · `[x]` Done · Phase: `TODO` | `IN_PROGRESS` | `DONE`
 
-**Task specs**: Each task has an execution plan in [specs/](specs/). Read the spec before starting.
+**Task specs**: Each task has an execution plan in [specs/](specs/). Read the spec before starting. Task metadata (state, dependsOn) is in spec frontmatter.
 
 ---
 
@@ -124,4 +130,4 @@
 | 5 | 3 | 0 | TODO |
 | 6 | 1 | 0 | TODO |
 
-**Last updated**: (update when tasks change)
+Metadata in frontmatter (`updated`).

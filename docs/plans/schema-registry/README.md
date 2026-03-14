@@ -1,3 +1,9 @@
+---
+state: in_progress
+created: 2025-03-13
+updated: 2025-03-13
+---
+
 # Schema Registry Plan
 
 > Evolve REST + OpenAPI integration into a unified Schema Registry for OpenAPI, AsyncAPI, JSON Schema, and future formats.
@@ -25,10 +31,11 @@
 
 ## How to Use This Plan
 
-1. **Pick a task** from [TASKS.md](./TASKS.md)
-2. **Check off** `[ ]` → `[x]` when done
-3. **Update phase status** when a phase is complete (`TODO` → `IN_PROGRESS` → `DONE`)
-4. **Update "Last updated"** in TASKS.md when making progress
+1. **Pick a task** from [TASKS.md](./TASKS.md) — check `dependsOn` in spec frontmatter; only pick tasks whose dependencies are done
+2. **Check off** `[ ]` → `[x]` in TASKS.md when done
+3. **Update spec frontmatter**: set `state: done` and `updated: YYYY-MM-DD` in the spec file
+4. **Update phase status** when a phase is complete (`TODO` → `IN_PROGRESS` → `DONE`)
+5. **Update `updated`** in plan.md, TASKS.md, and README.md frontmatter when making progress
 
 ## Summary
 

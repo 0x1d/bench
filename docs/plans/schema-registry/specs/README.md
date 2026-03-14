@@ -4,10 +4,23 @@ Each spec is an execution plan for an agent. Read the spec before starting the t
 
 ## Spec Format
 
-Every spec contains:
+Every spec has **frontmatter** (YAML between `---`) and body sections.
 
-- **Task ID** — Links to TASKS.md
-- **Prerequisites** — Tasks that must be done first
+### Frontmatter
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | Task ID (e.g. `"1.1"`) |
+| `phase` | number | Phase number |
+| `title` | string | Short title |
+| `state` | string | `todo` \| `in_progress` \| `done` |
+| `dependsOn` | string[] | Task IDs that must be done first |
+| `optional` | boolean | (optional) Task is optional |
+| `created` | string | ISO date (YYYY-MM-DD) |
+| `updated` | string | ISO date (YYYY-MM-DD) |
+
+### Body Sections
+
 - **Context** — Background and design decisions
 - **Steps** — Numbered actions to perform
 - **Files** — Paths to create or modify

@@ -12,16 +12,23 @@ Use this skill when implementing features from Bench implementation plans (e.g. 
 |----------|---------|
 | `docs/plans/` | Root for all implementation plans |
 | `docs/plans/{plan}/README.md` | Overview, current status, quick links |
-| `docs/plans/{plan}/plan.md` | Full design document |
+| `docs/plans/{plan}/plan.md` | Full design document (frontmatter: state, created, updated) |
 | `docs/plans/{plan}/TASKS.md` | Task index with checkboxes and spec links |
 | `docs/plans/{plan}/specs/` | Task specs — execution plans per task |
-| `docs/plans/{plan}/specs/{id}.md` | Spec for one task (steps, files, acceptance) |
+| `docs/plans/{plan}/specs/{id}.md` | Spec for one task (frontmatter + steps, files, acceptance) |
+
+## Frontmatter (Plans & Tasks)
+
+**Plan** (plan.md, TASKS.md, README.md): `state`, `created`, `updated`
+
+**Task spec**: `id`, `phase`, `title`, `state` (todo | in_progress | done), `dependsOn` (array of task IDs), `created`, `updated`
 
 ## Workflow
 
 1. **Pick a task** from `TASKS.md`:
    - Choose one with `[ ]` (not done)
-   - Respect prerequisites (earlier tasks in same phase, or prior phases)
+   - Check `dependsOn` in the spec frontmatter — all listed tasks must be done first
+   - Only pick tasks whose dependencies are satisfied
 
 2. **Read the spec** before coding:
    - Open the linked spec file (e.g. `specs/1.1-config.md`)
@@ -38,14 +45,15 @@ Use this skill when implementing features from Bench implementation plans (e.g. 
 
 5. **Update status**:
    - Change `[ ]` to `[x]` for the completed task in `TASKS.md`
+   - In the spec file: set `state: done` and `updated: YYYY-MM-DD` in frontmatter
    - If a phase is complete, set phase status to `DONE`
-   - Update "Last updated" in `TASKS.md` if present
+   - Update `updated` in plan.md, TASKS.md, README.md frontmatter
 
 ## Rules
 
 - **Do not skip the spec** — the spec is the execution plan; read it first.
 - **One task per commit** — commit after completing a task (or logical subtask).
-- **Respect prerequisites** — do not start a task until its prerequisites are done.
+- **Respect dependsOn** — check spec frontmatter `dependsOn`; do not start until all listed tasks are done.
 - **Do not modify the spec** while executing — if the spec is wrong, fix the spec in a separate change, then execute.
 - **Run validation** — every spec includes validation commands; run them before marking done.
 

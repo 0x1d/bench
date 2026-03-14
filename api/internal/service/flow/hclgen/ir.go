@@ -114,7 +114,7 @@ func BuildIR(flow *model.Flow, defaultDBID string) (*PipelineIR, error) {
 	}
 
 	// Add connection params for used databases
-	usedDBs := usedDatabaseIDs(flow.Steps, defaultDBID)
+	usedDBs := usedConnectionParamIDs(flow, defaultDBID)
 	for _, dbID := range sortedKeys(usedDBs) {
 		ir.Params = append(ir.Params, ParamIR{Name: "conn_" + dbID, Type: "string"})
 	}

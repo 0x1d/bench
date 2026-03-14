@@ -1,9 +1,13 @@
 package hclgen
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
+	"github.com/0x1d/bench/api/internal/config"
 	"github.com/0x1d/bench/api/internal/model"
 )
 
@@ -126,6 +130,118 @@ func usedDatabaseIDs(steps []model.FlowStep, defaultID string) map[string]bool {
 		}
 	}
 	return used
+}
+
+func usedConnectionParamIDs(flow *model.Flow, defaultID string) map[string]bool {
+	used := make(map[string]bool)
+	if flow == nil {
+		return used
+	}
+	for dbID := range usedDatabaseIDs(flow.Steps, defaultID) {
+		used[dbID] = true
+	}
+	visited := map[string]bool{}
+	for _, step := range flow.Steps {
+		if !stringsEqualFold(step.Type, "pipeline") {
+			continue
+		}
+		ref, _ := step.Config["pipelineRef"].(string)
+		for dbID := range requiredConnectionParamIDsForPipelineRef(ref, defaultID, visited) {
+			used[dbID] = true
+		}
+	}
+	return used
+}
+
+func requiredConnectionParamIDsForPipelineRef(ref, defaultID string, visited map[string]bool) map[string]bool {
+	out := make(map[string]bool)
+	ref = strings.TrimSpace(ref)
+	if ref == "" || visited[ref] {
+		return out
+	}
+	visited[ref] = true
+
+	flow, ok := loadFlowByPipelineRef(ref)
+	if !ok || flow == nil {
+		return out
+	}
+	for dbID := range usedDatabaseIDs(flow.Steps, defaultID) {
+		out[dbID] = true
+	}
+	for _, step := range flow.Steps {
+		if !stringsEqualFold(step.Type, "pipeline") {
+			continue
+		}
+		nestedRef, _ := step.Config["pipelineRef"].(string)
+		for dbID := range requiredConnectionParamIDsForPipelineRef(nestedRef, defaultID, visited) {
+			out[dbID] = true
+		}
+	}
+	return out
+}
+
+func loadFlowByPipelineRef(ref string) (*model.Flow, bool) {
+	base := config.FlowsPath()
+	if strings.TrimSpace(base) == "" {
+		return nil, false
+	}
+	candidates := make([]string, 0, 4)
+	normalized := filepath.FromSlash(ref)
+	candidates = append(candidates, filepath.Join(base, normalized+".json"))
+	candidates = append(candidates, filepath.Join(base, ref+".json"))
+	if strings.Contains(ref, ".") {
+		last := ref[strings.LastIndex(ref, ".")+1:]
+		if last != "" {
+			candidates = append(candidates, filepath.Join(base, last+".json"))
+		}
+	}
+
+	var data []byte
+	found := false
+	seen := map[string]bool{}
+	for _, p := range candidates {
+		if p == "" || seen[p] {
+			continue
+		}
+		seen[p] = true
+		b, err := os.ReadFile(p)
+		if err == nil {
+			data = b
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		targetName := ref + ".json"
+		if strings.Contains(ref, ".") {
+			targetName = ref[strings.LastIndex(ref, ".")+1:] + ".json"
+		}
+		_ = filepath.WalkDir(base, func(path string, d os.DirEntry, err error) error {
+			if err != nil || d == nil || d.IsDir() {
+				return nil
+			}
+			if d.Name() != targetName {
+				return nil
+			}
+			b, readErr := os.ReadFile(path)
+			if readErr == nil {
+				data = b
+				found = true
+				return filepath.SkipAll
+			}
+			return nil
+		})
+	}
+	if !found {
+		return nil, false
+	}
+
+	var flow model.Flow
+	if err := json.Unmarshal(data, &flow); err != nil {
+		return nil, false
+	}
+	return &flow, true
 }
 
 func sortedKeys(m map[string]bool) []string {

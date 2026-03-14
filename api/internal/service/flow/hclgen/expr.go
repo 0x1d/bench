@@ -82,6 +82,38 @@ func tokensForExpression(s string) hclwrite.Tokens {
 	return hclwrite.TokensForValue(cty.StringVal(s))
 }
 
+// tokensForStringValue returns tokens for a string value.
+// If the input contains template interpolation (${...}), emit as a quoted HCL
+// template expression so interpolation is preserved in generated .fp output.
+func tokensForStringValue(s string) hclwrite.Tokens {
+	if strings.Contains(s, "${") {
+		if toks := tokensFromExpression(strconv.Quote(s)); len(toks) > 0 {
+			return toks
+		}
+	}
+	return hclwrite.TokensForValue(cty.StringVal(escapeString(s)))
+}
+
+func setStringAttribute(body *hclwrite.Body, key, value string) {
+	body.SetAttributeRaw(key, tokensForStringValue(value))
+}
+
+func tokensForTypeSpec(s string) hclwrite.Tokens {
+	t := strings.TrimSpace(strings.ToLower(s))
+	switch t {
+	case "":
+		t = "string"
+	case "boolean":
+		t = "bool"
+	case "integer":
+		t = "number"
+	}
+	if toks := tokensFromExpression(t); len(toks) > 0 {
+		return toks
+	}
+	return tokensFromExpression("string")
+}
+
 // tokensFromExpression lexes s as HCL expression and returns hclwrite tokens.
 // Returns nil if lexing fails or produces no meaningful tokens.
 func tokensFromExpression(s string) hclwrite.Tokens {

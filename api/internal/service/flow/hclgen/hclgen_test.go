@@ -68,6 +68,75 @@ func TestGenerate_ValidHCL(t *testing.T) {
 	}
 }
 
+func TestGenerate_PipelineStepAutoPassesNestedConnectionParams(t *testing.T) {
+	tmpDir := t.TempDir()
+	flowsDir := filepath.Join(tmpDir, "flows")
+	if err := os.MkdirAll(flowsDir, 0755); err != nil {
+		t.Fatalf("mkdir flows dir: %v", err)
+	}
+
+	child := model.Flow{
+		ID:   "child",
+		Name: "Child",
+		Steps: []model.FlowStep{
+			{
+				ID:    "q1",
+				Type:  "query",
+				Label: "Query",
+				Config: map[string]any{
+					"databaseId": "local",
+					"sql":        "select 1",
+				},
+			},
+		},
+	}
+	childData, err := json.MarshalIndent(child, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal child flow: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(flowsDir, "child.json"), childData, 0644); err != nil {
+		t.Fatalf("write child flow fixture: %v", err)
+	}
+
+	cfgPath := filepath.Join(tmpDir, "config.yaml")
+	cfg := "resources:\n  filesystem: []\n  databases: []\n  rest: []\nflows:\n  path: " + flowsDir + "\n"
+	if err := os.WriteFile(cfgPath, []byte(cfg), 0644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	t.Setenv("BENCH_CONFIG", cfgPath)
+
+	parent := &model.Flow{
+		ID:   "parent",
+		Name: "Parent",
+		Steps: []model.FlowStep{
+			{
+				ID:    "p1",
+				Type:  "pipeline",
+				Label: "Call child",
+				Config: map[string]any{
+					"pipelineRef": "child",
+					"args":        map[string]any{},
+				},
+			},
+		},
+	}
+
+	got, err := Generate(parent, "local")
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	gotS := string(got)
+	if err := ValidateHCL(got, "parent.fp"); err != nil {
+		t.Fatalf("generated invalid HCL: %v\n%s", err, gotS)
+	}
+	if !strings.Contains(gotS, `param "conn_local"`) {
+		t.Fatalf("expected parent flow to include conn_local param, got:\n%s", gotS)
+	}
+	if !strings.Contains(gotS, `"conn_local" = param.conn_local`) {
+		t.Fatalf("expected pipeline step args to include conn_local pass-through, got:\n%s", gotS)
+	}
+}
+
 func TestGenerate_GoldenFixtures(t *testing.T) {
 	// Load JSON fixtures from workspace/flows/tests or flows/tests if present
 	wd, _ := os.Getwd()
@@ -163,5 +232,101 @@ flows:
 	}
 	if !strings.Contains(string(got), "Basic YWxpY2U6czNjcjN0") {
 		t.Fatalf("expected encoded basic auth header in output, got:\n%s", string(got))
+	}
+}
+
+func TestGenerate_PreservesStringInterpolationTemplates(t *testing.T) {
+	flow := &model.Flow{
+		ID:   "template_preserve",
+		Name: "Template Preserve",
+		Steps: []model.FlowStep{
+			{
+				ID:    "input1",
+				Type:  "input",
+				Label: "inputs",
+				Config: map[string]any{
+					"params": []any{
+						map[string]any{"name": "name", "type": "string"},
+						map[string]any{"name": "id", "type": "string"},
+					},
+				},
+			},
+			{
+				ID:    "m1",
+				Type:  "message",
+				Label: "msg",
+				Config: map[string]any{
+					"text": "hello ${each.value}",
+					"commonAttributes": map[string]any{
+						"for_each": "[param.name]",
+						"throw": map[string]any{
+							"enabled": true,
+							"message": "failed for ${each.value}",
+						},
+					},
+				},
+			},
+			{
+				ID:    "q1",
+				Type:  "query",
+				Label: "query",
+				Config: map[string]any{
+					"databaseId": "local",
+					"sql":        "select '${param.name}' as name",
+					"args":       []any{"${param.id}"},
+				},
+			},
+			{
+				ID:    "h1",
+				Type:  "http",
+				Label: "http",
+				Config: map[string]any{
+					"path": "/items/${param.id}",
+					"body": `{"id":"${param.id}"}`,
+				},
+			},
+			{
+				ID:    "c1",
+				Type:  "container",
+				Label: "container",
+				Config: map[string]any{
+					"cmd": []any{"echo ${param.name}"},
+					"env": map[string]any{
+						"GREETING": "hi ${param.name}",
+					},
+				},
+			},
+		},
+	}
+
+	got, err := Generate(flow, "local")
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	gotS := string(got)
+	if err := ValidateHCL(got, "template_preserve.fp"); err != nil {
+		t.Fatalf("generated invalid HCL: %v\n%s", err, gotS)
+	}
+
+	// Ensure template interpolations are preserved and not escaped as literals.
+	wantInterpolations := []string{
+		"${each.value}",
+		"${param.name}",
+		"${param.id}",
+	}
+	for _, want := range wantInterpolations {
+		if !strings.Contains(gotS, want) {
+			t.Fatalf("expected generated HCL to contain %q, got:\n%s", want, gotS)
+		}
+		if strings.Contains(gotS, "$$"+want[1:]) {
+			t.Fatalf("expected generated HCL not to contain escaped interpolation %q, got:\n%s", "$$"+want[1:], gotS)
+		}
+	}
+
+	if strings.Contains(gotS, `type = "string"`) {
+		t.Fatalf("expected param type spec to be unquoted, got:\n%s", gotS)
+	}
+	if !strings.Contains(gotS, `type = string`) {
+		t.Fatalf("expected param type spec to be emitted as type expression, got:\n%s", gotS)
 	}
 }

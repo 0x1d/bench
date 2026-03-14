@@ -46,14 +46,14 @@ func emitPipeline(ir *PipelineIR, flow *model.Flow, defaultDBID string) ([]byte,
 	for _, p := range ir.Params {
 		paramBlock := pipeBody.AppendNewBlock("param", []string{p.Name})
 		pb := paramBlock.Body()
-		pb.SetAttributeValue("type", cty.StringVal(p.Type))
+		pb.SetAttributeRaw("type", tokensForTypeSpec(p.Type))
 		if p.Description != "" {
-			pb.SetAttributeValue("description", cty.StringVal(escapeString(p.Description)))
+			setStringAttribute(pb, "description", p.Description)
 		}
 		if p.Default != nil && p.Default != "" {
 			switch v := p.Default.(type) {
 			case string:
-				pb.SetAttributeValue("default", cty.StringVal(escapeString(v)))
+				setStringAttribute(pb, "default", v)
 			case float64:
 				pb.SetAttributeValue("default", cty.NumberFloatVal(v))
 			case bool:
@@ -179,10 +179,10 @@ func emitHTTP(sb *hclwrite.Body, step StepIR, _ *model.Flow, _ map[string]*model
 	entry, err := restSvc.GetEntry(restID)
 	if err == nil && entry != nil && entry.BaseURL != "" {
 		targetURL := strings.TrimSuffix(entry.BaseURL, "/") + "/" + strings.TrimPrefix(path, "/")
-		sb.SetAttributeValue("url", cty.StringVal(targetURL))
+		setStringAttribute(sb, "url", targetURL)
 		sb.SetAttributeValue("method", cty.StringVal(strings.ToLower(method)))
 		if body != "" {
-			sb.SetAttributeValue("request_body", cty.StringVal(escapeString(body)))
+			setStringAttribute(sb, "request_body", body)
 		}
 		hasHeaders := body != "" || entry.Auth != nil
 		if hasHeaders {
@@ -267,7 +267,7 @@ func emitQuery(sb *hclwrite.Body, step StepIR, _ *model.Flow, _ map[string]*mode
 	if dbID == "" {
 		return fmt.Errorf("no database configured; select a database in step config")
 	}
-	sb.SetAttributeValue("sql", cty.StringVal(escapeString(sql)))
+	setStringAttribute(sb, "sql", sql)
 	sb.SetAttributeRaw("database", tokensFromExpression("connection.postgres[param.conn_"+dbID+"]"))
 
 	argsRaw, _ := step.Config["args"]
@@ -285,7 +285,7 @@ func emitQuery(sb *hclwrite.Body, step StepIR, _ *model.Flow, _ map[string]*mode
 						argToks = append(argToks, hclwrite.TokensForTraversal(traversal))
 					}
 				} else {
-					argToks = append(argToks, hclwrite.TokensForValue(cty.StringVal(escapeString(s))))
+					argToks = append(argToks, tokensForStringValue(s))
 				}
 			}
 			if len(argToks) > 0 {
@@ -310,7 +310,7 @@ func emitMessage(sb *hclwrite.Body, step StepIR, _ *model.Flow, _ map[string]*mo
 	}
 
 	sb.SetAttributeRaw("notifier", tokensFromExpression(notifier))
-	sb.SetAttributeValue("text", cty.StringVal(escapeString(text)))
+	setStringAttribute(sb, "text", text)
 	return nil
 }
 
@@ -319,7 +319,7 @@ func emitSleep(sb *hclwrite.Body, step StepIR, _ *model.Flow, _ map[string]*mode
 	if duration == "" {
 		duration = "5s"
 	}
-	sb.SetAttributeValue("duration", cty.StringVal(escapeString(duration)))
+	setStringAttribute(sb, "duration", duration)
 	return nil
 }
 
@@ -345,17 +345,17 @@ func emitContainer(sb *hclwrite.Body, step StepIR, _ *model.Flow, _ map[string]*
 		image = "alpine:latest"
 	}
 	if image != "" {
-		sb.SetAttributeValue("image", cty.StringVal(escapeString(image)))
+		setStringAttribute(sb, "image", image)
 	}
 	if source != "" {
-		sb.SetAttributeValue("source", cty.StringVal(escapeString(source)))
+		setStringAttribute(sb, "source", source)
 	}
 	if cmdRaw != nil {
 		if cmd, ok := cmdRaw.([]any); ok && len(cmd) > 0 {
 			var parts []hclwrite.Tokens
 			for _, c := range cmd {
 				if str, ok := c.(string); ok {
-					parts = append(parts, hclwrite.TokensForValue(cty.StringVal(escapeString(str))))
+					parts = append(parts, tokensForStringValue(str))
 				}
 			}
 			if len(parts) > 0 {
@@ -376,7 +376,7 @@ func emitContainer(sb *hclwrite.Body, step StepIR, _ *model.Flow, _ map[string]*
 				if vs, ok := envMap[k].(string); ok {
 					attrs = append(attrs, hclwrite.ObjectAttrTokens{
 						Name:  hclwrite.TokensForValue(cty.StringVal(k)),
-						Value: hclwrite.TokensForValue(cty.StringVal(escapeString(vs))),
+						Value: tokensForStringValue(vs),
 					})
 				}
 			}
@@ -388,7 +388,7 @@ func emitContainer(sb *hclwrite.Body, step StepIR, _ *model.Flow, _ map[string]*
 	return nil
 }
 
-func emitPipelineStep(sb *hclwrite.Body, step StepIR, _ *model.Flow, _ map[string]*model.FlowStep, _ string) error {
+func emitPipelineStep(sb *hclwrite.Body, step StepIR, _ *model.Flow, _ map[string]*model.FlowStep, defaultDBID string) error {
 	pipelineRef, _ := step.Config["pipelineRef"].(string)
 	argsRaw, _ := step.Config["args"]
 
@@ -397,39 +397,53 @@ func emitPipelineStep(sb *hclwrite.Body, step StepIR, _ *model.Flow, _ map[strin
 	}
 	sb.SetAttributeRaw("pipeline", tokensFromExpression("pipeline."+pipelineRef))
 
-	if argsRaw != nil {
-		if args, ok := argsRaw.(map[string]any); ok && len(args) > 0 {
-			keys := make([]string, 0, len(args))
-			for k := range args {
-				keys = append(keys, k)
-			}
-			sort.Strings(keys)
-			attrs := make([]hclwrite.ObjectAttrTokens, 0, len(keys))
-			for _, k := range keys {
-				v := args[k]
-				var valToks hclwrite.Tokens
-				switch val := v.(type) {
-				case string:
-					if strings.HasPrefix(val, "param.") || strings.HasPrefix(val, "step.") {
-						valToks = tokensForExpression(val)
-					} else {
-						valToks = hclwrite.TokensForValue(cty.StringVal(escapeString(val)))
-					}
-				case float64:
-					valToks = hclwrite.TokensForValue(cty.NumberFloatVal(val))
-				case bool:
-					valToks = hclwrite.TokensForValue(cty.BoolVal(val))
-				default:
-					continue
+	mergedArgs := map[string]any{}
+	if args, ok := argsRaw.(map[string]any); ok {
+		for k, v := range args {
+			mergedArgs[k] = v
+		}
+	}
+	// Auto-pass connection params required by nested pipelines when not
+	// explicitly provided by the user.
+	required := requiredConnectionParamIDsForPipelineRef(pipelineRef, defaultDBID, map[string]bool{})
+	for dbID := range required {
+		argName := "conn_" + dbID
+		if _, exists := mergedArgs[argName]; !exists {
+			mergedArgs[argName] = "param." + argName
+		}
+	}
+
+	if len(mergedArgs) > 0 {
+		keys := make([]string, 0, len(mergedArgs))
+		for k := range mergedArgs {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		attrs := make([]hclwrite.ObjectAttrTokens, 0, len(keys))
+		for _, k := range keys {
+			v := mergedArgs[k]
+			var valToks hclwrite.Tokens
+			switch val := v.(type) {
+			case string:
+				if strings.HasPrefix(val, "param.") || strings.HasPrefix(val, "step.") {
+					valToks = tokensForExpression(val)
+				} else {
+					valToks = tokensForStringValue(val)
 				}
-				attrs = append(attrs, hclwrite.ObjectAttrTokens{
-					Name:  hclwrite.TokensForValue(cty.StringVal(k)),
-					Value: valToks,
-				})
+			case float64:
+				valToks = hclwrite.TokensForValue(cty.NumberFloatVal(val))
+			case bool:
+				valToks = hclwrite.TokensForValue(cty.BoolVal(val))
+			default:
+				continue
 			}
-			if len(attrs) > 0 {
-				sb.SetAttributeRaw("args", hclwrite.TokensForObject(attrs))
-			}
+			attrs = append(attrs, hclwrite.ObjectAttrTokens{
+				Name:  hclwrite.TokensForValue(cty.StringVal(k)),
+				Value: valToks,
+			})
+		}
+		if len(attrs) > 0 {
+			sb.SetAttributeRaw("args", hclwrite.TokensForObject(attrs))
 		}
 	}
 	return nil
@@ -437,13 +451,13 @@ func emitPipelineStep(sb *hclwrite.Body, step StepIR, _ *model.Flow, _ map[strin
 
 func emitCommonAttrs(sb *hclwrite.Body, c *CommonAttrsIR) {
 	if c.Title != "" {
-		sb.SetAttributeValue("title", cty.StringVal(escapeString(c.Title)))
+		setStringAttribute(sb, "title", c.Title)
 	}
 	if c.Description != "" {
-		sb.SetAttributeValue("description", cty.StringVal(escapeString(c.Description)))
+		setStringAttribute(sb, "description", c.Description)
 	}
 	if c.Timeout != "" {
-		sb.SetAttributeValue("timeout", cty.StringVal(escapeString(c.Timeout)))
+		setStringAttribute(sb, "timeout", c.Timeout)
 	}
 	if c.TimeoutSeconds > 0 {
 		sb.SetAttributeValue("timeout", cty.NumberIntVal(int64(c.TimeoutSeconds)))
@@ -479,7 +493,7 @@ func emitCommonAttrs(sb *hclwrite.Body, c *CommonAttrsIR) {
 			rb.Body().SetAttributeValue("max_attempts", cty.NumberIntVal(int64(c.Retry.MaxAttempts)))
 		}
 		if c.Retry.Strategy != "" {
-			rb.Body().SetAttributeValue("strategy", cty.StringVal(escapeString(c.Retry.Strategy)))
+			setStringAttribute(rb.Body(), "strategy", c.Retry.Strategy)
 		}
 		if c.Retry.MinInterval > 0 {
 			rb.Body().SetAttributeValue("min_interval", cty.NumberIntVal(int64(c.Retry.MinInterval)))
@@ -494,7 +508,7 @@ func emitCommonAttrs(sb *hclwrite.Body, c *CommonAttrsIR) {
 			tb.Body().SetAttributeRaw("if", tokensForExpression(c.Throw.If))
 		}
 		if c.Throw.Message != "" {
-			tb.Body().SetAttributeValue("message", cty.StringVal(escapeString(c.Throw.Message)))
+			setStringAttribute(tb.Body(), "message", c.Throw.Message)
 		}
 	}
 	if c.Output != nil {

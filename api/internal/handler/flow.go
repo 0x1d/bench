@@ -15,6 +15,46 @@ import (
 
 var flowSvc = flow.NewService()
 
+func collectRequiredConnectionParamIDs(module string, f *model.Flow, visited map[string]bool) map[string]bool {
+	required := make(map[string]bool)
+	if f == nil {
+		return required
+	}
+	flowKey := module + ":" + f.ID
+	if visited[flowKey] {
+		return required
+	}
+	visited[flowKey] = true
+
+	for _, step := range f.Steps {
+		if strings.EqualFold(step.Type, "query") {
+			if dbID, _ := step.Config["databaseId"].(string); dbID != "" {
+				required[dbID] = true
+			}
+			continue
+		}
+		if !strings.EqualFold(step.Type, "pipeline") {
+			continue
+		}
+		ref, _ := step.Config["pipelineRef"].(string)
+		ref = strings.TrimSpace(ref)
+		if ref == "" {
+			continue
+		}
+		child, err := flowSvc.GetInModule(module, ref)
+		if err != nil && module != "." {
+			child, err = flowSvc.GetInModule(".", ref)
+		}
+		if err != nil {
+			continue
+		}
+		for dbID := range collectRequiredConnectionParamIDs(module, child, visited) {
+			required[dbID] = true
+		}
+	}
+	return required
+}
+
 // HandleFlowHCLSchema returns the HCL schema for flow expression autocomplete.
 // Schema aligns with hclgen step types and attributes.
 func HandleFlowHCLSchema(w http.ResponseWriter, r *http.Request) {
@@ -391,6 +431,7 @@ func HandleFlowRun(w http.ResponseWriter, r *http.Request) {
 
 	// Build the set of params this pipeline actually defines (Flowpipe rejects unknown params).
 	allowedParams := make(map[string]bool)
+	requiredConnIDs := collectRequiredConnectionParamIDs(module, f, map[string]bool{})
 	for _, step := range f.Steps {
 		if strings.EqualFold(step.Type, "input") {
 			if params, ok := step.Config["params"].([]any); ok {
@@ -403,11 +444,9 @@ func HandleFlowRun(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
-		if strings.EqualFold(step.Type, "query") {
-			if dbID, _ := step.Config["databaseId"].(string); dbID != "" {
-				allowedParams["conn_"+dbID] = true
-			}
-		}
+	}
+	for dbID := range requiredConnIDs {
+		allowedParams["conn_"+dbID] = true
 	}
 
 	// Parse user-provided args from request body
@@ -425,16 +464,15 @@ func HandleFlowRun(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Add connection args for query steps (conn_X = connection name)
+	// Add connection args for required DB params (conn_X = connection name)
 	mergedArgs := make(map[string]any)
 	for k, v := range userArgs {
 		mergedArgs[k] = v
 	}
-	for _, step := range f.Steps {
-		if strings.EqualFold(step.Type, "query") {
-			if dbID, _ := step.Config["databaseId"].(string); dbID != "" {
-				mergedArgs["conn_"+dbID] = dbID
-			}
+	for dbID := range requiredConnIDs {
+		key := "conn_" + dbID
+		if _, provided := mergedArgs[key]; !provided {
+			mergedArgs[key] = dbID
 		}
 	}
 

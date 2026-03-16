@@ -9,7 +9,7 @@ bench/
 ├── api/             # Go backend API
 ├── ui/              # React/TypeScript frontend (Vite)
 ├── flows/           # Flow definitions (Flowpipe HCL and JSON)
-├── docs/            # Documentation (database, flows, security)
+├── docs/            # Documentation (database, filesystem, flows, infrastructure, rest, security)
 ├── config.yaml      # Resource roots and flows config (see config.example.yaml)
 ├── dev.sh           # Run API and UI together for local development
 ├── example.env
@@ -107,11 +107,28 @@ Configure `flows` in `config.yaml` with a `path` and `workspaces` (Flowpipe serv
 
 See [docs/flows.md](docs/flows.md) for configuration, step types, and API details.
 
+## Infrastructure (Terraform)
+
+The Infrastructure page provides Terraform file editing, dependency graph visualization, and command execution (`init`, `plan`, `apply`, `destroy`).
+
+Configure infrastructure in `config.yaml`:
+
+```yaml
+infrastructure:
+  path: ./workspace/infra
+```
+
+If infrastructure is not configured or Terraform is not installed on the API host, the page shows setup guidance.
+
+See [docs/infrastructure.md](docs/infrastructure.md) for workflow details, API reference, and troubleshooting.
+
 ## Documentation
 
 - [docs/database.md](docs/database.md) — Database integration API reference, query endpoint, and features
 - [docs/flows.md](docs/flows.md) — Flows (Flowpipe) configuration, step types, and execution
 - [docs/filesystem.md](docs/filesystem.md) — File system resource manager API reference
+- [docs/infrastructure.md](docs/infrastructure.md) — Terraform workflow, command runbook, and API reference
+- [docs/rest.md](docs/rest.md) — REST resource proxy and OpenAPI-based tooling
 - [docs/security.md](docs/security.md) — Security concepts (API token, credentials, path traversal prevention)
 
 ## Resources (File System)
@@ -133,4 +150,6 @@ Configuration is in `config.yaml` (see `config.example.yaml`):
 
 - See `.cursor/rules/` for coding guidelines.
 - Follow [Conventional Commits](https://www.conventionalcommits.org/) for commit messages.
-- Run linters before committing: `pnpm lint` (UI), `golangci-lint run` (API).
+- Run pre-commit checks before committing:
+  - API: `cd api && go vet ./... && go test ./... && go build ./cmd/server`
+  - UI: `cd ui && pnpm lint && pnpm build`

@@ -1,7 +1,7 @@
 ---
 state: READY
 created: 2025-03-13
-updated: 2025-03-14
+updated: 2025-03-15
 ---
 
 # Schema Registry Implementation Plan
@@ -62,7 +62,8 @@ This plan describes how to evolve Bench's REST + OpenAPI integration into a **Sc
 
 - Describes channels, operations (publish/subscribe), and message payloads.
 - Uses JSON Schema for payloads; can reference OpenAPI for bindings.
-- Enables future **Message/Kafka/MQTT step** in flows (e.g., publish to topic, subscribe).
+- **Current scope**: Storing and browsing AsyncAPI schemas in the registry and schema browser.
+- **Deferred**: Kafka/MQTT flow steps.
 
 ### 3.2 JSON Schema (P2)
 
@@ -131,6 +132,8 @@ resources:
 | GET | `/api/schemas/{id}/content` | Raw schema content (for parsing in UI) |
 | GET | `/api/schemas/{id}/operations` | Normalized operations (OpenAPI: paths; AsyncAPI: channels) — optional convenience |
 
+**Response shape**: `GET /api/schemas` returns `{ "schemas": SchemaResource[] }` (same pattern as `GET /api/rest` → `{ "resources": RestResource[] }`).
+
 **Backward compatibility**: `GET /api/rest/{id}/spec` continues to work by resolving `schemaId` → schema content, or falling back to `openapiSpec` path.
 
 ### 4.4 Schema Type Detection
@@ -154,6 +157,8 @@ See [TASKS.md](./TASKS.md) for the task breakdown and status.
 | 5 | JSON Schema support | Medium |
 
 **Deferred** (not in current scope): Kafka/messaging step, AsyncAPI flow integration — see Future Enhancements.
+
+**Phase 4 note**: AsyncAPI support is for **storing and browsing** schemas in the registry and schema browser. Kafka/messaging flow steps are deferred.
 
 **Recommended order**: Phases 1–3 deliver immediate value (cleaner config, schema reuse). Phases 4–5 enable AsyncAPI and JSON Schema.
 
@@ -237,8 +242,10 @@ ui/
 
 ## 9. Testing Strategy
 
-- **Unit**: Schema service `Content()`, `List()` with mock config.
-- **Integration**: API tests for `/api/schemas`, `/api/schemas/{id}/content`.
+- **Test config**: Use `api/internal/config/testdata/schema-registry-config.yaml` — minimal config with `resources.schemas` and a schema file. Set `BENCH_CONFIG` to this path in tests, or use a helper that loads it.
+- **Unit**: Schema service `Content()`, `List()` with test config.
+- **Integration**: API tests for `GET /api/schemas` (response `{ schemas: [...] }`), `GET /api/schemas/{id}`, `GET /api/schemas/{id}/content`.
+- **Path traversal**: Fixture with `../` in path; assert `Content()` returns error.
 - **Regression**: REST spec resolution via `schemaId` and `openapiSpec`.
 - **UI**: Flow HTTP step with `schemaId`-backed REST resource; REST page unchanged.
 
@@ -255,6 +262,7 @@ ui/
 ## 11. Future Enhancements
 
 - **Kafka/messaging step**: `resources.messaging[]`, Kafka/publish flow step, AsyncAPI UI in flow panel — deferred from current scope.
+- **JSON Schema use cases**: Transform step (validate output against schema); config validation (validate `config.yaml` against schema).
 - **Schema versioning**: Multiple versions per schema ID.
 - **Remote URLs**: `source.url` for fetching specs from URLs (with caching).
 - **Inline schemas**: `source.inline` for small schemas in config.

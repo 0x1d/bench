@@ -1,7 +1,7 @@
 ---
 state: READY
 created: 2025-03-13
-updated: 2025-03-14
+updated: 2025-03-15
 ---
 
 # Schema Registry — Task Tracker
@@ -71,7 +71,7 @@ updated: 2025-03-14
 
 - [ ] **3.2** Add schemaId dropdown to REST form — [specs/3.2-rest-form.md](specs/3.2-rest-form.md)
 
-### Optional
+### Schema Browser
 
 - [ ] **3.3** Schema browser page — [specs/3.3-schema-browser.md](specs/3.3-schema-browser.md)
 

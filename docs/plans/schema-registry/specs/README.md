@@ -41,7 +41,7 @@ Every spec has **frontmatter** (YAML between `---`) and body sections.
 | 2.3 | [2.3-tests.md](2.3-tests.md) | 2 — Tests |
 | 3.1 | [3.1-resources-config.md](3.1-resources-config.md) | 3 — Resources Config UI |
 | 3.2 | [3.2-rest-form.md](3.2-rest-form.md) | 3 — REST Form |
-| 3.3 | [3.3-schema-browser.md](3.3-schema-browser.md) | 3 — Schema Browser (optional) |
+| 3.3 | [3.3-schema-browser.md](3.3-schema-browser.md) | 3 — Schema Browser |
 | 4.1 | [4.1-schema-registry-lib.md](4.1-schema-registry-lib.md) | 4 — Schema Registry Lib |
 | 4.2 | [4.2-asyncapi-lib.md](4.2-asyncapi-lib.md) | 4 — AsyncAPI Lib |
 | 6.1 | [6.1-json-schema.md](6.1-json-schema.md) | 5 — JSON Schema |

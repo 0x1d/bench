@@ -15,7 +15,23 @@ import (
 
 var flowSvc = flow.NewService()
 
-func collectRequiredConnectionParamIDs(module string, f *model.Flow, visited map[string]bool) map[string]bool {
+func defaultDatabaseID() string {
+	dbs, err := config.DatabasesWithError()
+	if err != nil || len(dbs) == 0 {
+		dbs, err = config.DatabasesFromRawConfig()
+		if err != nil || len(dbs) == 0 {
+			return ""
+		}
+	}
+	for _, d := range dbs {
+		if d.Default {
+			return d.ID
+		}
+	}
+	return dbs[0].ID
+}
+
+func collectRequiredConnectionParamIDs(module string, f *model.Flow, defaultDBID string, visited map[string]bool) map[string]bool {
 	required := make(map[string]bool)
 	if f == nil {
 		return required
@@ -28,7 +44,12 @@ func collectRequiredConnectionParamIDs(module string, f *model.Flow, visited map
 
 	for _, step := range f.Steps {
 		if strings.EqualFold(step.Type, "query") {
-			if dbID, _ := step.Config["databaseId"].(string); dbID != "" {
+			dbID, _ := step.Config["databaseId"].(string)
+			dbID = strings.TrimSpace(dbID)
+			if dbID == "" {
+				dbID = defaultDBID
+			}
+			if dbID != "" {
 				required[dbID] = true
 			}
 			continue
@@ -48,7 +69,7 @@ func collectRequiredConnectionParamIDs(module string, f *model.Flow, visited map
 		if err != nil {
 			continue
 		}
-		for dbID := range collectRequiredConnectionParamIDs(module, child, visited) {
+		for dbID := range collectRequiredConnectionParamIDs(module, child, defaultDBID, visited) {
 			required[dbID] = true
 		}
 	}
@@ -64,10 +85,10 @@ func HandleFlowHCLSchema(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(struct {
-		StepTypes     []string            `json:"stepTypes"`
+		StepTypes      []string            `json:"stepTypes"`
 		StepAttributes map[string][]string `json:"stepAttributes"`
 	}{
-		StepTypes:     hclgen.StepTypes(),
+		StepTypes:      hclgen.StepTypes(),
 		StepAttributes: hclgen.StepAttributes(),
 	})
 }
@@ -431,7 +452,7 @@ func HandleFlowRun(w http.ResponseWriter, r *http.Request) {
 
 	// Build the set of params this pipeline actually defines (Flowpipe rejects unknown params).
 	allowedParams := make(map[string]bool)
-	requiredConnIDs := collectRequiredConnectionParamIDs(module, f, map[string]bool{})
+	requiredConnIDs := collectRequiredConnectionParamIDs(module, f, defaultDatabaseID(), map[string]bool{})
 	for _, step := range f.Steps {
 		if strings.EqualFold(step.Type, "input") {
 			if params, ok := step.Config["params"].([]any); ok {

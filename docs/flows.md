@@ -8,7 +8,7 @@ When `flows` is configured in `config.yaml`, the Flows page enables:
 
 - **Module browser** — Organize flows in modules (subfolders) with tree view
 - **Flow editor** — Visual graph editor with drag-and-drop steps and connections
-- **Step types** — Input, output, HTTP (REST), query (database), message, sleep, transform, container, pipeline
+- **Step types** — Input, output, HTTP (REST), query (database), message, sleep, transform, container, pipeline, plus Flowpipe common step attributes on executable steps
 - **Execution** — Run flows on Flowpipe and view process history and execution details
 
 Flows are persisted as `{id}.json` (Bench format) and `{id}.fp` (Flowpipe HCL). Database connections used in flows are auto-generated in `connections.fpc`.
@@ -90,6 +90,47 @@ A flow is a directed graph of steps connected by edges:
 | `pipeline` | Call another pipeline | `pipelineRef`, `args?` |
 
 Step references in `args` use Flowpipe syntax: `param.name`, `step.http.foo.response_body.id`.
+
+### Common Step Attributes (advanced)
+
+For all executable steps (`http`, `query`, `message`, `sleep`, `transform`, `container`, `pipeline`), Bench supports Flowpipe common step attributes via `config.commonAttributes`.
+
+```json
+{
+  "id": "step_2",
+  "type": "query",
+  "label": "Fetch User",
+  "config": {
+    "databaseId": "main",
+    "sql": "select * from users where id = $1",
+    "args": ["param.user_id"],
+    "commonAttributes": {
+      "title": "Fetch primary user",
+      "if": "param.user_id != \"\"",
+      "max_concurrency": 5,
+      "retry": {
+        "enabled": true,
+        "max_attempts": 3,
+        "strategy": "exponential",
+        "min_interval": 1000
+      }
+    }
+  }
+}
+```
+
+Supported keys in `commonAttributes`:
+
+- Scalar: `title`, `description`, `timeout`, `if`, `for_each`, `max_concurrency`
+- Blocks: `error`, `loop`, `retry`, `throw`, `output` (each uses `enabled: true` to emit)
+
+Important constraints:
+
+- `if`, `for_each`, and nested expression fields are emitted as raw HCL expressions (not quoted).
+- `timeout` supports either a string (for example `"30s"`) or numeric seconds.
+- `max_concurrency`, `retry.max_attempts`, and `retry.min_interval` are emitted only when numeric and greater than zero.
+- `commonAttributes.output` creates per-step output blocks; this is separate from top-level pipeline outputs from `output` steps.
+- `input` and `output` steps are virtual and do not emit step blocks, so common attributes do not apply to them.
 
 ## API Reference
 
@@ -196,6 +237,14 @@ All endpoints require the `X-API-Token` header. Base path: `/api/flows`.
 
 **Response (executions):** Proxied from Flowpipe `/api/v0/process/{execId}/execution`.
 
+### Execution behavior details
+
+- Run arguments are filtered to only parameters declared by `input` steps.
+- `query` steps with a configured `databaseId` automatically add `conn_{databaseId}` args on the server.
+- Unknown request args are ignored before forwarding to Flowpipe.
+- `dependsOn` relationships are emitted as Flowpipe `depends_on` references for non-input dependencies.
+- `edges` are persisted for editor visualization; execution ordering is derived from `dependsOn`.
+
 ## File Layout
 
 The flows directory contains:
@@ -222,6 +271,13 @@ Path traversal (`..`) in module paths is rejected.
 | Invalid flow id | 400 | `invalid flow id: {id}` |
 | Invalid module name | 400 | `invalid module name: {name}` |
 | Flowpipe request failed | 502 | `flowpipe request failed: {error}` |
+
+## Troubleshooting
+
+- **Flow runs but step order looks wrong**: verify `dependsOn` on steps (not just rendered edges).
+- **Run args appear ignored**: only params declared in `input` steps are accepted.
+- **Query step run fails with missing connection arg**: ensure the step has `databaseId` and that the database resource exists.
+- **Flowpipe process list returns gateway error**: Bench converts upstream Flowpipe 5xx on process listing into a friendly `502` error response.
 
 ## Security
 

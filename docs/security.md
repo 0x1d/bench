@@ -10,6 +10,7 @@ This document describes the security concepts and controls in place across the b
 | Database | Connection string | Server-only, never exposed |
 | UI | Proxy | Token injected server-side, never in browser |
 | Config | File system | Paths from config, not user input |
+| Infrastructure | Path controls + token | Terraform file writes are root-scoped; command execution is token-protected |
 
 ## API Authentication
 
@@ -105,6 +106,16 @@ See [filesystem.md](filesystem.md) for the full API reference.
 - **Path validation**: Module paths reject `..` and path traversal.
 
 See [flows.md](flows.md) for the full API reference.
+
+## Infrastructure (Terraform)
+
+- Infrastructure endpoints are enabled only when `infrastructure.path` is configured.
+- All infrastructure routes require `X-API-Token`.
+- **Path traversal protection**: `POST /api/infrastructure/save-file` resolves and validates paths against the configured infrastructure root; escaping the root is rejected.
+- **Command execution scope**: Terraform commands run server-side with working directory set to the configured infrastructure path.
+- `terraform fmt` is triggered after save as a best-effort formatting step.
+
+Because infrastructure endpoints can run `terraform apply`/`destroy`, treat API token access as privileged.
 
 ## CORS
 

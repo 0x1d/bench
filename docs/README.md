@@ -6,3 +6,5 @@
 - **[infrastructure.md](infrastructure.md)** — Infrastructure (Terraform): diagram/editor workflow, command runbook, API reference, troubleshooting
 - **[rest.md](rest.md)** — REST resource: Swagger-like test client, OpenAPI spec, proxy
 - **[security.md](security.md)** — Security: API authentication, database credentials, filesystem path traversal prevention, token handling, deployment checklist
+- **[plans/](plans/)** — Implementation plans with task tracking
+  - [schema-registry](plans/schema-registry/) — Schema registry: OpenAPI, AsyncAPI, JSON Schema; flow integration; phased rollout

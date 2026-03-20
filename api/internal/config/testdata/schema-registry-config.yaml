@@ -1,0 +1,10 @@
+# Minimal config for schema registry tests.
+# Use with BENCH_CONFIG pointing to this file (absolute path).
+resources:
+  schemas:
+    - id: test-openapi
+      label: Test OpenAPI
+      type: openapi
+      source:
+        path: petstore-minimal.json
+  rest: []

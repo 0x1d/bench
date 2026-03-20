@@ -1,4 +1,10 @@
 resources:
+  schemas:
+    - id: petstore-api
+      label: Petstore API
+      type: openapi
+      source:
+        path: ./workspace/rest/petstore.json
   filesystem:
     - id: workspace
       label: Workspace

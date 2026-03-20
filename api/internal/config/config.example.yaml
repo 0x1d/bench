@@ -2,6 +2,12 @@
 # Keep in sync with repo root config.example.yaml (embedded for deployed builds).
 # Copy to config.yaml and adjust paths for your environment.
 resources:
+  schemas:
+    - id: petstore-api
+      label: Petstore API
+      type: openapi
+      source:
+        path: ./workspace/rest/petstore.json
   filesystem:
     - id: default
       label: My Data

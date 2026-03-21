@@ -99,6 +99,26 @@ function FitViewOnNodesChange({ nodes }: { nodes: Node[] }) {
   }, [nodesKey, fitView]);
   return null;
 }
+
+/** Fits the diagram when the right panel opens/closes (node, file, or terraform output). */
+function FitViewOnInfraPanelExpand() {
+  const { fitView } = useReactFlow();
+  const { selectedNode, selectedFile, output, isRunning } = useInfrastructureView();
+  const panelStateKeyRef = useRef<string | null>(null);
+  const hasTerminalOpen = output.length > 0 || isRunning;
+  useEffect(() => {
+    const key = `${selectedNode?.id ?? ''}|${selectedFile ?? ''}|${hasTerminalOpen ? '1' : '0'}`;
+    if (panelStateKeyRef.current === null) {
+      panelStateKeyRef.current = key;
+      return;
+    }
+    if (panelStateKeyRef.current === key) return;
+    panelStateKeyRef.current = key;
+    const id = setTimeout(() => fitView({ padding: 0.2, duration: 200 }), 50);
+    return () => clearTimeout(id);
+  }, [selectedNode?.id, selectedFile, hasTerminalOpen, fitView]);
+  return null;
+}
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
@@ -280,6 +300,7 @@ function InfraDiagramInner({
           <Controls />
           <FitViewOnTerraformRun />
           <FitViewOnNodesChange nodes={nodes} />
+          <FitViewOnInfraPanelExpand />
           <Panel position="top-left">
             <span className="text-xs text-muted-foreground">
               {parsedFromContext.providers.length +

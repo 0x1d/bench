@@ -847,9 +847,9 @@ export function InfrastructurePage({ view }: { view: InfrastructureView }) {
       </div>
 
       {/* Main content */}
-      <div className="flex h-full min-h-0 min-w-0 flex-1 flex-row items-stretch overflow-hidden">
+      <div className="flex h-full min-h-0 min-w-0 w-full flex-1 flex-row items-stretch overflow-hidden">
         {view === 'diagram' ? (
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <div className="flex min-h-0 min-w-0 w-full flex-1 flex-col overflow-hidden">
           <ReactFlowProvider>
             <InfraDiagramInner
               nodes={nodes}
@@ -869,7 +869,7 @@ export function InfrastructurePage({ view }: { view: InfrastructureView }) {
           </ReactFlowProvider>
           </div>
         ) : view === 'files' ? (
-          <div className="flex-1 min-w-0 rounded-lg border border-border bg-card overflow-hidden flex flex-col">
+          <div className="flex min-h-0 min-w-0 w-full flex-1 flex-col overflow-hidden rounded-lg border border-border bg-card">
             <div className="flex flex-wrap items-center gap-2 p-3 border-b border-border bg-muted/20">
               <nav className="flex items-center gap-1 text-sm">
                 <button
@@ -1033,7 +1033,7 @@ export function InfrastructurePage({ view }: { view: InfrastructureView }) {
             )}
           </div>
         ) : (
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">
+          <div className="flex min-h-0 min-w-0 w-full flex-1 flex-col overflow-auto">
             {configPending && (
               <p className="text-muted-foreground">Loading configuration...</p>
             )}

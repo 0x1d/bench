@@ -195,7 +195,7 @@ export function FilesystemPage({ mode }: { mode: 'browse' | 'settings' }) {
     <div className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-row items-stretch overflow-hidden">
       <div
         className={cn(
-          'flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-auto',
+          'flex min-h-0 min-w-0 w-full flex-1 flex-col gap-4 overflow-auto',
           mode === 'settings' && 'px-4 md:px-6 pt-4 md:pt-6 pb-4 md:pb-6'
         )}
       >

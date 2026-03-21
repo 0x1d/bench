@@ -191,7 +191,7 @@ export function RestPage() {
           <X className="size-4" />
         </Button>
       </div>
-      <div className="min-h-0 flex-1 overflow-auto p-4">
+      <div className="min-h-0 min-w-0 w-full flex-1 overflow-auto p-4">
         {selectedId && (
           <>
             {specLoading && <p className="text-muted-foreground">Loading OpenAPI spec...</p>}
@@ -206,7 +206,7 @@ export function RestPage() {
               </div>
             )}
             {specData && !specError && (
-              <div className="min-h-0 overflow-auto rounded-lg border border-border bg-card">
+              <div className="min-h-0 min-w-0 w-full overflow-auto rounded-lg border border-border bg-card">
                 <RestClient restId={selectedId} spec={specData} />
               </div>
             )}
@@ -221,7 +221,7 @@ export function RestPage() {
 
   return (
     <div className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-row items-stretch overflow-hidden">
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-auto px-4 md:px-6 pt-4 md:pt-6 pb-4 md:pb-6">
+      <div className="flex min-h-0 min-w-0 w-full flex-1 flex-col gap-4 overflow-auto px-4 md:px-6 pt-4 md:pt-6 pb-4 md:pb-6">
         <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 shadow-sm">
           <nav className="flex flex-wrap items-center gap-1 text-sm">
             <span className="rounded px-2 py-1 font-medium">REST</span>

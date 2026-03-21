@@ -769,7 +769,7 @@ export default function FlowEditorPage() {
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div className="flex min-h-0 min-w-0 w-full flex-1 flex-col overflow-hidden">
         <div className="flow-editor-canvas flex flex-1 min-h-[300px] gap-2 overflow-hidden">
           <FlowPalette
             hasInputStep={nodes.some(

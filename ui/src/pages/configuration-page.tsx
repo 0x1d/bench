@@ -870,14 +870,14 @@ export function ConfigurationPage() {
     <div className="flex w-full min-h-0 flex-1 overflow-hidden">
       <div
         className={cn(
-          'min-h-0 min-w-0 flex-1 overflow-auto p-4 md:p-6'
+          'min-h-0 min-w-0 w-full flex-1 overflow-auto p-4 md:p-6'
         )}
       >
         <div className="flex w-full min-h-0 flex-1 flex-col gap-4">
           <Tabs
             value={resourceTab}
             onValueChange={(v) => setResourceTab(v as ResourceConfigTab)}
-            className="flex min-h-0 flex-1 flex-col overflow-hidden"
+            className="flex min-h-0 min-w-0 w-full flex-1 flex-col overflow-hidden"
           >
             <TabsList variant="line" className="w-full shrink-0 flex-wrap justify-start gap-x-1">
               <TabsTrigger value="filesystem">Filesystem</TabsTrigger>
@@ -889,7 +889,7 @@ export function ConfigurationPage() {
               <TabsTrigger value="agent">Agent</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="filesystem" className="mt-3 min-h-0 flex-1 overflow-auto">
+            <TabsContent value="filesystem" className="mt-3 min-h-0 min-w-0 w-full flex-1 overflow-auto">
           <section className="flex flex-col gap-4 p-4">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-medium">Filesystem resources</h3>
@@ -901,7 +901,7 @@ export function ConfigurationPage() {
             {state.filesystem.length === 0 ? (
               <p className="text-sm text-muted-foreground">No filesystem resources configured.</p>
             ) : (
-              <div className="overflow-x-auto rounded-lg border border-border bg-card">
+              <div className="w-full min-w-0 overflow-x-auto rounded-lg border border-border bg-card">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border bg-muted/30">
@@ -951,7 +951,7 @@ export function ConfigurationPage() {
           </section>
             </TabsContent>
 
-            <TabsContent value="schemas" className="mt-3 min-h-0 flex-1 overflow-auto">
+            <TabsContent value="schemas" className="mt-3 min-h-0 min-w-0 w-full flex-1 overflow-auto">
           <section className="flex flex-col gap-4 p-4">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-medium">Schemas</h3>
@@ -963,7 +963,7 @@ export function ConfigurationPage() {
             {state.schemas.length === 0 ? (
               <p className="text-sm text-muted-foreground">No schemas registered.</p>
             ) : (
-              <div className="overflow-x-auto rounded-lg border border-border bg-card">
+              <div className="w-full min-w-0 overflow-x-auto rounded-lg border border-border bg-card">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border bg-muted/30">
@@ -1015,7 +1015,7 @@ export function ConfigurationPage() {
           </section>
             </TabsContent>
 
-            <TabsContent value="databases" className="mt-3 min-h-0 flex-1 overflow-auto">
+            <TabsContent value="databases" className="mt-3 min-h-0 min-w-0 w-full flex-1 overflow-auto">
           <section className="flex flex-col gap-4 p-4">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-medium">Database resources</h3>
@@ -1027,7 +1027,7 @@ export function ConfigurationPage() {
             {state.databases.length === 0 ? (
               <p className="text-sm text-muted-foreground">No database resources configured.</p>
             ) : (
-              <div className="overflow-x-auto rounded-lg border border-border bg-card">
+              <div className="w-full min-w-0 overflow-x-auto rounded-lg border border-border bg-card">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border bg-muted/30">
@@ -1081,7 +1081,7 @@ export function ConfigurationPage() {
           </section>
             </TabsContent>
 
-            <TabsContent value="rest" className="mt-3 min-h-0 flex-1 overflow-auto">
+            <TabsContent value="rest" className="mt-3 min-h-0 min-w-0 w-full flex-1 overflow-auto">
           <section className="flex flex-col gap-4 p-4">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-medium">REST resources</h3>
@@ -1093,7 +1093,7 @@ export function ConfigurationPage() {
             {state.rest.length === 0 ? (
               <p className="text-sm text-muted-foreground">No REST resources configured.</p>
             ) : (
-              <div className="overflow-x-auto rounded-lg border border-border bg-card">
+              <div className="w-full min-w-0 overflow-x-auto rounded-lg border border-border bg-card">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border bg-muted/30">
@@ -1147,7 +1147,7 @@ export function ConfigurationPage() {
           </section>
             </TabsContent>
 
-            <TabsContent value="flows" className="mt-3 min-h-0 flex-1 overflow-auto">
+            <TabsContent value="flows" className="mt-3 min-h-0 min-w-0 w-full flex-1 overflow-auto">
           <section className="flex flex-col gap-4 p-4">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-medium">Flows</h3>
@@ -1176,7 +1176,7 @@ export function ConfigurationPage() {
                     No profiles configured. Add Flowpipe workspace profiles for pipeline execution.
                   </p>
                 ) : (
-                  <div className="overflow-x-auto rounded-lg border border-border bg-card">
+                  <div className="w-full min-w-0 overflow-x-auto rounded-lg border border-border bg-card">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b border-border bg-muted/30">
@@ -1228,7 +1228,7 @@ export function ConfigurationPage() {
           </section>
             </TabsContent>
 
-            <TabsContent value="infrastructure" className="mt-3 min-h-0 flex-1 overflow-auto">
+            <TabsContent value="infrastructure" className="mt-3 min-h-0 min-w-0 w-full flex-1 overflow-auto">
           <section className="flex flex-col gap-4 p-4">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-medium">Infrastructure</h3>
@@ -1249,7 +1249,7 @@ export function ConfigurationPage() {
           </section>
             </TabsContent>
 
-            <TabsContent value="agent" className="mt-3 min-h-0 flex-1 overflow-auto">
+            <TabsContent value="agent" className="mt-3 min-h-0 min-w-0 w-full flex-1 overflow-auto">
           <section className="flex flex-col gap-4 p-4">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-medium">AI Agent</h3>

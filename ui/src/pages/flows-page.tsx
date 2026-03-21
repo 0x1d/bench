@@ -454,7 +454,7 @@ export function FlowsPage({ view }: { view: FlowsListView }) {
     <div className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-row items-stretch overflow-hidden">
       <div
         className={cn(
-          'flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-hidden',
+          'flex min-h-0 min-w-0 w-full flex-1 flex-col gap-4 overflow-hidden',
           isResourceSettingsHash(hash) && 'px-4 md:px-6 pt-4 md:pt-6 pb-4 md:pb-6'
         )}
       >
@@ -519,9 +519,9 @@ export function FlowsPage({ view }: { view: FlowsListView }) {
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1 min-w-0 flex-col overflow-hidden">
+      <div className="flex min-h-0 min-w-0 w-full flex-1 flex-col overflow-hidden">
         {view === 'modules' && (
-          <div className="mt-0 flex min-h-0 flex-1 min-w-0 overflow-auto">
+          <div className="mt-0 flex min-h-0 min-w-0 w-full flex-1 overflow-auto">
           {workspaces.length === 0 ? (
             <div className="rounded-lg border border-dashed border-border p-8 text-center">
               <Workflow className="mx-auto size-10 text-muted-foreground" />
@@ -570,7 +570,7 @@ export function FlowsPage({ view }: { view: FlowsListView }) {
               )}
             </div>
           ) : (
-            <div className="rounded-lg border border-border bg-card overflow-hidden">
+            <div className="w-full min-w-0 rounded-lg border border-border bg-card overflow-hidden">
               <div className="grid grid-cols-[1fr_auto_5rem_7rem_auto] gap-2 border-b border-border bg-muted/30 px-4 py-3 text-sm font-medium">
                 <span>Name</span>
                 <span className="hidden sm:block"></span>
@@ -599,7 +599,7 @@ export function FlowsPage({ view }: { view: FlowsListView }) {
           </div>
         )}
         {view === 'executions' && (
-          <div className="mt-0 flex min-h-0 flex-1 min-w-0 overflow-auto">
+          <div className="mt-0 flex min-h-0 min-w-0 w-full flex-1 overflow-auto">
           {workspaces.length === 0 ? (
             <div className="rounded-lg border border-dashed border-border p-8 text-center">
               <Workflow className="mx-auto size-10 text-muted-foreground" />
@@ -630,7 +630,7 @@ export function FlowsPage({ view }: { view: FlowsListView }) {
               </p>
             </div>
           ) : (
-            <div className="rounded-lg border border-border bg-card overflow-hidden">
+            <div className="w-full min-w-0 rounded-lg border border-border bg-card overflow-hidden">
               <div className="grid grid-cols-[1fr_auto_6rem_auto] gap-2 border-b border-border bg-muted/30 px-4 py-3 text-sm font-medium">
                 <span>Flow</span>
                 <span>Status</span>
@@ -700,14 +700,14 @@ export function FlowsPage({ view }: { view: FlowsListView }) {
           </div>
         )}
         {view === 'settings' && (
-          <div className="mt-0 flex min-h-0 flex-1 min-w-0 overflow-auto">
+          <div className="mt-0 flex min-h-0 min-w-0 w-full flex-1 overflow-auto">
           {configPending && (
             <p className="text-muted-foreground">Loading configuration...</p>
           )}
           {configErr && <p className="text-sm text-destructive">{configErr}</p>}
           {!configPending && (
-            <div className="flex flex-col gap-6">
-              <section className="flex flex-col gap-4">
+            <div className="flex w-full min-w-0 flex-col gap-6">
+              <section className="flex w-full min-w-0 flex-col gap-4">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <h3 className="text-base font-medium">Flows directory</h3>
@@ -718,7 +718,7 @@ export function FlowsPage({ view }: { view: FlowsListView }) {
                   </Button>
                 </div>
               </section>
-              <section className="flex flex-col gap-4">
+              <section className="flex w-full min-w-0 flex-col gap-4">
                 <div className="mb-3 flex items-center justify-between">
                   <h3 className="text-base font-medium">Flowpipe workspaces</h3>
                   <Button type="button" variant="outline" size="sm" onClick={openAddWorkspacePanel}>
@@ -729,7 +729,7 @@ export function FlowsPage({ view }: { view: FlowsListView }) {
                 {configState.workspaces.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No workspaces configured.</p>
                 ) : (
-                  <div className="overflow-x-auto rounded-lg border border-border bg-card">
+                  <div className="w-full min-w-0 overflow-x-auto rounded-lg border border-border bg-card">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b border-border bg-muted/30">

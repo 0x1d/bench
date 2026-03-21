@@ -191,7 +191,7 @@ export function SchemaBrowserPage() {
         </Button>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto p-4">
+      <div className="min-h-0 min-w-0 w-full flex-1 overflow-auto p-4">
         {selected && (
           <div className="space-y-4 text-sm">
             <div className="grid grid-cols-1 gap-2 rounded-lg border border-border bg-muted/20 p-3 font-mono text-xs sm:grid-cols-2">
@@ -279,7 +279,7 @@ export function SchemaBrowserPage() {
 
   return (
     <div className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-row items-stretch overflow-hidden">
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-auto px-4 md:px-6 pt-4 md:pt-6 pb-4 md:pb-6">
+      <div className="flex min-h-0 min-w-0 w-full flex-1 flex-col gap-4 overflow-auto px-4 md:px-6 pt-4 md:pt-6 pb-4 md:pb-6">
         <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 shadow-sm">
           <nav className="flex flex-wrap items-center gap-1 text-sm">
             <span className="rounded px-2 py-1 font-medium">Schemas</span>

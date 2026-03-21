@@ -222,11 +222,11 @@ export function App() {
                             id="main"
                             className={
                               hash === 'configuration' || hash === 'schemas' || hash === 'rest'
-                                ? 'flex min-h-0 flex-1 flex-col items-stretch'
+                                ? 'flex min-h-0 min-w-0 w-full flex-1 flex-col items-stretch'
                                 : mainStretch
                                   ? isResourceSettingsHash(hash)
-                                    ? 'flex min-h-0 flex-1 flex-col items-stretch overflow-hidden p-0'
-                                    : 'flex min-h-0 flex-1 flex-col items-stretch p-4 md:p-6'
+                                    ? 'flex min-h-0 min-w-0 w-full flex-1 flex-col items-stretch overflow-hidden p-0'
+                                    : 'flex min-h-0 min-w-0 w-full flex-1 flex-col items-stretch p-4 md:p-6'
                                   : 'flex flex-1 items-start justify-center p-4 md:min-h-min'
                             }
                           >

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ApplyStepButton } from '@/components/apply-step-button';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -58,7 +59,6 @@ export function FlowStepPanelContent({
 
   const handleSave = (finalConfig?: Record<string, unknown>) => {
     onSave({ ...step, label, config: finalConfig ?? config });
-    onClose();
   };
 
   if (step.type === 'http') {
@@ -681,9 +681,8 @@ function HttpStepConfig({
         <Button variant="outline" size="sm" onClick={onClose}>
           Cancel
         </Button>
-        <Button
-          size="sm"
-          onClick={() => {
+        <ApplyStepButton
+          onApply={() => {
             const saveConfig = { ...config };
             if (selectedOp) {
               saveConfig.method = selectedOp.method;
@@ -691,9 +690,7 @@ function HttpStepConfig({
             }
             onSaveWithConfig(saveConfig);
           }}
-        >
-          Save
-        </Button>
+        />
       </div>
     </div>
   );
@@ -811,9 +808,7 @@ function QueryStepConfig({
         <Button variant="outline" size="sm" onClick={onClose}>
           Cancel
         </Button>
-        <Button size="sm" onClick={onSave}>
-          Save
-        </Button>
+        <ApplyStepButton onApply={onSave} />
       </div>
     </div>
   );
@@ -942,9 +937,7 @@ function InputStepConfig({
         <Button variant="outline" size="sm" onClick={onClose}>
           Cancel
         </Button>
-        <Button size="sm" onClick={onSave}>
-          Save
-        </Button>
+        <ApplyStepButton onApply={onSave} />
       </div>
     </div>
   );
@@ -1058,9 +1051,7 @@ function OutputStepConfig({
         <Button variant="outline" size="sm" onClick={onClose}>
           Cancel
         </Button>
-        <Button size="sm" onClick={onSave}>
-          Save
-        </Button>
+        <ApplyStepButton onApply={onSave} />
       </div>
     </div>
   );
@@ -1143,9 +1134,7 @@ function MessageStepConfig({
         <Button variant="outline" size="sm" onClick={onClose}>
           Cancel
         </Button>
-        <Button size="sm" onClick={onSave}>
-          Save
-        </Button>
+        <ApplyStepButton onApply={onSave} />
       </div>
     </div>
   );
@@ -1214,9 +1203,7 @@ function SleepStepConfig({
         <Button variant="outline" size="sm" onClick={onClose}>
           Cancel
         </Button>
-        <Button size="sm" onClick={onSave}>
-          Save
-        </Button>
+        <ApplyStepButton onApply={onSave} />
       </div>
     </div>
   );
@@ -1287,9 +1274,7 @@ function TransformStepConfig({
         <Button variant="outline" size="sm" onClick={onClose}>
           Cancel
         </Button>
-        <Button size="sm" onClick={onSave}>
-          Save
-        </Button>
+        <ApplyStepButton onApply={onSave} />
       </div>
     </div>
   );
@@ -1439,9 +1424,7 @@ function ContainerStepConfig({
         <Button variant="outline" size="sm" onClick={onClose}>
           Cancel
         </Button>
-        <Button size="sm" onClick={onSave}>
-          Save
-        </Button>
+        <ApplyStepButton onApply={onSave} />
       </div>
     </div>
   );
@@ -1576,9 +1559,7 @@ function PipelineStepConfig({
         <Button variant="outline" size="sm" onClick={onClose}>
           Cancel
         </Button>
-        <Button size="sm" onClick={onSave}>
-          Save
-        </Button>
+        <ApplyStepButton onApply={onSave} />
       </div>
     </div>
   );

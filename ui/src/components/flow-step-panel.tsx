@@ -168,7 +168,7 @@ export function FlowStepPanel() {
             restResources={restResources}
             onSave={(updatedStep) => {
               onStepSave?.(updatedStep);
-              setSelectedStep(null);
+              setSelectedStep(updatedStep);
             }}
             onClose={handleClose}
           />

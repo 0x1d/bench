@@ -9,7 +9,7 @@ bench/
 ├── api/             # Go backend API
 ├── ui/              # React/TypeScript frontend (Vite)
 ├── flows/           # Flow definitions (Flowpipe HCL and JSON)
-├── docs/            # Documentation (database, filesystem, flows, infrastructure, rest, security)
+├── docs/            # Documentation (database, filesystem, flows, infrastructure, rest, schema-registry, security)
 ├── config.yaml      # Resource roots and flows config (see config.example.yaml)
 ├── dev.sh           # Run API and UI together for local development
 ├── example.env
@@ -122,6 +122,12 @@ If infrastructure is not configured or Terraform is not installed on the API hos
 
 See [docs/infrastructure.md](docs/infrastructure.md) for workflow details, API reference, and troubleshooting.
 
+## Schema registry
+
+The schema registry holds OpenAPI, AsyncAPI, and JSON Schema files declared under `resources.schemas`. REST resources can reference a registered OpenAPI document with `schemaId` (it takes precedence over `openapiSpec`). The Schemas page (`#schemas`) lists entries and shows a simple preview by type.
+
+See [docs/schema-registry.md](docs/schema-registry.md) for configuration, REST integration, UI, and API details.
+
 ## Documentation
 
 - [docs/database.md](docs/database.md) — Database integration API reference, query endpoint, and features
@@ -129,6 +135,7 @@ See [docs/infrastructure.md](docs/infrastructure.md) for workflow details, API r
 - [docs/filesystem.md](docs/filesystem.md) — File system resource manager API reference
 - [docs/infrastructure.md](docs/infrastructure.md) — Terraform workflow, command runbook, and API reference
 - [docs/rest.md](docs/rest.md) — REST resource proxy and OpenAPI-based tooling
+- [docs/schema-registry.md](docs/schema-registry.md) — Schema registry (OpenAPI / AsyncAPI / JSON Schema), REST `schemaId`, Schemas UI, API
 - [docs/security.md](docs/security.md) — Security concepts (API token, credentials, path traversal prevention)
 
 ## Resources (File System)
@@ -143,7 +150,8 @@ Configuration is in `config.yaml` (see `config.example.yaml`):
 
 - **resources.filesystem** — File browser roots: `id`, `label`, `path` per entry
 - **resources.databases** — PostgreSQL connections for the Database page
-- **resources.rest** — REST API resources for the REST page and flow HTTP steps
+- **resources.rest** — REST API resources for the REST page and flow HTTP steps (optional `schemaId` pointing at a registered OpenAPI schema)
+- **resources.schemas** — Registered schema files (OpenAPI, AsyncAPI, JSON Schema) for the registry API and UI
 - **flows** — Flow storage path and Flowpipe workspace URLs for the Flows page
 
 ## Development

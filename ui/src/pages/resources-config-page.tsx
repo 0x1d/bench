@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import yaml from 'js-yaml';
 import { Pencil, Plus, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -15,8 +15,9 @@ import {
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { cn } from '@/lib/utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useQueryClient } from '@tanstack/react-query';
-import { fetchConfig, fetchConfigExample, saveConfig } from '@/services/api';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { fetchConfig, fetchConfigExample, fetchSchemaContent, saveConfig } from '@/services/api';
+import { detectSchemaType, parseSchema } from '@/lib/schema-registry';
 import { useStatus } from '@/hooks/use-status';
 
 interface FilesystemResource {
@@ -97,6 +98,7 @@ type PanelMode =
   | 'edit-filesystem'
   | 'add-schema'
   | 'edit-schema'
+  | 'schema-detail'
   | 'add-database'
   | 'edit-database'
   | 'add-rest'
@@ -517,6 +519,12 @@ export function ResourcesConfigPage() {
     setPanelMode('edit-schema');
   };
 
+  const openSchemaDetail = (index: number) => {
+    setPanelIndex(index);
+    setPanelError(null);
+    setPanelMode('schema-detail');
+  };
+
   const openRemoveSchema = (index: number) => {
     setDeleteTarget({ type: 'schema', index });
   };
@@ -587,6 +595,37 @@ export function ResourcesConfigPage() {
     setPanelIndex(null);
     setPanelError(null);
   };
+
+  const schemaDetailId =
+    panelMode === 'schema-detail' && panelIndex != null
+      ? (state.schemas[panelIndex]?.id ?? '').trim()
+      : '';
+  const schemaDetailEntry =
+    panelMode === 'schema-detail' && panelIndex != null ? state.schemas[panelIndex] : null;
+
+  const {
+    data: schemaDetailRaw,
+    isLoading: schemaDetailLoading,
+    error: schemaDetailFetchError,
+  } = useQuery({
+    queryKey: ['schemas', 'content', schemaDetailId],
+    queryFn: () => fetchSchemaContent(schemaDetailId),
+    enabled: panelMode === 'schema-detail' && schemaDetailId.length > 0,
+  });
+
+  const schemaDetailParsed = useMemo(() => {
+    if (!schemaDetailEntry || schemaDetailRaw == null) return null;
+    const detected = detectSchemaType(schemaDetailRaw);
+    const kind =
+      schemaDetailEntry.type === 'openapi' ||
+      schemaDetailEntry.type === 'asyncapi' ||
+      schemaDetailEntry.type === 'json-schema'
+        ? schemaDetailEntry.type
+        : detected !== 'unknown'
+          ? detected
+          : 'openapi';
+    return parseSchema(schemaDetailRaw, kind);
+  }, [schemaDetailEntry, schemaDetailRaw]);
 
   const applyFilesystemDraft = async () => {
     const id = filesystemDraft.id.trim();
@@ -979,7 +1018,11 @@ export function ResourcesConfigPage() {
           ? 'Add schema'
           : panelMode === 'edit-schema'
             ? 'Edit schema'
-            : panelMode === 'add-database'
+            : panelMode === 'schema-detail'
+              ? schemaDetailEntry
+                ? `Schema: ${schemaDetailEntry.label?.trim() || schemaDetailEntry.id}`
+                : 'Schema details'
+              : panelMode === 'add-database'
               ? 'Add database resource'
               : panelMode === 'edit-database'
                 ? 'Edit database resource'
@@ -1001,8 +1044,10 @@ export function ResourcesConfigPage() {
   const panelDescription = panelMode?.includes('filesystem')
     ? 'Configure filesystem resource fields used for file browsing.'
     : panelMode === 'add-schema' || panelMode === 'edit-schema'
-      ? 'Register a schema file (OpenAPI, AsyncAPI, or JSON Schema). Path is relative to the config directory.'
-      : panelMode?.includes('database')
+      ? 'Path is relative to the config directory.'
+      : panelMode === 'schema-detail' && schemaDetailEntry
+        ? `${schemaDetailEntry.type} · ${schemaDetailEntry.source.path}`
+        : panelMode?.includes('database')
         ? 'Configure database resource fields.'
         : panelMode?.includes('rest')
           ? 'Configure REST API endpoint with optional auth. Use a registered OpenAPI schema or a spec file path.'
@@ -1167,6 +1212,101 @@ export function ResourcesConfigPage() {
                 Path to the schema file, relative to the Bench config directory.
               </p>
             </div>
+          </div>
+        )}
+
+        {panelMode === 'schema-detail' && schemaDetailEntry && (
+          <div className="space-y-4 text-sm">
+            <div className="grid grid-cols-1 gap-2 rounded-lg border border-border bg-muted/20 p-3 font-mono text-xs sm:grid-cols-2">
+              <div>
+                <span className="text-muted-foreground">ID</span>
+                <p className="break-all">{schemaDetailEntry.id}</p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Label</span>
+                <p>{schemaDetailEntry.label?.trim() || '—'}</p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Type</span>
+                <p>{schemaDetailEntry.type}</p>
+              </div>
+              <div className="sm:col-span-2">
+                <span className="text-muted-foreground">Source path</span>
+                <p className="break-all">{schemaDetailEntry.source.path}</p>
+              </div>
+            </div>
+
+            {schemaDetailId === '' && (
+              <p className="text-destructive text-sm">
+                This schema has no ID. Set an ID in Edit schema to load content.
+              </p>
+            )}
+            {schemaDetailLoading && (
+              <p className="text-muted-foreground">Loading schema content...</p>
+            )}
+            {schemaDetailFetchError && (
+              <p className="text-destructive">
+                {schemaDetailFetchError instanceof Error
+                  ? schemaDetailFetchError.message
+                  : 'Failed to load schema content'}
+              </p>
+            )}
+            {schemaDetailRaw != null && schemaDetailParsed && (
+              <div className="rounded-lg border border-border bg-card p-4">
+                {schemaDetailParsed.type === 'openapi' && (
+                  <div className="space-y-4">
+                    {schemaDetailParsed.data.groups.map((g) => (
+                      <div key={g.tag}>
+                        <h3 className="mb-2 font-medium">{g.tag}</h3>
+                        <ul className="space-y-1 font-mono text-xs">
+                          {g.operations.map((op, i) => (
+                            <li key={`${op.path}-${op.method}-${i}`}>
+                              <span className="text-muted-foreground">{op.method}</span> {op.path}
+                              {op.summary ? (
+                                <span className="ml-2 text-muted-foreground">— {op.summary}</span>
+                              ) : null}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {schemaDetailParsed.type === 'asyncapi' && (
+                  <div className="space-y-3">
+                    <h3 className="font-medium">Channels</h3>
+                    <ul className="space-y-2">
+                      {schemaDetailParsed.data.operations.map((op, i) => (
+                        <li key={`${op.channel}-${op.direction}-${i}`} className="font-mono text-xs">
+                          <span className="text-muted-foreground">{op.direction}</span> {op.channel}
+                          {op.summary ? (
+                            <span className="ml-2 text-muted-foreground">— {op.summary}</span>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {schemaDetailParsed.type === 'json-schema' && (
+                  <div className="space-y-2">
+                    {schemaDetailParsed.data.title && (
+                      <p className="font-medium">{schemaDetailParsed.data.title}</p>
+                    )}
+                    <p className="text-muted-foreground">Properties</p>
+                    <ul className="list-inside list-disc font-mono text-xs">
+                      {schemaDetailParsed.data.properties
+                        ? Object.keys(schemaDetailParsed.data.properties).map((k) => (
+                            <li key={k}>{k}</li>
+                          ))
+                        : null}
+                    </ul>
+                  </div>
+                )}
+                {schemaDetailParsed.type === 'unknown' && (
+                  <p className="text-muted-foreground">Could not parse this schema for preview.</p>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -1541,6 +1681,9 @@ export function ResourcesConfigPage() {
           <Button variant="outline" onClick={closePanel}>
             Cancel
           </Button>
+          {panelMode === 'schema-detail' && panelIndex != null && (
+            <Button onClick={() => openEditSchema(panelIndex)}>Edit schema</Button>
+          )}
         {(panelMode === 'add-filesystem' || panelMode === 'edit-filesystem') && (
           <Button onClick={applyFilesystemDraft}>
               {panelMode === 'add-filesystem' ? 'Add' : 'Save changes'}
@@ -1704,7 +1847,7 @@ export function ResourcesConfigPage() {
                       <tr
                         key={`schema-${index}`}
                         className="border-b border-border/50 last:border-b-0 cursor-pointer hover:bg-accent/30"
-                        onClick={() => openEditSchema(index)}
+                        onClick={() => openSchemaDetail(index)}
                       >
                         <td className="px-4 py-2 font-mono">{entry.id}</td>
                         <td className="px-4 py-2">{entry.label || '—'}</td>
@@ -2028,8 +2171,9 @@ export function ResourcesConfigPage() {
       </div>
       <div
         className={cn(
-          'bg-sidebar text-sidebar-foreground relative z-20 hidden min-h-0 w-[360px] flex-col overflow-auto border-l lg:flex',
-          panelOpen ? 'lg:flex' : 'lg:hidden'
+          'bg-sidebar text-sidebar-foreground relative z-20 hidden min-h-0 flex-col overflow-auto border-l lg:flex',
+          panelOpen ? 'lg:flex' : 'lg:hidden',
+          panelMode === 'schema-detail' ? 'lg:w-[min(560px,50vw)]' : 'lg:w-[360px]'
         )}
       >
         {panelBody}

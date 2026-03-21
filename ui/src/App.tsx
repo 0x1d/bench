@@ -150,15 +150,17 @@ export function App() {
                         <SidebarInset
                           className={cn(
                             'min-h-0',
-                            (hash.startsWith('flows/') || hash === 'resources') ? 'overflow-hidden' : 'overflow-auto'
+                            (hash.startsWith('flows/') || hash === 'resources' || hash === 'schemas')
+                              ? 'overflow-hidden'
+                              : 'overflow-auto'
                           )}
                         >
                           <section
                             id="main"
                             className={
-                              hash === 'resources'
+                              hash === 'resources' || hash === 'schemas'
                                 ? 'flex min-h-0 flex-1 flex-col items-stretch'
-                                : hash === 'filesystem' || hash === 'database' || hash === 'rest' || hash === 'schemas' || hash === 'infrastructure' || isFlowsSection(hash)
+                                : hash === 'filesystem' || hash === 'database' || hash === 'rest' || hash === 'infrastructure' || isFlowsSection(hash)
                                   ? 'flex min-h-0 flex-1 flex-col items-stretch p-4 md:p-6'
                                   : 'flex flex-1 items-start justify-center p-4 md:min-h-min'
                             }

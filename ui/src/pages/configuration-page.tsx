@@ -1,17 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Pencil, Plus, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
+import {
+  AgentConfigFields,
+  DatabaseResourceFields,
+  FilesystemResourceFields,
+  FlowsConfigFields,
+  InfrastructurePathFields,
+  RestResourceFields,
+  SchemaDetailPreview,
+  SchemaResourceFields,
+  WorkspaceResourceFields,
+} from '@/components/resource-config';
 import { cn } from '@/lib/utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useQuery } from '@tanstack/react-query';
@@ -27,7 +28,6 @@ import {
   type FlowsConfig,
   type InfrastructureConfig,
   type ResourceFormState,
-  type RestAuthConfig,
   type RestResource,
   type SchemaResourceEntry,
   type WorkspaceResource,
@@ -764,600 +764,50 @@ export function ConfigurationPage() {
 
       <div className="p-4">
         {(panelMode === 'add-workspace' || panelMode === 'edit-workspace') && (
-          <div className="space-y-3">
-            <div className="space-y-1">
-              <Label>ID</Label>
-              <Input
-                value={workspaceDraft.id}
-                onChange={(e) =>
-                  setWorkspaceDraft((prev) => ({ ...prev, id: e.target.value }))
-                }
-                placeholder="default"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Label</Label>
-              <Input
-                value={workspaceDraft.label}
-                onChange={(e) =>
-                  setWorkspaceDraft((prev) => ({ ...prev, label: e.target.value }))
-                }
-                placeholder="Default"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Flowpipe URL</Label>
-              <Input
-                value={workspaceDraft.flowpipeUrl}
-                onChange={(e) =>
-                  setWorkspaceDraft((prev) => ({ ...prev, flowpipeUrl: e.target.value }))
-                }
-                placeholder="http://localhost:7103"
-                className="font-mono"
-              />
-              <p className="text-xs text-muted-foreground">
-                Flowpipe server URL. Written as host in flows/workspaces.fpc when profile is initialized.
-              </p>
-            </div>
-          </div>
+          <WorkspaceResourceFields draft={workspaceDraft} onChange={setWorkspaceDraft} />
         )}
 
         {(panelMode === 'add-filesystem' || panelMode === 'edit-filesystem') && (
-          <div className="space-y-3">
-            <div className="space-y-1">
-              <Label>ID</Label>
-              <Input
-                value={filesystemDraft.id}
-                onChange={(e) =>
-                  setFilesystemDraft((prev) => ({ ...prev, id: e.target.value }))
-                }
-                placeholder="data"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Label</Label>
-              <Input
-                value={filesystemDraft.label}
-                onChange={(e) =>
-                  setFilesystemDraft((prev) => ({ ...prev, label: e.target.value }))
-                }
-                placeholder="Data"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Path</Label>
-              <Input
-                value={filesystemDraft.path}
-                onChange={(e) =>
-                  setFilesystemDraft((prev) => ({ ...prev, path: e.target.value }))
-                }
-                placeholder="/mnt/data"
-                className="font-mono"
-              />
-            </div>
-          </div>
+          <FilesystemResourceFields draft={filesystemDraft} onChange={setFilesystemDraft} />
         )}
 
         {(panelMode === 'add-schema' || panelMode === 'edit-schema') && (
-          <div className="space-y-3">
-            <div className="space-y-1">
-              <Label>ID</Label>
-              <Input
-                value={schemaDraft.id}
-                onChange={(e) =>
-                  setSchemaDraft((prev) => ({ ...prev, id: e.target.value }))
-                }
-                placeholder="petstore-api"
-                className="font-mono"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Label</Label>
-              <Input
-                value={schemaDraft.label}
-                onChange={(e) =>
-                  setSchemaDraft((prev) => ({ ...prev, label: e.target.value }))
-                }
-                placeholder="Petstore API"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Type</Label>
-              <Select
-                value={schemaDraft.type}
-                onValueChange={(v) =>
-                  setSchemaDraft((prev) => ({
-                    ...prev,
-                    type: v as SchemaResourceEntry['type'],
-                  }))
-                }
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Schema type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="openapi">openapi</SelectItem>
-                  <SelectItem value="asyncapi">asyncapi</SelectItem>
-                  <SelectItem value="json-schema">json-schema</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label>Source path</Label>
-              <Input
-                value={schemaDraft.source.path}
-                onChange={(e) =>
-                  setSchemaDraft((prev) => ({
-                    ...prev,
-                    source: { ...prev.source, path: e.target.value },
-                  }))
-                }
-                placeholder="./workspace/rest/openapi.json"
-                className="font-mono"
-              />
-              <p className="text-xs text-muted-foreground">
-                Path to the schema file, relative to the Bench config directory.
-              </p>
-            </div>
-          </div>
+          <SchemaResourceFields draft={schemaDraft} onChange={setSchemaDraft} />
         )}
 
         {panelMode === 'schema-detail' && schemaDetailEntry && (
-          <div className="space-y-4 text-sm">
-            <div className="grid grid-cols-1 gap-2 rounded-lg border border-border bg-muted/20 p-3 font-mono text-xs sm:grid-cols-2">
-              <div>
-                <span className="text-muted-foreground">ID</span>
-                <p className="break-all">{schemaDetailEntry.id}</p>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Label</span>
-                <p>{schemaDetailEntry.label?.trim() || '—'}</p>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Type</span>
-                <p>{schemaDetailEntry.type}</p>
-              </div>
-              <div className="sm:col-span-2">
-                <span className="text-muted-foreground">Source path</span>
-                <p className="break-all">{schemaDetailEntry.source.path}</p>
-              </div>
-            </div>
-
-            {schemaDetailId === '' && (
-              <p className="text-destructive text-sm">
-                This schema has no ID. Set an ID in Edit schema to load content.
-              </p>
-            )}
-            {schemaDetailLoading && (
-              <p className="text-muted-foreground">Loading schema content...</p>
-            )}
-            {schemaDetailFetchError && (
-              <p className="text-destructive">
-                {schemaDetailFetchError instanceof Error
-                  ? schemaDetailFetchError.message
-                  : 'Failed to load schema content'}
-              </p>
-            )}
-            {schemaDetailRaw != null && schemaDetailParsed && (
-              <div className="rounded-lg border border-border bg-card p-4">
-                {schemaDetailParsed.type === 'openapi' && (
-                  <div className="space-y-4">
-                    {schemaDetailParsed.data.groups.map((g) => (
-                      <div key={g.tag}>
-                        <h3 className="mb-2 font-medium">{g.tag}</h3>
-                        <ul className="space-y-1 font-mono text-xs">
-                          {g.operations.map((op, i) => (
-                            <li key={`${op.path}-${op.method}-${i}`}>
-                              <span className="text-muted-foreground">{op.method}</span> {op.path}
-                              {op.summary ? (
-                                <span className="ml-2 text-muted-foreground">— {op.summary}</span>
-                              ) : null}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {schemaDetailParsed.type === 'asyncapi' && (
-                  <div className="space-y-3">
-                    <h3 className="font-medium">Channels</h3>
-                    <ul className="space-y-2">
-                      {schemaDetailParsed.data.operations.map((op, i) => (
-                        <li key={`${op.channel}-${op.direction}-${i}`} className="font-mono text-xs">
-                          <span className="text-muted-foreground">{op.direction}</span> {op.channel}
-                          {op.summary ? (
-                            <span className="ml-2 text-muted-foreground">— {op.summary}</span>
-                          ) : null}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                {schemaDetailParsed.type === 'json-schema' && (
-                  <div className="space-y-2">
-                    {schemaDetailParsed.data.title && (
-                      <p className="font-medium">{schemaDetailParsed.data.title}</p>
-                    )}
-                    <p className="text-muted-foreground">Properties</p>
-                    <ul className="list-inside list-disc font-mono text-xs">
-                      {schemaDetailParsed.data.properties
-                        ? Object.keys(schemaDetailParsed.data.properties).map((k) => (
-                            <li key={k}>{k}</li>
-                          ))
-                        : null}
-                    </ul>
-                  </div>
-                )}
-                {schemaDetailParsed.type === 'unknown' && (
-                  <p className="text-muted-foreground">Could not parse this schema for preview.</p>
-                )}
-              </div>
-            )}
-          </div>
+          <SchemaDetailPreview
+            entry={schemaDetailEntry}
+            schemaId={schemaDetailId}
+            loading={schemaDetailLoading}
+            fetchError={schemaDetailFetchError}
+            raw={schemaDetailRaw}
+            parsed={schemaDetailParsed}
+          />
         )}
 
         {(panelMode === 'add-rest' || panelMode === 'edit-rest') && (
-          <div className="space-y-3">
-            <div className="space-y-1">
-              <Label>ID</Label>
-              <Input
-                value={restDraft.id}
-                onChange={(e) =>
-                  setRestDraft((prev) => ({ ...prev, id: e.target.value }))
-                }
-                placeholder="petstore"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Label</Label>
-              <Input
-                value={restDraft.label}
-                onChange={(e) =>
-                  setRestDraft((prev) => ({ ...prev, label: e.target.value }))
-                }
-                placeholder="Petstore API"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Base URL</Label>
-              <Input
-                value={restDraft.baseUrl}
-                onChange={(e) =>
-                  setRestDraft((prev) => ({ ...prev, baseUrl: e.target.value }))
-                }
-                placeholder="https://api.example.com"
-                className="font-mono"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>OpenAPI schema (registry)</Label>
-              <Select
-                value={restDraft.schemaId?.trim() ? restDraft.schemaId : '__none__'}
-                onValueChange={(v) =>
-                  setRestDraft((prev) => ({
-                    ...prev,
-                    schemaId: v === '__none__' ? '' : v,
-                  }))
-                }
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="None (use path below)" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">None (use path below)</SelectItem>
-                  {state.schemas
-                    .filter((s) => s.type === 'openapi')
-                    .map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.label?.trim() || s.id}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                Use a registered OpenAPI schema (recommended) or specify a file path below. Registry schema
-                takes precedence.
-              </p>
-            </div>
-            <div className="space-y-1">
-              <Label>OpenAPI spec path</Label>
-              <Input
-                value={restDraft.openapiSpec}
-                onChange={(e) =>
-                  setRestDraft((prev) => ({ ...prev, openapiSpec: e.target.value }))
-                }
-                placeholder="specs/api.json"
-                className="font-mono"
-              />
-              <p className="text-xs text-muted-foreground">
-                Path relative to config directory. Leave empty when using a registry schema above.
-              </p>
-            </div>
-            <div className="space-y-1">
-              <Label>Auth type</Label>
-              <Select
-                value={restDraft.auth?.type ?? 'none'}
-                onValueChange={(v) =>
-                  setRestDraft((prev) => ({
-                    ...prev,
-                    auth: {
-                      ...prev.auth,
-                      type: v as RestAuthConfig['type'],
-                    },
-                  }))
-                }
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">None</SelectItem>
-                  <SelectItem value="basic">Basic</SelectItem>
-                  <SelectItem value="bearer">Bearer</SelectItem>
-                  <SelectItem value="apiKey">API Key</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {restDraft.auth?.type === 'basic' && (
-              <>
-                <div className="space-y-1">
-                  <Label>Username</Label>
-                  <Input
-                    value={restDraft.auth.username ?? ''}
-                    onChange={(e) =>
-                      setRestDraft((prev) => ({
-                        ...prev,
-                        auth: { ...prev.auth!, username: e.target.value },
-                      }))
-                    }
-                    placeholder={'${BENCH_REST_USER}'}
-                    className="font-mono"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label>Password</Label>
-                  <Input
-                    type="password"
-                    value={restDraft.auth.password ?? ''}
-                    onChange={(e) =>
-                      setRestDraft((prev) => ({
-                        ...prev,
-                        auth: { ...prev.auth!, password: e.target.value },
-                      }))
-                    }
-                    placeholder={'${BENCH_REST_PASS}'}
-                    className="font-mono"
-                  />
-                </div>
-              </>
-            )}
-            {restDraft.auth?.type === 'bearer' && (
-              <div className="space-y-1">
-                <Label>Token</Label>
-                <Input
-                  type="password"
-                  value={restDraft.auth.token ?? ''}
-                  onChange={(e) =>
-                    setRestDraft((prev) => ({
-                      ...prev,
-                      auth: { ...prev.auth!, token: e.target.value },
-                    }))
-                  }
-                  placeholder={'${BENCH_REST_TOKEN}'}
-                  className="font-mono"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Use env placeholders for secrets.
-                </p>
-              </div>
-            )}
-            {restDraft.auth?.type === 'apiKey' && (
-              <>
-                <div className="space-y-1">
-                  <Label>Header/param name</Label>
-                  <Input
-                    value={restDraft.auth.name ?? ''}
-                    onChange={(e) =>
-                      setRestDraft((prev) => ({
-                        ...prev,
-                        auth: { ...prev.auth!, name: e.target.value },
-                      }))
-                    }
-                    placeholder="X-API-Key"
-                    className="font-mono"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label>Location</Label>
-                  <Select
-                    value={restDraft.auth.in ?? 'header'}
-                    onValueChange={(v) =>
-                      setRestDraft((prev) => ({
-                        ...prev,
-                        auth: { ...prev.auth!, in: v },
-                      }))
-                    }
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="header">Header</SelectItem>
-                      <SelectItem value="query">Query</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1">
-                  <Label>Value</Label>
-                  <Input
-                    type="password"
-                    value={restDraft.auth.value ?? ''}
-                    onChange={(e) =>
-                      setRestDraft((prev) => ({
-                        ...prev,
-                        auth: { ...prev.auth!, value: e.target.value },
-                      }))
-                    }
-                    placeholder={'${BENCH_REST_API_KEY}'}
-                    className="font-mono"
-                  />
-                </div>
-              </>
-            )}
-          </div>
+          <RestResourceFields
+            draft={restDraft}
+            onChange={setRestDraft}
+            openapiSchemas={state.schemas.filter((s) => s.type === 'openapi')}
+          />
         )}
 
         {panelMode === 'edit-flows' && (
-          <div className="space-y-3">
-            <div className="space-y-1">
-              <Label>Flows directory</Label>
-              <Input
-                value={flowsDraft.path}
-                onChange={(e) =>
-                  setFlowsDraft((prev) => ({ ...prev, path: e.target.value }))
-                }
-                placeholder="./flows"
-                className="font-mono"
-              />
-              <p className="text-xs text-muted-foreground">
-                Path to store flow JSON and .fp files. Relative to config directory.
-              </p>
-            </div>
-          </div>
+          <FlowsConfigFields draft={flowsDraft} onChange={setFlowsDraft} />
         )}
 
         {panelMode === 'edit-infrastructure' && (
-          <div className="space-y-3">
-            <div className="space-y-1">
-              <Label>Infrastructure directory</Label>
-              <Input
-                value={infrastructureDraft.path}
-                onChange={(e) =>
-                  setInfrastructureDraft((prev) => ({ ...prev, path: e.target.value }))
-                }
-                placeholder="./workspace/infra"
-                className="font-mono"
-              />
-              <p className="text-xs text-muted-foreground">
-                Path for Terraform .tf files. Relative to config directory.
-              </p>
-            </div>
-          </div>
+          <InfrastructurePathFields draft={infrastructureDraft} onChange={setInfrastructureDraft} />
         )}
 
         {(panelMode === 'add-database' || panelMode === 'edit-database') && (
-          <div className="space-y-3">
-            <div className="space-y-1">
-              <Label>ID</Label>
-              <Input
-                value={databaseDraft.id}
-                onChange={(e) =>
-                  setDatabaseDraft((prev) => ({ ...prev, id: e.target.value }))
-                }
-                placeholder="main"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Label</Label>
-              <Input
-                value={databaseDraft.label}
-                onChange={(e) =>
-                  setDatabaseDraft((prev) => ({ ...prev, label: e.target.value }))
-                }
-                placeholder="Main DB"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>URL</Label>
-              <Input
-                value={databaseDraft.url}
-                onChange={(e) =>
-                  setDatabaseDraft((prev) => ({ ...prev, url: e.target.value }))
-                }
-                placeholder="${BENCH_DB_MAIN_URL}"
-                className="font-mono"
-              />
-              <p className="text-xs text-muted-foreground">
-                URL supports env placeholders like{' '}
-                <code className="rounded bg-muted px-1">${'{BENCH_DB_MAIN_URL}'}</code>.
-              </p>
-            </div>
-            <label className="flex items-center gap-2 text-sm">
-              <Checkbox
-                checked={databaseDraft.enabled}
-                onCheckedChange={(v) =>
-                  setDatabaseDraft((prev) => ({ ...prev, enabled: v === true }))
-                }
-              />
-              Enabled
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <Checkbox
-                checked={databaseDraft.default}
-                onCheckedChange={(v) =>
-                  setDatabaseDraft((prev) => ({ ...prev, default: v === true }))
-                }
-              />
-              Default
-            </label>
-          </div>
+          <DatabaseResourceFields draft={databaseDraft} onChange={setDatabaseDraft} />
         )}
 
         {panelMode === 'edit-agent' && (
-          <div className="space-y-3">
-            <div className="space-y-1">
-              <Label>Endpoint</Label>
-              <Input
-                value={agentDraft.endpoint}
-                onChange={(e) =>
-                  setAgentDraft((prev) => ({ ...prev, endpoint: e.target.value }))
-                }
-                placeholder="http://localhost:3001"
-                className="font-mono"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Working directory</Label>
-              <Input
-                value={agentDraft.workingDirectory}
-                onChange={(e) =>
-                  setAgentDraft((prev) => ({ ...prev, workingDirectory: e.target.value }))
-                }
-                placeholder="/home/user/bench/workspace"
-                className="font-mono"
-              />
-              <p className="text-xs text-muted-foreground">
-                Mandatory path where the agent will perform tasks.
-              </p>
-            </div>
-            <div className="space-y-1">
-              <Label>Agent type</Label>
-              <Select
-                value={agentDraft.agent}
-                onValueChange={(v) => setAgentDraft((prev) => ({ ...prev, agent: v }))}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="cursor">Cursor</SelectItem>
-                  <SelectItem value="gemini">Gemini</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label>Model (optional)</Label>
-              <Input
-                value={agentDraft.model}
-                onChange={(e) =>
-                  setAgentDraft((prev) => ({ ...prev, model: e.target.value }))
-                }
-                placeholder="gemini-2.0-flash"
-                className="font-mono"
-              />
-            </div>
-          </div>
+          <AgentConfigFields draft={agentDraft} onChange={setAgentDraft} />
         )}
 
         {panelError && <p className="mt-3 text-sm text-destructive">{panelError}</p>}

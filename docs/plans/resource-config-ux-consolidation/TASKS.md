@@ -25,10 +25,10 @@ updated: 2025-03-21
 
 ## Phase 2: Extract editor components
 
-**Phase status**: TODO  
+**Phase status**: DONE  
 **Deliverable**: Reusable settings UI for each resource type (and agent form for reuse).
 
-- [ ] **2.1** Extract resource editor components — [specs/2.1-extract-editor-components.md](specs/2.1-extract-editor-components.md)
+- [x] **2.1** Extract resource editor components — [specs/2.1-extract-editor-components.md](specs/2.1-extract-editor-components.md)
 
 ---
 
@@ -67,9 +67,9 @@ updated: 2025-03-21
 | Phase | Tasks | Done | Status |
 |-------|-------|------|--------|
 | 1 | 3 | 3 | DONE |
-| 2 | 1 | 0 | TODO |
+| 2 | 1 | 1 | DONE |
 | 3 | 3 | 0 | TODO |
 | 4 | 1 | 0 | TODO |
 | 5 | 2 | 0 | TODO |
 
-**Next up**: Phase 2 — Task 2.1 (extract resource editor components).
+**Next up**: Phase 3 — Task 3.1 (integrate Filesystem and Database pages).

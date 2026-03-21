@@ -21,12 +21,12 @@ updated: 2025-03-21
 | Phase | Status | Description |
 |-------|--------|-------------|
 | 1 | DONE | Rename modules; config lib; RMW hook |
-| 2 | TODO | Extract editor components |
+| 2 | DONE | Extract editor components |
 | 3 | TODO | Integrate Filesystem/DB, REST/Schema, Flows/Infra |
 | 4 | TODO | Configuration Overview + Agent |
 | 5 | TODO | Copy, queries, verification |
 
-**Next up**: Phase 2 — Task 2.1 — Extract resource editor components from `configuration-page.tsx`.
+**Next up**: Phase 3 — Task 3.1 — Integrate Filesystem and Database pages (Browse | Settings tabs).
 
 ## How to use this plan
 

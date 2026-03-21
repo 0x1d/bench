@@ -124,7 +124,7 @@ See [docs/infrastructure.md](docs/infrastructure.md) for workflow details, API r
 
 ## Schema registry
 
-The schema registry holds OpenAPI, AsyncAPI, and JSON Schema files declared under `resources.schemas`. REST resources can reference a registered OpenAPI document with `schemaId` (it takes precedence over `openapiSpec`). The Schemas page (`#schemas`) lists entries and shows a simple preview by type.
+The schema registry holds OpenAPI, AsyncAPI, and JSON Schema files declared under `resources.schemas`. REST resources can reference a registered OpenAPI document with `schemaId` (it takes precedence over `openapiSpec`). Register and edit schemas on the Configuration page (`#configuration`); the Schemas page (`#schemas`) lists entries and shows a simple preview by type.
 
 See [docs/schema-registry.md](docs/schema-registry.md) for configuration, REST integration, UI, and API details.
 
@@ -138,9 +138,9 @@ See [docs/schema-registry.md](docs/schema-registry.md) for configuration, REST i
 - [docs/schema-registry.md](docs/schema-registry.md) — Schema registry (OpenAPI / AsyncAPI / JSON Schema), REST `schemaId`, Schemas UI, API
 - [docs/security.md](docs/security.md) — Security concepts (API token, credentials, path traversal prevention)
 
-## Resources (File System)
+## Filesystem
 
-The Resources page provides a file browser for configured directory roots. Configure roots in `config.yaml` under `resources.filesystem`. Each entry has `id`, `label`, and `path` (absolute or relative to the config file). Supports list, download, upload, create folder, rename, and delete.
+The Configuration page (`#configuration`) provides a file browser for configured directory roots. Configure roots in `config.yaml` under `resources.filesystem`. Each entry has `id`, `label`, and `path` (absolute or relative to the config file). Supports list, download, upload, create folder, rename, and delete.
 
 See [docs/filesystem.md](docs/filesystem.md) for the full API reference.
 

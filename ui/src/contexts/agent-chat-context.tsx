@@ -53,7 +53,7 @@ export function AgentChatProvider({ children }: { children: React.ReactNode }) {
 
             const agentCfg = parsed.agent;
             if (!agentCfg || !agentCfg.workingDirectory) {
-                throw new Error('Agent is not configured. Please configure it in the Resources page (mandatory: working directory).');
+                throw new Error('Agent is not configured. Please configure it on the Configuration page (mandatory: working directory).');
             }
 
             const request: PromptRequest = {

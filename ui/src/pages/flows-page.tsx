@@ -324,7 +324,7 @@ export function FlowsPage() {
           <Workflow className="mx-auto size-10 text-muted-foreground" />
           <p className="mt-2 text-sm text-muted-foreground">No flow workspaces configured</p>
           <p className="mt-1 text-xs text-muted-foreground">
-            Add workspaces in the Resources config page to get started.
+            Add workspaces on the Configuration page to get started.
           </p>
         </div>
       </div>

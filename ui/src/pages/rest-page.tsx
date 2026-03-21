@@ -59,7 +59,7 @@ export function RestPage() {
         </nav>
         <NotConfiguredCard
           title="No REST resources configured"
-          description="Add REST API endpoints in the Resources config page."
+          description="Add REST API endpoints on the Configuration page."
         />
       </div>
     );

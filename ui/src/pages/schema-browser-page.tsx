@@ -81,7 +81,7 @@ export function SchemaBrowserPage() {
         </nav>
         <NotConfiguredCard
           title="No schemas registered"
-          description="Add schemas in the Resources config page."
+          description="Add schemas on the Configuration page."
         />
       </div>
     );

@@ -139,7 +139,7 @@ export interface RootsResponse {
 }
 
 export async function fetchRoots(): Promise<RootsResponse> {
-  const response = await fetch(`${API_BASE}/resources/roots`);
+  const response = await fetch(`${API_BASE}/configuration/roots`);
   if (!response.ok) {
     throw new Error(`Failed to fetch roots: ${response.status} ${response.statusText}`);
   }
@@ -151,7 +151,7 @@ export async function fetchResourceList(
   path: string
 ): Promise<ResourceListResponse> {
   const params = new URLSearchParams({ root, path: path || '.' });
-  const response = await fetch(`${API_BASE}/resources?${params}`);
+  const response = await fetch(`${API_BASE}/configuration?${params}`);
   if (!response.ok) {
     throw new Error(`Failed to list resources: ${response.status} ${response.statusText}`);
   }
@@ -163,7 +163,7 @@ export async function fetchResourceTree(
   path: string
 ): Promise<TreeResponse> {
   const params = new URLSearchParams({ root, path: path || '.', recursive: 'true' });
-  const response = await fetch(`${API_BASE}/resources?${params}`);
+  const response = await fetch(`${API_BASE}/configuration?${params}`);
   if (!response.ok) {
     throw new Error(`Failed to list tree: ${response.status} ${response.statusText}`);
   }
@@ -172,7 +172,7 @@ export async function fetchResourceTree(
 
 export async function downloadFile(root: string, path: string): Promise<Blob> {
   const params = new URLSearchParams({ root, path });
-  const response = await fetch(`${API_BASE}/resources/download?${params}`);
+  const response = await fetch(`${API_BASE}/configuration/download?${params}`);
   if (!response.ok) {
     throw new Error(`Failed to download: ${response.status} ${response.statusText}`);
   }
@@ -185,7 +185,7 @@ export async function downloadFileIfExists(
   path: string
 ): Promise<Blob | null> {
   const params = new URLSearchParams({ root, path });
-  const response = await fetch(`${API_BASE}/resources/download?${params}`);
+  const response = await fetch(`${API_BASE}/configuration/download?${params}`);
   if (response.status === 404) return null;
   if (!response.ok) {
     throw new Error(`Failed to download: ${response.status} ${response.statusText}`);
@@ -237,7 +237,7 @@ export async function uploadFile(
   const formData = new FormData();
   formData.append('file', file);
 
-  const response = await fetch(`${API_BASE}/resources?${params}`, {
+  const response = await fetch(`${API_BASE}/configuration?${params}`, {
     method: 'POST',
     body: formData,
   });
@@ -258,7 +258,7 @@ export function uploadFileWithProgress(
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     const params = new URLSearchParams({ root, path: path || '.' });
-    xhr.open('POST', `${API_BASE}/resources?${params}`);
+    xhr.open('POST', `${API_BASE}/configuration?${params}`);
 
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable) onProgress(e.loaded, e.total);
@@ -299,7 +299,7 @@ export async function createFolder(
   name: string
 ): Promise<void> {
   const params = new URLSearchParams({ root, path: path || '.' });
-  const response = await fetch(`${API_BASE}/resources?${params}`, {
+  const response = await fetch(`${API_BASE}/configuration?${params}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ action: 'mkdir', name }),
@@ -315,7 +315,7 @@ export async function renameResource(
   path: string,
   newName: string
 ): Promise<void> {
-  const response = await fetch(`${API_BASE}/resources`, {
+  const response = await fetch(`${API_BASE}/configuration`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ root, path, newName }),
@@ -331,7 +331,7 @@ export async function moveResource(
   path: string,
   destination: string
 ): Promise<void> {
-  const response = await fetch(`${API_BASE}/resources`, {
+  const response = await fetch(`${API_BASE}/configuration`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ root, path, destination }),
@@ -344,7 +344,7 @@ export async function moveResource(
 
 export async function deleteResource(root: string, path: string): Promise<void> {
   const params = new URLSearchParams({ root, path });
-  const response = await fetch(`${API_BASE}/resources?${params}`, {
+  const response = await fetch(`${API_BASE}/configuration?${params}`, {
     method: 'DELETE',
   });
   if (!response.ok) {

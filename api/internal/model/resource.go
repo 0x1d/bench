@@ -16,12 +16,12 @@ type ResourceEntry struct {
 	Mtime int64  `json:"mtime,omitempty"`
 }
 
-// RootsResponse is the response for GET /api/resources/roots.
+// RootsResponse is the response for GET /api/configuration/roots (and legacy GET /api/resources/roots).
 type RootsResponse struct {
 	Roots []Root `json:"roots"`
 }
 
-// ListResponse is the response for GET /api/resources (list).
+// ListResponse is the response for GET /api/configuration (list) and legacy GET /api/resources.
 type ListResponse struct {
 	Entries []ResourceEntry `json:"entries"`
 	Roots   []Root          `json:"roots"`
@@ -37,20 +37,20 @@ type TreeEntry struct {
 	Children []TreeEntry `json:"children,omitempty"`
 }
 
-// TreeResponse is the response for GET /api/resources?recursive=true.
+// TreeResponse is the response for GET /api/configuration?recursive=true (and legacy /api/resources).
 type TreeResponse struct {
 	Entries []TreeEntry `json:"entries"`
 	Roots   []Root      `json:"roots"`
 }
 
-// RenameRequest is the request body for PATCH /api/resources.
+// RenameRequest is the request body for PATCH /api/configuration (and legacy PATCH /api/resources).
 type RenameRequest struct {
 	Root    string `json:"root"`
 	Path    string `json:"path"`
 	NewName string `json:"newName"`
 }
 
-// MoveRequest is the request body for PUT /api/resources (move).
+// MoveRequest is the request body for PUT /api/configuration (move) and legacy PUT /api/resources.
 type MoveRequest struct {
 	Root        string `json:"root"`
 	Path        string `json:"path"`

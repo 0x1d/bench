@@ -641,7 +641,7 @@ export function InfrastructurePage() {
       <div className="flex w-full min-h-0 flex-1 flex-col gap-4">
         <NotConfiguredCard
           title="Infrastructure not configured"
-          description="Add infrastructure.path to config.yaml (e.g. ./workspace/infra) in the Resources config page."
+          description="Add infrastructure.path to config.yaml (e.g. ./workspace/infra) on the Configuration page."
         />
       </div>
     );

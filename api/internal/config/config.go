@@ -97,7 +97,8 @@ type WorkspaceEntry struct {
 	FlowpipeURL string `yaml:"flowpipeUrl,omitempty" json:"flowpipeUrl,omitempty"` // Flowpipe server URL (host in workspaces.fpc)
 }
 
-// ResourcesConfig is the resources section of config.yaml.
+// ResourcesConfig is the `resources` section of config.yaml (filesystem, databases, REST, schemas).
+// It is edited in the UI on the Configuration page.
 type ResourcesConfig struct {
 	Filesystem []FilesystemEntry `yaml:"filesystem"`
 	Databases  []DatabaseEntry   `yaml:"databases"`

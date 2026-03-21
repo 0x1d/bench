@@ -274,7 +274,7 @@ export function StatusPage() {
             </dl>
             {!statusData.flows?.configured && (
               <p className="mt-2 text-sm text-muted-foreground">
-                Configure flows in the Resources config page.
+                Configure flows on the Configuration page.
               </p>
             )}
           </div>
@@ -323,7 +323,7 @@ export function StatusPage() {
             </div>
             {!statusData.rest?.configured && (
               <p className="mt-2 text-sm text-muted-foreground">
-                Add REST resources in the Resources config page.
+                Add REST resources on the Configuration page.
               </p>
             )}
           </div>

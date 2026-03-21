@@ -27,8 +27,12 @@ import { AgentChat } from '@/components/agent-chat';
 import { cn } from '@/lib/utils';
 import { Toaster } from 'sonner';
 
+function normalizeHashSegment(raw: string) {
+  return raw === 'resources' ? 'configuration' : raw;
+}
+
 function getHash() {
-  return window.location.hash.slice(1) || 'status';
+  return normalizeHashSegment(window.location.hash.slice(1) || 'status');
 }
 
 function isFlowsSection(hash: string) {
@@ -121,6 +125,12 @@ export function App() {
   const [hash, setHash] = useState(getHash);
 
   useEffect(() => {
+    if (window.location.hash === '#resources') {
+      window.location.replace('#configuration');
+    }
+  }, []);
+
+  useEffect(() => {
     const onHashChange = () => setHash(getHash());
     window.addEventListener('hashchange', onHashChange);
     return () => window.removeEventListener('hashchange', onHashChange);
@@ -150,7 +160,7 @@ export function App() {
                         <SidebarInset
                           className={cn(
                             'min-h-0',
-                            (hash.startsWith('flows/') || hash === 'resources' || hash === 'schemas')
+                            (hash.startsWith('flows/') || hash === 'configuration' || hash === 'schemas')
                               ? 'overflow-hidden'
                               : 'overflow-auto'
                           )}
@@ -158,7 +168,7 @@ export function App() {
                           <section
                             id="main"
                             className={
-                              hash === 'resources' || hash === 'schemas'
+                              hash === 'configuration' || hash === 'schemas'
                                 ? 'flex min-h-0 flex-1 flex-col items-stretch'
                                 : hash === 'filesystem' || hash === 'database' || hash === 'rest' || hash === 'infrastructure' || isFlowsSection(hash)
                                   ? 'flex min-h-0 flex-1 flex-col items-stretch p-4 md:p-6'
@@ -166,14 +176,14 @@ export function App() {
                             }
                           >
                             {hash === 'filesystem' && <FilesystemPage />}
-                            {hash === 'resources' && <ResourcesConfigPage />}
+                            {hash === 'configuration' && <ResourcesConfigPage />}
                             {hash === 'rest' && <RestPage />}
                             {hash === 'schemas' && <SchemaBrowserPage />}
                             {hash === 'database' && <DatabasePage />}
                             {hash === 'flows' && <FlowsPage />}
                             {hash.startsWith('flows/') && <FlowEditorPage />}
                             {hash === 'infrastructure' && <InfrastructurePage />}
-                            {hash !== 'filesystem' && hash !== 'resources' && hash !== 'rest' && hash !== 'schemas' && hash !== 'database' && hash !== 'infrastructure' && !isFlowsSection(hash) && <StatusPage />}
+                            {hash !== 'filesystem' && hash !== 'configuration' && hash !== 'rest' && hash !== 'schemas' && hash !== 'database' && hash !== 'infrastructure' && !isFlowsSection(hash) && <StatusPage />}
                           </section>
                         </SidebarInset>
                         <FileViewer />

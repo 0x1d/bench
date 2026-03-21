@@ -28,7 +28,7 @@ func TestHandleResourceRoots(t *testing.T) {
 	cfgPath := writeTestConfig(t, tmp, tmp)
 	t.Setenv("BENCH_CONFIG", cfgPath)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/resources/roots", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/configuration/roots", nil)
 	rec := httptest.NewRecorder()
 
 	HandleResourceRoots(rec, req)
@@ -62,7 +62,7 @@ func TestHandleResourceList(t *testing.T) {
 		t.Fatalf("setup: %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/api/resources?root=default&path=.", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/configuration?root=default&path=.", nil)
 	rec := httptest.NewRecorder()
 
 	HandleResourceList(rec, req)
@@ -97,7 +97,7 @@ func TestHandleResourceList_RootNotFound(t *testing.T) {
 	cfgPath := writeTestConfig(t, tmp, tmp)
 	t.Setenv("BENCH_CONFIG", cfgPath)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/resources?root=nonexistent&path=.", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/configuration?root=nonexistent&path=.", nil)
 	rec := httptest.NewRecorder()
 
 	HandleResourceList(rec, req)
@@ -116,7 +116,7 @@ func TestHandleResourceDownload(t *testing.T) {
 		t.Fatalf("setup: %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/api/resources/download?root=default&path=file.txt", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/configuration/download?root=default&path=file.txt", nil)
 	rec := httptest.NewRecorder()
 
 	HandleResourceDownload(rec, req)
@@ -143,7 +143,7 @@ func TestHandleResourcePost_Upload(t *testing.T) {
 	part.Write([]byte("uploaded content"))
 	w.Close()
 
-	req := httptest.NewRequest(http.MethodPost, "/api/resources?root=default&path=.", &buf)
+	req := httptest.NewRequest(http.MethodPost, "/api/configuration?root=default&path=.", &buf)
 	req.Header.Set("Content-Type", w.FormDataContentType())
 	rec := httptest.NewRecorder()
 
@@ -167,7 +167,7 @@ func TestHandleResourcePost_CreateDir(t *testing.T) {
 	t.Setenv("BENCH_CONFIG", cfgPath)
 
 	body := []byte(`{"action":"mkdir","name":"newfolder"}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/resources?root=default&path=.", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/configuration?root=default&path=.", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
@@ -194,7 +194,7 @@ func TestHandleResourcePatch(t *testing.T) {
 	}
 
 	body := []byte(`{"root":"default","path":"oldname.txt","newName":"newname.txt"}`)
-	req := httptest.NewRequest(http.MethodPatch, "/api/resources", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPatch, "/api/configuration", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
@@ -220,7 +220,7 @@ func TestHandleResourceDelete(t *testing.T) {
 		t.Fatalf("setup: %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodDelete, "/api/resources?root=default&path=todelete.txt", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/api/configuration?root=default&path=todelete.txt", nil)
 	rec := httptest.NewRecorder()
 
 	HandleResourceDelete(rec, req)
@@ -230,5 +230,23 @@ func TestHandleResourceDelete(t *testing.T) {
 	}
 	if _, err := os.Stat(filePath); err == nil {
 		t.Error("file should be deleted")
+	}
+}
+
+func TestRegisterRoutes_FilesystemConfigurationAndLegacyAlias(t *testing.T) {
+	tmp := t.TempDir()
+	cfgPath := writeTestConfig(t, tmp, tmp)
+	t.Setenv("BENCH_CONFIG", cfgPath)
+
+	mux := http.NewServeMux()
+	RegisterRoutes(mux)
+
+	for _, path := range []string{"/api/configuration/roots", "/api/resources/roots"} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s: expected status %d, got %d", path, http.StatusOK, rec.Code)
+		}
 	}
 }

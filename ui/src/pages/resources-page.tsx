@@ -108,7 +108,7 @@ export function FilesystemPage() {
       <div className="flex w-full min-h-0 flex-1 flex-col gap-4">
         <NotConfiguredCard
           title="No filesystem resources configured"
-          description="Add filesystem entries in the Resources config page to enable file browsing."
+          description="Add filesystem entries on the Configuration page to enable file browsing."
         />
       </div>
     );

@@ -2,6 +2,7 @@ import { memo } from 'react';
 import { type NodeProps, Handle, Position } from '@xyflow/react';
 import { Globe, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { reactFlowHandleClassName } from '@/lib/react-flow-handles';
 import { Button } from '@/components/ui/button';
 import { flowStepIcons } from '@/lib/flow-step-icons';
 import type { FlowStep } from '@/services/api';
@@ -30,7 +31,7 @@ export const FlowStepNode = memo(function FlowStepNode({
         <Handle
           type="target"
           position={targetPosition}
-          className="!bg-primary"
+          className={reactFlowHandleClassName(selected)}
         />
       )}
       <Icon className="size-4 shrink-0 text-muted-foreground" />
@@ -43,7 +44,7 @@ export const FlowStepNode = memo(function FlowStepNode({
         <Handle
           type="source"
           position={sourcePosition}
-          className="!bg-primary"
+          className={reactFlowHandleClassName(selected)}
         />
       )}
 

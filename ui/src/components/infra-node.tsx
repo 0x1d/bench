@@ -11,6 +11,7 @@ import {
   Variable,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { reactFlowHandleClassName } from '@/lib/react-flow-handles';
 
 const NODE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   provider: Globe,
@@ -36,11 +37,11 @@ export const InfraProviderNode = memo(function InfraProviderNode({
   return (
     <div
       className={cn(
-        'flex items-center gap-2 rounded-lg border-2 px-3 py-2 w-[200px] min-h-[48px] bg-card shadow-sm',
+        'group flex items-center gap-2 rounded-lg border-2 px-3 py-2 w-[200px] min-h-[48px] bg-card shadow-sm',
         selected ? 'border-primary' : 'border-border hover:border-muted-foreground/50'
       )}
     >
-      <Handle type="target" position={targetPosition} className="!bg-primary" />
+      <Handle type="target" position={targetPosition} className={reactFlowHandleClassName(selected)} />
       <Icon className="size-4 shrink-0 text-muted-foreground" />
       <div className="flex flex-col min-w-0 flex-1 leading-tight">
         <span className="truncate text-sm font-medium">{label}</span>
@@ -48,7 +49,7 @@ export const InfraProviderNode = memo(function InfraProviderNode({
           {source || version ? `${source} ${version}` : 'provider'}
         </span>
       </div>
-      <Handle type="source" position={sourcePosition} className="!bg-primary" />
+      <Handle type="source" position={sourcePosition} className={reactFlowHandleClassName(selected)} />
     </div>
   );
 });
@@ -64,14 +65,14 @@ export const InfraVariableNode = memo(function InfraVariableNode({
   return (
     <div
       className={cn(
-        'flex items-center gap-2 rounded-lg border-2 px-3 py-2 w-[180px] min-h-[44px] bg-card shadow-sm',
+        'group flex items-center gap-2 rounded-lg border-2 px-3 py-2 w-[180px] min-h-[44px] bg-card shadow-sm',
         selected ? 'border-primary' : 'border-border hover:border-muted-foreground/50'
       )}
     >
-      <Handle type="target" position={targetPosition} className="!bg-primary" />
+      <Handle type="target" position={targetPosition} className={reactFlowHandleClassName(selected)} />
       <Icon className="size-4 shrink-0 text-muted-foreground" />
       <span className="truncate text-sm font-medium font-mono">{label}</span>
-      <Handle type="source" position={sourcePosition} className="!bg-primary" />
+      <Handle type="source" position={sourcePosition} className={reactFlowHandleClassName(selected)} />
     </div>
   );
 });
@@ -88,17 +89,17 @@ export const InfraResourceNode = memo(function InfraResourceNode({
   return (
     <div
       className={cn(
-        'flex items-center gap-2 rounded-lg border-2 px-3 py-2 w-[220px] min-h-[48px] bg-card shadow-sm',
+        'group flex items-center gap-2 rounded-lg border-2 px-3 py-2 w-[220px] min-h-[48px] bg-card shadow-sm',
         selected ? 'border-primary' : 'border-border hover:border-muted-foreground/50'
       )}
     >
-      <Handle type="target" position={targetPosition} className="!bg-primary" />
+      <Handle type="target" position={targetPosition} className={reactFlowHandleClassName(selected)} />
       <Icon className="size-4 shrink-0 text-muted-foreground" />
       <div className="flex flex-col min-w-0 flex-1 leading-tight">
         <span className="truncate text-sm font-medium">{name}</span>
         <span className="text-[10px] text-muted-foreground font-mono truncate">{type}</span>
       </div>
-      <Handle type="source" position={sourcePosition} className="!bg-primary" />
+      <Handle type="source" position={sourcePosition} className={reactFlowHandleClassName(selected)} />
     </div>
   );
 });
@@ -115,17 +116,17 @@ export const InfraDataNode = memo(function InfraDataNode({
   return (
     <div
       className={cn(
-        'flex items-center gap-2 rounded-lg border-2 px-3 py-2 w-[220px] min-h-[48px] bg-card shadow-sm',
+        'group flex items-center gap-2 rounded-lg border-2 px-3 py-2 w-[220px] min-h-[48px] bg-card shadow-sm',
         selected ? 'border-primary' : 'border-border hover:border-muted-foreground/50'
       )}
     >
-      <Handle type="target" position={targetPosition} className="!bg-primary" />
+      <Handle type="target" position={targetPosition} className={reactFlowHandleClassName(selected)} />
       <Icon className="size-4 shrink-0 text-muted-foreground" />
       <div className="flex flex-col min-w-0 flex-1 leading-tight">
         <span className="truncate text-sm font-medium">{name}</span>
         <span className="text-[10px] text-muted-foreground font-mono truncate">data.{type}</span>
       </div>
-      <Handle type="source" position={sourcePosition} className="!bg-primary" />
+      <Handle type="source" position={sourcePosition} className={reactFlowHandleClassName(selected)} />
     </div>
   );
 });
@@ -141,14 +142,14 @@ export const InfraModuleNode = memo(function InfraModuleNode({
   return (
     <div
       className={cn(
-        'flex items-center gap-2 rounded-lg border-2 px-3 py-2 w-[180px] min-h-[48px] bg-card shadow-sm',
+        'group flex items-center gap-2 rounded-lg border-2 px-3 py-2 w-[180px] min-h-[48px] bg-card shadow-sm',
         selected ? 'border-primary' : 'border-border hover:border-muted-foreground/50'
       )}
     >
-      <Handle type="target" position={targetPosition} className="!bg-primary" />
+      <Handle type="target" position={targetPosition} className={reactFlowHandleClassName(selected)} />
       <Icon className="size-4 shrink-0 text-muted-foreground" />
       <span className="truncate text-sm font-medium font-mono">{name}</span>
-      <Handle type="source" position={sourcePosition} className="!bg-primary" />
+      <Handle type="source" position={sourcePosition} className={reactFlowHandleClassName(selected)} />
     </div>
   );
 });
@@ -164,14 +165,14 @@ export const InfraOutputNode = memo(function InfraOutputNode({
   return (
     <div
       className={cn(
-        'flex items-center gap-2 rounded-lg border-2 px-3 py-2 w-[180px] min-h-[44px] bg-card shadow-sm',
+        'group flex items-center gap-2 rounded-lg border-2 px-3 py-2 w-[180px] min-h-[44px] bg-card shadow-sm',
         selected ? 'border-primary' : 'border-border hover:border-muted-foreground/50'
       )}
     >
-      <Handle type="target" position={targetPosition} className="!bg-primary" />
+      <Handle type="target" position={targetPosition} className={reactFlowHandleClassName(selected)} />
       <Icon className="size-4 shrink-0 text-muted-foreground" />
       <span className="truncate text-sm font-medium font-mono">{name}</span>
-      <Handle type="source" position={sourcePosition} className="!bg-primary" />
+      <Handle type="source" position={sourcePosition} className={reactFlowHandleClassName(selected)} />
     </div>
   );
 });

@@ -1052,7 +1052,7 @@ export function ResourcesConfigPage() {
         : panelMode?.includes('rest')
           ? 'Configure REST API endpoint with optional auth. Use a registered OpenAPI schema or a spec file path.'
         : panelMode?.includes('workspace')
-          ? 'Flowpipe profile: named config for pipeline execution (host, port, etc.). Init adds block to flows/workspaces.fpc.'
+          ? 'Flowpipe profile: id, label, and server URL.'
           : panelMode === 'edit-flows'
             ? 'Flowpipe integration: flows directory and server URL.'
             : panelMode === 'edit-infrastructure'

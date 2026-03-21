@@ -37,6 +37,10 @@ import { Button } from '@/components/ui/button';
 import { NotConfiguredCard } from '@/components/not-configured-card';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
+  InfrastructurePathFields,
+  ResourceSettingsSidePanel,
+} from '@/components/resource-config';
+import {
   InfraProviderNode,
   InfraVariableNode,
   InfraResourceNode,
@@ -71,6 +75,11 @@ import {
   type DependencyFlow,
 } from '@/lib/terraform-diagram';
 import { useInfrastructureView } from '@/contexts/infrastructure-view-context';
+import {
+  parseConfigToState,
+  useResourceConfig,
+  type InfrastructureConfig,
+} from '@/lib/resource-config';
 
 /** Fits the diagram view when a Terraform command finishes (isRunning goes false). */
 function FitViewOnTerraformRun() {
@@ -353,13 +362,24 @@ export function InfrastructurePage() {
       return 'dependencies-at-top';
     }
   });
-  const [activeTab, setActiveTab] = useState<'files' | 'diagram'>('diagram');
+  const [activeTab, setActiveTab] = useState<'files' | 'diagram' | 'settings'>('diagram');
   const [currentPath, setCurrentPath] = useState('.');
   const [showNewFile, setShowNewFile] = useState(false);
   const [newFileName, setNewFileName] = useState('');
   const [showNewFolder, setShowNewFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<{ path: string; name: string; isDir: boolean } | null>(null);
+
+  const { data: rawConfig, mergeAndPersist, isPending: configPending, error: configError } =
+    useResourceConfig();
+  const configInfra = useMemo(
+    () => parseConfigToState(rawConfig ?? '').infrastructure,
+    [rawConfig]
+  );
+  const [infraPathPanelOpen, setInfraPathPanelOpen] = useState(false);
+  const [infraDraft, setInfraDraft] = useState<InfrastructureConfig>({ path: './workspace/infra' });
+  const [infraFormError, setInfraFormError] = useState<string | null>(null);
+  const [infraSavePending, setInfraSavePending] = useState(false);
 
   const { data: fileList } = useQuery({
     queryKey: ['resources', 'infra', currentPath],
@@ -687,6 +707,23 @@ export function InfrastructurePage() {
   });
   const pathParts = currentPath === '.' ? [] : currentPath.split('/').filter(Boolean);
 
+  async function applyInfraPath() {
+    const path = infraDraft.path.trim() || './workspace/infra';
+    setInfraFormError(null);
+    setInfraSavePending(true);
+    try {
+      await mergeAndPersist((prev) => ({ ...prev, infrastructure: { path } }));
+      setInfraPathPanelOpen(false);
+    } catch (e) {
+      setInfraFormError(e instanceof Error ? e.message : 'Save failed');
+    } finally {
+      setInfraSavePending(false);
+    }
+  }
+
+  const configErr =
+    configError instanceof Error ? configError.message : configError ? String(configError) : null;
+
   return (
     <div className="flex w-full min-h-0 flex-1 flex-col gap-4">
       {/* Breadcrumbs */}
@@ -702,10 +739,14 @@ export function InfrastructurePage() {
 
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 shadow-sm">
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'files' | 'diagram')}>
-          <TabsList>
+        <Tabs
+          value={activeTab}
+          onValueChange={(v) => setActiveTab(v as 'files' | 'diagram' | 'settings')}
+        >
+          <TabsList variant="line" className="w-fit max-w-full shrink-0 justify-start gap-x-1">
             <TabsTrigger value="diagram">Diagram</TabsTrigger>
             <TabsTrigger value="files">Files</TabsTrigger>
+            <TabsTrigger value="settings">Settings</TabsTrigger>
           </TabsList>
         </Tabs>
         {activeTab === 'diagram' && (
@@ -744,7 +785,12 @@ export function InfrastructurePage() {
             </Button>
           </>
         )}
-        <div className="ml-auto flex flex-shrink-0 items-center gap-2">
+        <div
+          className={cn(
+            'ml-auto flex flex-shrink-0 items-center gap-2',
+            activeTab === 'settings' && 'hidden'
+          )}
+        >
           <Button
             variant="outline"
             size="sm"
@@ -824,7 +870,7 @@ export function InfrastructurePage() {
               nodeTypes={nodeTypes}
             />
           </ReactFlowProvider>
-        ) : (
+        ) : activeTab === 'files' ? (
           <div className="flex-1 min-w-0 rounded-lg border border-border bg-card overflow-hidden flex flex-col">
             <div className="flex flex-wrap items-center gap-2 p-3 border-b border-border bg-muted/20">
               <nav className="flex items-center gap-1 text-sm">
@@ -988,7 +1034,71 @@ export function InfrastructurePage() {
               </div>
             )}
           </div>
+        ) : (
+          <div className="flex flex-1 min-w-0 flex-col overflow-auto">
+            {configPending && (
+              <p className="text-muted-foreground">Loading configuration...</p>
+            )}
+            {configErr && <p className="text-sm text-destructive">{configErr}</p>}
+            {!configPending && (
+              <section className="rounded-lg border border-border bg-card p-4">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <h3 className="text-base font-medium">Infrastructure directory</h3>
+                    <p className="mt-1 font-mono text-sm text-muted-foreground">{configInfra.path}</p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setInfraDraft(configInfra);
+                      setInfraFormError(null);
+                      setInfraPathPanelOpen(true);
+                    }}
+                  >
+                    Edit
+                  </Button>
+                </div>
+              </section>
+            )}
+          </div>
         )}
+
+        <ResourceSettingsSidePanel
+          open={infraPathPanelOpen}
+          onOpenChange={(open) => {
+            if (!open) {
+              setInfraPathPanelOpen(false);
+              setInfraFormError(null);
+            }
+          }}
+          title="Infrastructure directory"
+          footer={
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setInfraPathPanelOpen(false);
+                  setInfraFormError(null);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={() => void applyInfraPath()}
+                disabled={infraSavePending}
+              >
+                Save changes
+              </Button>
+            </div>
+          }
+        >
+          <InfrastructurePathFields draft={infraDraft} onChange={setInfraDraft} />
+          {infraFormError && <p className="mt-2 text-sm text-destructive">{infraFormError}</p>}
+        </ResourceSettingsSidePanel>
 
         <ConfirmDeleteDialog
           open={!!deleteTarget}

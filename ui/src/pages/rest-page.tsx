@@ -7,7 +7,7 @@ import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { RestClient } from '@/components/rest-client';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { RestResourceFields } from '@/components/resource-config';
+import { RestResourceFields, ResourceSettingsSidePanel } from '@/components/resource-config';
 import { cn } from '@/lib/utils';
 import {
   parseConfigToState,
@@ -407,38 +407,45 @@ export function RestPage() {
                 </div>
               )}
 
-              {editingRest !== null && (
-                <div className="mt-4 rounded-lg border border-border bg-muted/20 p-4">
-                  <h4 className="mb-3 text-sm font-medium">
-                    {editingRest === 'add' ? 'Add REST resource' : 'Edit REST resource'}
-                  </h4>
-                  <RestResourceFields
-                    draft={restDraft}
-                    onChange={setRestDraft}
-                    openapiSchemas={openapiSchemas}
-                  />
-                  {formError && <p className="mt-2 text-sm text-destructive">{formError}</p>}
-                  <div className="mt-4 flex justify-end gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => {
-                        setEditingRest(null);
-                        setFormError(null);
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                    <Button type="button" onClick={applyRestDraft} disabled={savePending}>
-                      {editingRest === 'add' ? 'Add' : 'Save changes'}
-                    </Button>
-                  </div>
-                </div>
-              )}
             </section>
           )}
         </TabsContent>
       </Tabs>
+
+      <ResourceSettingsSidePanel
+        open={editingRest !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setEditingRest(null);
+            setFormError(null);
+          }
+        }}
+        title={editingRest === 'add' ? 'Add REST resource' : 'Edit REST resource'}
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setEditingRest(null);
+                setFormError(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button type="button" onClick={applyRestDraft} disabled={savePending}>
+              {editingRest === 'add' ? 'Add' : 'Save changes'}
+            </Button>
+          </div>
+        }
+      >
+        <RestResourceFields
+          draft={restDraft}
+          onChange={setRestDraft}
+          openapiSchemas={openapiSchemas}
+        />
+        {formError && <p className="mt-2 text-sm text-destructive">{formError}</p>}
+      </ResourceSettingsSidePanel>
 
       <ConfirmDeleteDialog
         open={deleteIndex != null}

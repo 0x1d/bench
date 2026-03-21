@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
-import { DatabaseResourceFields } from '@/components/resource-config';
+import { DatabaseResourceFields, ResourceSettingsSidePanel } from '@/components/resource-config';
 import { useDatabaseTables, useTableData } from '@/hooks/use-database';
 import { useStatus } from '@/hooks/use-status';
 import { useDatabaseView } from '@/contexts/database-view-context';
@@ -468,34 +468,41 @@ export function DatabasePage() {
                 </div>
               )}
 
-              {editingDb !== null && (
-                <div className="mt-4 rounded-lg border border-border bg-muted/20 p-4">
-                  <h4 className="mb-3 text-sm font-medium">
-                    {editingDb === 'add' ? 'Add database' : 'Edit database'}
-                  </h4>
-                  <DatabaseResourceFields draft={databaseDraft} onChange={setDatabaseDraft} />
-                  {formError && <p className="mt-2 text-sm text-destructive">{formError}</p>}
-                  <div className="mt-4 flex justify-end gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => {
-                        setEditingDb(null);
-                        setFormError(null);
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                    <Button type="button" onClick={applyDatabaseDraft} disabled={savePending}>
-                      {editingDb === 'add' ? 'Add' : 'Save changes'}
-                    </Button>
-                  </div>
-                </div>
-              )}
             </section>
           )}
         </TabsContent>
       </Tabs>
+
+      <ResourceSettingsSidePanel
+        open={editingDb !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setEditingDb(null);
+            setFormError(null);
+          }
+        }}
+        title={editingDb === 'add' ? 'Add database' : 'Edit database'}
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setEditingDb(null);
+                setFormError(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button type="button" onClick={applyDatabaseDraft} disabled={savePending}>
+              {editingDb === 'add' ? 'Add' : 'Save changes'}
+            </Button>
+          </div>
+        }
+      >
+        <DatabaseResourceFields draft={databaseDraft} onChange={setDatabaseDraft} />
+        {formError && <p className="mt-2 text-sm text-destructive">{formError}</p>}
+      </ResourceSettingsSidePanel>
 
       <ConfirmDeleteDialog
         open={deleteIndex != null}

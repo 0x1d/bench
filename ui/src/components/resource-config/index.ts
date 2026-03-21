@@ -1,3 +1,4 @@
+export { ResourceSettingsSidePanel } from './resource-settings-side-panel';
 export { AgentConfigFields } from './agent-config-fields';
 export { DatabaseResourceFields } from './database-resource-fields';
 export { FilesystemResourceFields } from './filesystem-resource-fields';

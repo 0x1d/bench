@@ -3,7 +3,7 @@ import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { FilesystemResourceFields } from '@/components/resource-config';
+import { FilesystemResourceFields, ResourceSettingsSidePanel } from '@/components/resource-config';
 import { FileBrowser } from '@/components/file-browser';
 import { useRoots } from '@/hooks/use-resources';
 import { useFileBrowserHistory } from '@/hooks/use-file-browser-history';
@@ -300,35 +300,41 @@ export function FilesystemPage() {
                   </table>
                 </div>
               )}
-
-              {editingFs !== null && (
-                <div className="mt-4 rounded-lg border border-border bg-muted/20 p-4">
-                  <h4 className="mb-3 text-sm font-medium">
-                    {editingFs === 'add' ? 'Add filesystem' : 'Edit filesystem'}
-                  </h4>
-                  <FilesystemResourceFields draft={filesystemDraft} onChange={setFilesystemDraft} />
-                  {formError && <p className="mt-2 text-sm text-destructive">{formError}</p>}
-                  <div className="mt-4 flex justify-end gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => {
-                        setEditingFs(null);
-                        setFormError(null);
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                    <Button type="button" onClick={applyFilesystemDraft} disabled={savePending}>
-                      {editingFs === 'add' ? 'Add' : 'Save changes'}
-                    </Button>
-                  </div>
-                </div>
-              )}
             </section>
           )}
         </TabsContent>
       </Tabs>
+
+      <ResourceSettingsSidePanel
+        open={editingFs !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setEditingFs(null);
+            setFormError(null);
+          }
+        }}
+        title={editingFs === 'add' ? 'Add filesystem' : 'Edit filesystem'}
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setEditingFs(null);
+                setFormError(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button type="button" onClick={applyFilesystemDraft} disabled={savePending}>
+              {editingFs === 'add' ? 'Add' : 'Save changes'}
+            </Button>
+          </div>
+        }
+      >
+        <FilesystemResourceFields draft={filesystemDraft} onChange={setFilesystemDraft} />
+        {formError && <p className="mt-2 text-sm text-destructive">{formError}</p>}
+      </ResourceSettingsSidePanel>
 
       <ConfirmDeleteDialog
         open={deleteIndex != null}

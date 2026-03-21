@@ -4,7 +4,7 @@ import { Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import { fetchSchemaContent, fetchSchemaList } from '@/services/api';
 import { Button } from '@/components/ui/button';
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
-import { SchemaResourceFields } from '@/components/resource-config';
+import { ResourceSettingsSidePanel, SchemaResourceFields } from '@/components/resource-config';
 import { detectSchemaType, parseSchema } from '@/lib/schema-registry';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -472,34 +472,41 @@ export function SchemaBrowserPage() {
                 </div>
               )}
 
-              {editingSchema !== null && (
-                <div className="mt-4 rounded-lg border border-border bg-muted/20 p-4">
-                  <h4 className="mb-3 text-sm font-medium">
-                    {editingSchema === 'add' ? 'Add schema' : 'Edit schema'}
-                  </h4>
-                  <SchemaResourceFields draft={schemaDraft} onChange={setSchemaDraft} />
-                  {formError && <p className="mt-2 text-sm text-destructive">{formError}</p>}
-                  <div className="mt-4 flex justify-end gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => {
-                        setEditingSchema(null);
-                        setFormError(null);
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                    <Button type="button" onClick={applySchemaDraft} disabled={savePending}>
-                      {editingSchema === 'add' ? 'Add' : 'Save changes'}
-                    </Button>
-                  </div>
-                </div>
-              )}
             </section>
           )}
         </TabsContent>
       </Tabs>
+
+      <ResourceSettingsSidePanel
+        open={editingSchema !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setEditingSchema(null);
+            setFormError(null);
+          }
+        }}
+        title={editingSchema === 'add' ? 'Add schema' : 'Edit schema'}
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setEditingSchema(null);
+                setFormError(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button type="button" onClick={applySchemaDraft} disabled={savePending}>
+              {editingSchema === 'add' ? 'Add' : 'Save changes'}
+            </Button>
+          </div>
+        }
+      >
+        <SchemaResourceFields draft={schemaDraft} onChange={setSchemaDraft} />
+        {formError && <p className="mt-2 text-sm text-destructive">{formError}</p>}
+      </ResourceSettingsSidePanel>
 
       <ConfirmDeleteDialog
         open={deleteIndex != null}

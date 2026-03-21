@@ -38,7 +38,7 @@ updated: 2025-03-21
 **Deliverable**: Browse/Settings (or extended) tabs on each feature page with saves wired to RMW hook.
 
 - [x] **3.1** Integrate Filesystem and Database pages — [specs/3.1-integrate-filesystem-database.md](specs/3.1-integrate-filesystem-database.md)
-- [ ] **3.2** Integrate REST and Schema browser pages — [specs/3.2-integrate-rest-schema.md](specs/3.2-integrate-rest-schema.md)
+- [x] **3.2** Integrate REST and Schema browser pages — [specs/3.2-integrate-rest-schema.md](specs/3.2-integrate-rest-schema.md)
 - [ ] **3.3** Integrate Flows and Infrastructure pages — [specs/3.3-integrate-flows-infrastructure.md](specs/3.3-integrate-flows-infrastructure.md)
 
 ---
@@ -68,8 +68,8 @@ updated: 2025-03-21
 |-------|-------|------|--------|
 | 1 | 3 | 3 | DONE |
 | 2 | 1 | 1 | DONE |
-| 3 | 3 | 1 | IN_PROGRESS |
+| 3 | 3 | 2 | IN_PROGRESS |
 | 4 | 1 | 0 | TODO |
 | 5 | 2 | 0 | TODO |
 
-**Next up**: Phase 3 — Task 3.2 (integrate REST and Schema browser pages).
+**Next up**: Phase 3 — Task 3.3 (integrate Flows and Infrastructure pages).

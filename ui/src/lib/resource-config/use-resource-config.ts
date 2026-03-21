@@ -47,6 +47,8 @@ export function useResourceConfig() {
       await refetchStatus();
       await queryClient.invalidateQueries({ queryKey: RESOURCE_CONFIG_QUERY_KEY });
       queryClient.invalidateQueries({ queryKey: ['resources', 'roots'] });
+      queryClient.invalidateQueries({ queryKey: ['rest'] });
+      queryClient.invalidateQueries({ queryKey: ['schemas'] });
       queryClient.invalidateQueries({ queryKey: ['flows', 'workspaces'] });
       queryClient.invalidateQueries({ queryKey: ['infrastructure'] });
     },

@@ -22,11 +22,11 @@ updated: 2025-03-21
 |-------|--------|-------------|
 | 1 | DONE | Rename modules; config lib; RMW hook |
 | 2 | DONE | Extract editor components |
-| 3 | IN_PROGRESS | Integrate Filesystem/DB (done), REST/Schema, Flows/Infra |
+| 3 | IN_PROGRESS | Integrate Filesystem/DB (done), REST/Schema (done), Flows/Infra |
 | 4 | TODO | Configuration Overview + Agent |
 | 5 | TODO | Copy, queries, verification |
 
-**Next up**: Phase 3 — Task 3.2 — Integrate REST and Schema browser pages.
+**Next up**: Phase 3 — Task 3.3 — Integrate Flows and Infrastructure pages.
 
 ## How to use this plan
 

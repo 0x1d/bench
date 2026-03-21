@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const LAYOUT_STORAGE_PREFIX = 'bench-flow-layout-';
 
@@ -20,6 +20,7 @@ import {
   useEdgesState,
   useReactFlow,
   addEdge,
+  MarkerType,
   type Node,
   type Edge,
   type Connection,
@@ -250,15 +251,22 @@ function parseFlowHash(hash: string): { flowId: string; flowModule: string | nul
   return { flowId, flowModule };
 }
 
-/** Fits the React Flow view when the right-side panel expands (e.g. on pipeline run). */
+/** Fits the React Flow view when the right-side panel opens/closes or execution panel appears. */
 function FitViewOnPanelExpand() {
   const { fitView } = useReactFlow();
-  const { executionId } = useFlowView();
+  const { executionId, selectedStep } = useFlowView();
+  const panelStateKeyRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!executionId) return;
+    const key = `${selectedStep?.id ?? ''}|${executionId ?? ''}`;
+    if (panelStateKeyRef.current === null) {
+      panelStateKeyRef.current = key;
+      return;
+    }
+    if (panelStateKeyRef.current === key) return;
+    panelStateKeyRef.current = key;
     const id = setTimeout(() => fitView({ padding: 0.1, duration: 200 }), 50);
     return () => clearTimeout(id);
-  }, [executionId, fitView]);
+  }, [selectedStep?.id, executionId, fitView]);
   return null;
 }
 
@@ -841,6 +849,9 @@ export default function FlowEditorPage() {
             onPaneClick={() => setSelectedStep(null)}
             onEdgeClick={() => setSelectedStep(null)}
             nodeTypes={nodeTypes}
+            defaultEdgeOptions={{
+              markerEnd: { type: MarkerType.ArrowClosed },
+            }}
             nodesDraggable={false}
             fitView
           >

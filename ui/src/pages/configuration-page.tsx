@@ -351,7 +351,7 @@ function stateToConfig(state: ResourceFormState): string {
   return yaml.dump(output, { noRefs: true, lineWidth: 120 });
 }
 
-export function ResourcesConfigPage() {
+export function ConfigurationPage() {
   const queryClient = useQueryClient();
   const { refetch: refetchStatus } = useStatus();
   const [state, setState] = useState<ResourceFormState>(emptyState);

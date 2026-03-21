@@ -1,5 +1,5 @@
 ---
-state: READY
+state: IN_PROGRESS
 created: 2025-03-21
 updated: 2025-03-21
 ---
@@ -20,13 +20,13 @@ updated: 2025-03-21
 
 | Phase | Status | Description |
 |-------|--------|-------------|
-| 1 | TODO | Rename modules; config lib; RMW hook |
+| 1 | IN_PROGRESS | Rename modules; config lib; RMW hook |
 | 2 | TODO | Extract editor components |
 | 3 | TODO | Integrate Filesystem/DB, REST/Schema, Flows/Infra |
 | 4 | TODO | Configuration Overview + Agent |
 | 5 | TODO | Copy, queries, verification |
 
-**Next up**: Phase 1 — Task 1.1 — Rename `resources-page.tsx` → `filesystem-page.tsx` and `resources-config-page.tsx` → `configuration-page.tsx`.
+**Next up**: Phase 1 — Task 1.2 — Extract `parseConfigToState` / `stateToYaml` into `ui/src/lib/resource-config/`.
 
 ## How to use this plan
 

@@ -13,8 +13,8 @@ import { InfrastructurePanel } from '@/components/infrastructure-panel';
 import { SidebarLeft } from '@/components/sidebar-left';
 import { SiteHeader } from '@/components/site-header';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
-import { FilesystemPage } from '@/pages/resources-page';
-import { ResourcesConfigPage } from '@/pages/resources-config-page';
+import { FilesystemPage } from '@/pages/filesystem-page';
+import { ConfigurationPage } from '@/pages/configuration-page';
 import { RestPage } from '@/pages/rest-page';
 import { SchemaBrowserPage } from '@/pages/schema-browser-page';
 import { StatusPage } from '@/pages/status-page';
@@ -176,7 +176,7 @@ export function App() {
                             }
                           >
                             {hash === 'filesystem' && <FilesystemPage />}
-                            {hash === 'configuration' && <ResourcesConfigPage />}
+                            {hash === 'configuration' && <ConfigurationPage />}
                             {hash === 'rest' && <RestPage />}
                             {hash === 'schemas' && <SchemaBrowserPage />}
                             {hash === 'database' && <DatabasePage />}

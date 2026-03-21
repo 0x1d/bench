@@ -1,5 +1,5 @@
 ---
-state: READY
+state: IN_PROGRESS
 created: 2025-03-21
 updated: 2025-03-21
 ---
@@ -8,9 +8,9 @@ updated: 2025-03-21
 
 ## Executive Summary
 
-Bench today centralizes all `config.yaml` editing in a single large **Configuration** screen (`resources-config-page.tsx`, component `ResourcesConfigPage`) while feature areas (Filesystem, Database, REST, etc.) live on separate routes. Users must jump between **Configuration** and feature pages; empty states often say “configure on the Configuration page.”
+Bench centralizes `config.yaml` editing in a single large **Configuration** screen (`configuration-page.tsx`, component `ConfigurationPage`, formerly `resources-config-page` / `ResourcesConfigPage`) while feature areas (Filesystem, Database, REST, etc.) live on separate routes. Users must jump between **Configuration** and feature pages; empty states often say “configure on the Configuration page.”
 
-This plan **moves resource-specific configuration onto each feature page** behind a **Browse | Settings** (or extended) tab pattern with a **non-full-width** tab list, extracts shared **parse / serialize / save** logic into a reusable module, and **slims Configuration** to **Tab 1 — Overview** (read-only snapshot + deep links) and **Tab 2 — Agent** (global agent settings). It also **renames misleading files**: `resources-page.tsx` → `filesystem-page.tsx`, `resources-config-page.tsx` → `configuration-page.tsx`.
+This plan **moves resource-specific configuration onto each feature page** behind a **Browse | Settings** (or extended) tab pattern with a **non-full-width** tab list, extracts shared **parse / serialize / save** logic into a reusable module, and **slims Configuration** to **Tab 1 — Overview** (read-only snapshot + deep links) and **Tab 2 — Agent** (global agent settings). **Task 1.1** renamed modules to `filesystem-page.tsx` and `configuration-page.tsx`.
 
 **Outcome**: One mental model—configure where you use the resource—with a safe read-modify-write pipeline so partial saves never wipe unrelated YAML. **No API contract changes**; UI continues to use `fetchConfig` / `saveConfig`.
 
@@ -23,17 +23,17 @@ This plan **moves resource-specific configuration onto each feature page** behin
 | Layer | Implementation |
 |-------|----------------|
 | **Config file** | Single YAML (`config.yaml`) with `resources.*`, `flows`, `infrastructure`, `agent` |
-| **UI editor** | `[ui/src/pages/resources-config-page.tsx](ui/src/pages/resources-config-page.tsx)` (~2.2k lines), tabs for filesystem, schemas, databases, REST, flows (+ workspaces), infrastructure, agent |
-| **Feature pages** | `[ui/src/pages/resources-page.tsx](ui/src/pages/resources-page.tsx)` exports `FilesystemPage`; REST, Database, Schemas, Flows, Infrastructure each have dedicated pages |
+| **UI editor** | `[ui/src/pages/configuration-page.tsx](ui/src/pages/configuration-page.tsx)` (~2.2k lines), tabs for filesystem, schemas, databases, REST, flows (+ workspaces), infrastructure, agent |
+| **Feature pages** | `[ui/src/pages/filesystem-page.tsx](ui/src/pages/filesystem-page.tsx)` exports `FilesystemPage`; REST, Database, Schemas, Flows, Infrastructure each have dedicated pages |
 | **Routes** | Hash routes in `[ui/src/App.tsx](ui/src/App.tsx)`; sidebar in `[ui/src/components/sidebar-left.tsx](ui/src/components/sidebar-left.tsx)` |
 | **Persistence** | `saveConfig(content: string)` replaces full file; client must merge slices |
 
-### Naming issues
+### Module names (task 1.1)
 
-| File | Actual role |
-|------|-------------|
-| `resources-page.tsx` | Only **Filesystem** browsing — not “all resources” |
-| `resources-config-page.tsx` | The **Configuration** route — should be `configuration-page.tsx` with `ConfigurationPage` |
+| File | Role |
+|------|------|
+| `filesystem-page.tsx` | **Filesystem** browsing only (`FilesystemPage`) |
+| `configuration-page.tsx` | **Configuration** route (`ConfigurationPage`) |
 
 ### Limitations
 

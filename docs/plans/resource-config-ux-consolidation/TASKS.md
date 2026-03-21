@@ -1,5 +1,5 @@
 ---
-state: READY
+state: IN_PROGRESS
 created: 2025-03-21
 updated: 2025-03-21
 ---
@@ -14,10 +14,10 @@ updated: 2025-03-21
 
 ## Phase 1: Foundation — rename and config module
 
-**Phase status**: TODO  
+**Phase status**: IN_PROGRESS  
 **Deliverable**: Clear filenames, shared parse/serialize/hook for safe YAML updates.
 
-- [ ] **1.1** Rename page modules — [specs/1.1-rename-page-modules.md](specs/1.1-rename-page-modules.md)
+- [x] **1.1** Rename page modules — [specs/1.1-rename-page-modules.md](specs/1.1-rename-page-modules.md)
 - [ ] **1.2** Extract config parse and serialize — [specs/1.2-config-parse-serialize.md](specs/1.2-config-parse-serialize.md)
 - [ ] **1.3** useResourceConfig hook — [specs/1.3-use-resource-config-hook.md](specs/1.3-use-resource-config-hook.md)
 
@@ -66,10 +66,10 @@ updated: 2025-03-21
 
 | Phase | Tasks | Done | Status |
 |-------|-------|------|--------|
-| 1 | 3 | 0 | TODO |
+| 1 | 3 | 1 | IN_PROGRESS |
 | 2 | 1 | 0 | TODO |
 | 3 | 3 | 0 | TODO |
 | 4 | 1 | 0 | TODO |
 | 5 | 2 | 0 | TODO |
 
-**Next up**: Phase 1 — Task 1.1 (rename page modules).
+**Next up**: Phase 1 — Task 1.2 (extract config parse and serialize).

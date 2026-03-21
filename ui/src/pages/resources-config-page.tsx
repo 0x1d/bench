@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/select';
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { cn } from '@/lib/utils';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useQueryClient } from '@tanstack/react-query';
 import { fetchConfig, fetchConfigExample, saveConfig } from '@/services/api';
 import { useStatus } from '@/hooks/use-status';
@@ -113,6 +114,15 @@ type DeleteTarget =
   | { type: 'rest'; index: number }
   | { type: 'workspace'; index: number }
   | null;
+
+type ResourceConfigTab =
+  | 'filesystem'
+  | 'schemas'
+  | 'databases'
+  | 'rest'
+  | 'flows'
+  | 'infrastructure'
+  | 'agent';
 
 function emptyState(): ResourceFormState {
   return {
@@ -349,6 +359,7 @@ export function ResourcesConfigPage() {
   const [panelIndex, setPanelIndex] = useState<number | null>(null);
   const [panelError, setPanelError] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget>(null);
+  const [resourceTab, setResourceTab] = useState<ResourceConfigTab>('filesystem');
   const [filesystemDraft, setFilesystemDraft] = useState<FilesystemResource>({
     id: '',
     label: '',
@@ -1580,7 +1591,7 @@ export function ResourcesConfigPage() {
           'min-h-0 min-w-0 flex-1 overflow-auto p-4 md:p-6'
         )}
       >
-        <div className="flex w-full min-h-0 flex-1 flex-col gap-6">
+        <div className="flex w-full min-h-0 flex-1 flex-col gap-4">
           <div className="rounded-lg border border-border bg-card p-4">
             <h2 className="text-lg font-medium tracking-tight">Resources</h2>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -1588,6 +1599,22 @@ export function ResourcesConfigPage() {
             </p>
           </div>
 
+          <Tabs
+            value={resourceTab}
+            onValueChange={(v) => setResourceTab(v as ResourceConfigTab)}
+            className="flex min-h-0 flex-1 flex-col overflow-hidden"
+          >
+            <TabsList variant="line" className="w-full shrink-0 flex-wrap justify-start gap-x-1">
+              <TabsTrigger value="filesystem">Filesystem</TabsTrigger>
+              <TabsTrigger value="schemas">Schemas</TabsTrigger>
+              <TabsTrigger value="databases">Databases</TabsTrigger>
+              <TabsTrigger value="rest">REST</TabsTrigger>
+              <TabsTrigger value="flows">Flows</TabsTrigger>
+              <TabsTrigger value="infrastructure">Infrastructure</TabsTrigger>
+              <TabsTrigger value="agent">Agent</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="filesystem" className="mt-3 min-h-0 flex-1 overflow-auto">
           <section className="rounded-lg border border-border bg-card p-4">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-medium">Filesystem resources</h3>
@@ -1647,7 +1674,9 @@ export function ResourcesConfigPage() {
               </div>
             )}
           </section>
+            </TabsContent>
 
+            <TabsContent value="schemas" className="mt-3 min-h-0 flex-1 overflow-auto">
           <section className="rounded-lg border border-border bg-card p-4">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-medium">Schemas</h3>
@@ -1709,7 +1738,9 @@ export function ResourcesConfigPage() {
               </div>
             )}
           </section>
+            </TabsContent>
 
+            <TabsContent value="databases" className="mt-3 min-h-0 flex-1 overflow-auto">
           <section className="rounded-lg border border-border bg-card p-4">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-medium">Database resources</h3>
@@ -1773,7 +1804,9 @@ export function ResourcesConfigPage() {
               </div>
             )}
           </section>
+            </TabsContent>
 
+            <TabsContent value="rest" className="mt-3 min-h-0 flex-1 overflow-auto">
           <section className="rounded-lg border border-border bg-card p-4">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-medium">REST resources</h3>
@@ -1837,63 +1870,9 @@ export function ResourcesConfigPage() {
               </div>
             )}
           </section>
+            </TabsContent>
 
-          <section className="rounded-lg border border-border bg-card p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-base font-medium">Infrastructure</h3>
-              <Button variant="outline" size="sm" onClick={openEditInfrastructure}>
-                <Pencil className="size-4" />
-                Configure
-              </Button>
-            </div>
-            <div className="space-y-2 text-sm">
-              <div className="flex gap-2">
-                <span className="text-muted-foreground">Path:</span>
-                <span className="font-mono">{state.infrastructure.path || './workspace/infra'}</span>
-              </div>
-              <p className="text-muted-foreground">
-                Terraform configuration directory for infrastructure as code.
-              </p>
-            </div>
-          </section>
-
-          <section className="rounded-lg border border-border bg-card p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-base font-medium">AI Agent</h3>
-              <Button variant="outline" size="sm" onClick={openEditAgent}>
-                <Pencil className="size-4" />
-                Configure
-              </Button>
-            </div>
-            <div className="space-y-4 text-sm">
-              <div className="grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2">
-                <div className="flex gap-2">
-                  <span className="text-muted-foreground">Endpoint:</span>
-                  <span className="font-mono">{state.agent.endpoint}</span>
-                </div>
-                <div className="flex gap-2">
-                  <span className="text-muted-foreground">Type:</span>
-                  <span className="capitalize">{state.agent.agent}</span>
-                </div>
-                <div className="flex gap-2">
-                  <span className="text-muted-foreground">Directory:</span>
-                  <span className="font-mono truncate" title={state.agent.workingDirectory}>
-                    {state.agent.workingDirectory || '—'}
-                  </span>
-                </div>
-                {state.agent.model && (
-                  <div className="flex gap-2">
-                    <span className="text-muted-foreground">Model:</span>
-                    <span className="font-mono">{state.agent.model}</span>
-                  </div>
-                )}
-              </div>
-              <p className="text-muted-foreground text-xs">
-                AI agent configuration for the persistent chat and automated tasks.
-              </p>
-            </div>
-          </section>
-
+            <TabsContent value="flows" className="mt-3 min-h-0 flex-1 overflow-auto">
           <section className="rounded-lg border border-border bg-card p-4">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-medium">Flows</h3>
@@ -1972,6 +1951,68 @@ export function ResourcesConfigPage() {
               </div>
             </div>
           </section>
+            </TabsContent>
+
+            <TabsContent value="infrastructure" className="mt-3 min-h-0 flex-1 overflow-auto">
+          <section className="rounded-lg border border-border bg-card p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-base font-medium">Infrastructure</h3>
+              <Button variant="outline" size="sm" onClick={openEditInfrastructure}>
+                <Pencil className="size-4" />
+                Configure
+              </Button>
+            </div>
+            <div className="space-y-2 text-sm">
+              <div className="flex gap-2">
+                <span className="text-muted-foreground">Path:</span>
+                <span className="font-mono">{state.infrastructure.path || './workspace/infra'}</span>
+              </div>
+              <p className="text-muted-foreground">
+                Terraform configuration directory for infrastructure as code.
+              </p>
+            </div>
+          </section>
+            </TabsContent>
+
+            <TabsContent value="agent" className="mt-3 min-h-0 flex-1 overflow-auto">
+          <section className="rounded-lg border border-border bg-card p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-base font-medium">AI Agent</h3>
+              <Button variant="outline" size="sm" onClick={openEditAgent}>
+                <Pencil className="size-4" />
+                Configure
+              </Button>
+            </div>
+            <div className="space-y-4 text-sm">
+              <div className="grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2">
+                <div className="flex gap-2">
+                  <span className="text-muted-foreground">Endpoint:</span>
+                  <span className="font-mono">{state.agent.endpoint}</span>
+                </div>
+                <div className="flex gap-2">
+                  <span className="text-muted-foreground">Type:</span>
+                  <span className="capitalize">{state.agent.agent}</span>
+                </div>
+                <div className="flex gap-2">
+                  <span className="text-muted-foreground">Directory:</span>
+                  <span className="font-mono truncate" title={state.agent.workingDirectory}>
+                    {state.agent.workingDirectory || '—'}
+                  </span>
+                </div>
+                {state.agent.model && (
+                  <div className="flex gap-2">
+                    <span className="text-muted-foreground">Model:</span>
+                    <span className="font-mono">{state.agent.model}</span>
+                  </div>
+                )}
+              </div>
+              <p className="text-muted-foreground text-xs">
+                AI agent configuration for the persistent chat and automated tasks.
+              </p>
+            </div>
+          </section>
+            </TabsContent>
+          </Tabs>
 
           {error && <p className="text-sm text-destructive">{error}</p>}
         </div>

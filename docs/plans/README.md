@@ -30,3 +30,4 @@ Phase status: `TODO` | `IN_PROGRESS` | `DONE`
 | Plan | Status | Description |
 |------|--------|-------------|
 | [schema-registry](./schema-registry/) | READY | Schema registry for OpenAPI, AsyncAPI, JSON Schema; flow integration |
+| [resource-config-ux-consolidation](./resource-config-ux-consolidation/) | READY | Per-page resource settings; Configuration Overview + Agent; rename filesystem/configuration modules |

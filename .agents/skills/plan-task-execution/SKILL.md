@@ -32,19 +32,21 @@ Use this skill when implementing features from Bench implementation plans (e.g. 
 
 2. **Read the spec** before coding:
    - Open the linked spec file (e.g. `specs/1.1-config.md`)
-   - Follow: Context → Steps → Files → Acceptance criteria
+   - Follow: Context → Steps → Files → Acceptance criteria (and any other checklist sections)
 
 3. **Execute**:
    - Implement according to the spec steps
    - Touch only the files listed in the spec
    - Run the validation commands from the spec
 
-4. **Verify**:
-   - Satisfy all acceptance criteria
-   - Run pre-commit quality gate (`go vet`, `go test`, `pnpm lint`, `pnpm build`)
+4. **Verify** (acceptance criteria and action items):
+   - If the spec (or task) lists **Acceptance criteria**, **action items**, or any markdown checklist (`- [ ] …`), treat each line as a concrete obligation: **do the work or verification it describes**, then mark it done.
+   - **Crossing off** means editing the markdown **from `- [ ]` to `- [x]`** (or `[ ]` → `[x]` in the same list style the file uses) for that item in the spec file (and in `TASKS.md` / other plan docs if the same item appears there).
+   - Do not mark `[x]` until the item is actually satisfied (tests run, behavior verified, etc.).
+   - Run pre-commit quality gate (`go vet`, `go test`, `pnpm lint`, `pnpm build`) when the spec calls for it.
 
 5. **Update state**:
-   - Change `[ ]` to `[x]` for the completed task in `TASKS.md`
+   - Change `[ ]` to `[x]` for the completed **task** in `TASKS.md`
    - In the spec file: set `state: DONE` and `updated: YYYY-MM-DD` in frontmatter
    - If a phase is complete, set phase status to `DONE`
    - Update `updated` and `state` in plan.md, TASKS.md, README.md frontmatter (set `state: IN_PROGRESS` when starting implementation; `DONE` when done)
@@ -61,11 +63,12 @@ When multiple agents may work on the same plan, use the **agent-coordination** s
 ## Rules
 
 - **Do not skip the spec** — the spec is the execution plan; read it first.
+- **Checklists in specs** — Acceptance criteria and action items written as `- [ ]` must be **verified and crossed off** (`- [x]`) as part of the same task, in the same files where they appear.
 - **One task per commit** — commit after completing each task.
 - **Commit and push after every task** — `git add`, `git commit`, `git push` to the feature branch after each task is done.
 - **Feature branch** — work on the same feature branch as the plan (e.g. `feat/schema-registry`). Branch name = feature, not "plan".
 - **Respect dependsOn** — check spec frontmatter `dependsOn`; do not start until all listed tasks are done.
-- **Do not modify the spec** while executing — if the spec is wrong, fix the spec in a separate change, then execute.
+- **Do not change spec requirements on the fly** — if steps or acceptance criteria are wrong or outdated, fix the spec in a **separate** change, then execute. **Exception:** updating checkbox state `[ ]`→`[x]` for completed items is required, not optional.
 - **Run validation** — every spec includes validation commands; run them before marking done.
 
 ## Example: Schema Registry Phase 1

@@ -5,6 +5,13 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { cn } from '@/lib/utils';
 import { useQueryClient } from '@tanstack/react-query';
@@ -1113,20 +1120,24 @@ export function ResourcesConfigPage() {
             </div>
             <div className="space-y-1">
               <Label>Type</Label>
-              <select
+              <Select
                 value={schemaDraft.type}
-                onChange={(e) =>
+                onValueChange={(v) =>
                   setSchemaDraft((prev) => ({
                     ...prev,
-                    type: e.target.value as SchemaResourceEntry['type'],
+                    type: v as SchemaResourceEntry['type'],
                   }))
                 }
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
               >
-                <option value="openapi">openapi</option>
-                <option value="asyncapi">asyncapi</option>
-                <option value="json-schema">json-schema</option>
-              </select>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Schema type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="openapi">openapi</SelectItem>
+                  <SelectItem value="asyncapi">asyncapi</SelectItem>
+                  <SelectItem value="json-schema">json-schema</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-1">
               <Label>Source path</Label>
@@ -1183,22 +1194,29 @@ export function ResourcesConfigPage() {
             </div>
             <div className="space-y-1">
               <Label>OpenAPI schema (registry)</Label>
-              <select
-                value={restDraft.schemaId ?? ''}
-                onChange={(e) =>
-                  setRestDraft((prev) => ({ ...prev, schemaId: e.target.value }))
+              <Select
+                value={restDraft.schemaId?.trim() ? restDraft.schemaId : '__none__'}
+                onValueChange={(v) =>
+                  setRestDraft((prev) => ({
+                    ...prev,
+                    schemaId: v === '__none__' ? '' : v,
+                  }))
                 }
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
               >
-                <option value="">None (use path below)</option>
-                {state.schemas
-                  .filter((s) => s.type === 'openapi')
-                  .map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.label?.trim() || s.id}
-                    </option>
-                  ))}
-              </select>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="None (use path below)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">None (use path below)</SelectItem>
+                  {state.schemas
+                    .filter((s) => s.type === 'openapi')
+                    .map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.label?.trim() || s.id}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
               <p className="text-xs text-muted-foreground">
                 Use a registered OpenAPI schema (recommended) or specify a file path below. Registry schema
                 takes precedence.
@@ -1220,24 +1238,28 @@ export function ResourcesConfigPage() {
             </div>
             <div className="space-y-1">
               <Label>Auth type</Label>
-              <select
+              <Select
                 value={restDraft.auth?.type ?? 'none'}
-                onChange={(e) =>
+                onValueChange={(v) =>
                   setRestDraft((prev) => ({
                     ...prev,
                     auth: {
                       ...prev.auth,
-                      type: e.target.value as RestAuthConfig['type'],
+                      type: v as RestAuthConfig['type'],
                     },
                   }))
                 }
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
               >
-                <option value="none">None</option>
-                <option value="basic">Basic</option>
-                <option value="bearer">Bearer</option>
-                <option value="apiKey">API Key</option>
-              </select>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  <SelectItem value="basic">Basic</SelectItem>
+                  <SelectItem value="bearer">Bearer</SelectItem>
+                  <SelectItem value="apiKey">API Key</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             {restDraft.auth?.type === 'basic' && (
               <>
@@ -1310,19 +1332,23 @@ export function ResourcesConfigPage() {
                 </div>
                 <div className="space-y-1">
                   <Label>Location</Label>
-                  <select
+                  <Select
                     value={restDraft.auth.in ?? 'header'}
-                    onChange={(e) =>
+                    onValueChange={(v) =>
                       setRestDraft((prev) => ({
                         ...prev,
-                        auth: { ...prev.auth!, in: e.target.value },
+                        auth: { ...prev.auth!, in: v },
                       }))
                     }
-                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
                   >
-                    <option value="header">Header</option>
-                    <option value="query">Query</option>
-                  </select>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="header">Header</SelectItem>
+                      <SelectItem value="query">Query</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-1">
                   <Label>Value</Label>
@@ -1469,16 +1495,18 @@ export function ResourcesConfigPage() {
             </div>
             <div className="space-y-1">
               <Label>Agent type</Label>
-              <select
+              <Select
                 value={agentDraft.agent}
-                onChange={(e) =>
-                  setAgentDraft((prev) => ({ ...prev, agent: e.target.value }))
-                }
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+                onValueChange={(v) => setAgentDraft((prev) => ({ ...prev, agent: v }))}
               >
-                <option value="cursor">Cursor</option>
-                <option value="gemini">Gemini</option>
-              </select>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cursor">Cursor</SelectItem>
+                  <SelectItem value="gemini">Gemini</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-1">
               <Label>Model (optional)</Label>

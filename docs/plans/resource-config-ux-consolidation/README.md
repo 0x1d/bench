@@ -26,7 +26,7 @@ updated: 2025-03-21
 | 4 | TODO | Configuration Overview + Agent |
 | 5 | TODO | Copy, queries, verification |
 
-**Next up**: Phase 1 — Task 1.2 — Extract `parseConfigToState` / `stateToYaml` into `ui/src/lib/resource-config/`.
+**Next up**: Phase 1 — Task 1.3 — Implement `useResourceConfig` (read-modify-write + query invalidation).
 
 ## How to use this plan
 

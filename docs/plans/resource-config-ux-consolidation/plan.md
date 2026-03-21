@@ -73,9 +73,9 @@ flowchart TB
     CFG --> OV
     CFG --> AG
   end
-  subgraph lib [Shared lib]
+  subgraph lib [Shared lib ui/lib/resource-config]
     PARSE[parseConfigToState]
-    SER[stateToYaml]
+    SER[stateToConfig]
     HOOK[useResourceConfig / slices]
   end
   HOOK --> PARSE

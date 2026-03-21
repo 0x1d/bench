@@ -24,7 +24,8 @@ export function RestPage() {
           r.id.toLowerCase().includes(searchLower) ||
           (r.label || '').toLowerCase().includes(searchLower) ||
           (r.baseUrl || '').toLowerCase().includes(searchLower) ||
-          (r.openapiSpec || '').toLowerCase().includes(searchLower)
+          (r.openapiSpec || '').toLowerCase().includes(searchLower) ||
+          (r.schemaId || '').toLowerCase().includes(searchLower)
       )
     : resources;
 
@@ -58,7 +59,7 @@ export function RestPage() {
         </nav>
         <NotConfiguredCard
           title="No REST resources configured"
-          description="Add REST API endpoints in the Resources config page."
+          description="Add REST API endpoints on the Configuration page."
         />
       </div>
     );

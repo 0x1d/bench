@@ -1,8 +1,11 @@
 ---
-description: Development Guidelines for the Bench Monorepo
+name: bench-development
+description: Bench monorepo — api/ Go backend, ui/ React frontend, structure, Conventional Commits, gofmt, React Query, dev.sh. Use for any code change in this repo, new features, refactors, API handlers, or cross-cutting work. Invoke for Bench development tasks; required alongside area-specific skills (e.g. bench-ui for ui/).
 ---
 
 # Bench Development Guidelines
+
+**Invoke this skill for almost any Bench code change** in `api/`, `ui/`, or repo tooling. Pair with **bench-ui** when editing the frontend.
 
 This skill provides the core development guidelines for the `bench` monorepo. Use these guidelines whenever you create or modify code in this repository.
 

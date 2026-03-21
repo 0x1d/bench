@@ -1,7 +1,7 @@
 ---
-state: READY
+state: DONE
 created: 2025-03-13
-updated: 2025-03-15
+updated: 2025-03-21
 ---
 
 # Schema Registry Implementation Plan
@@ -262,7 +262,7 @@ ui/
 ## 11. Future Enhancements
 
 - **Kafka/messaging step**: `resources.messaging[]`, Kafka/publish flow step, AsyncAPI UI in flow panel — deferred from current scope.
-- **JSON Schema use cases**: Transform step (validate output against schema); config validation (validate `config.yaml` against schema).
+- **JSON Schema use cases** (registry supports `type: json-schema` today — load/browse in UI; optional validation later): transform step (validate output against a registered schema); validate Bench config or flow payloads against JSON Schema; CI gates on schema conformance.
 - **Schema versioning**: Multiple versions per schema ID.
 - **Remote URLs**: `source.url` for fetching specs from URLs (with caching).
 - **Inline schemas**: `source.inline` for small schemas in config.

@@ -1,0 +1,6 @@
+resources:
+  filesystem:
+    - id: test-fs
+      label: Test FS
+      path: /tmp
+  schemas: []

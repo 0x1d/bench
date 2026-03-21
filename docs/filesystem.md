@@ -29,13 +29,13 @@ If no roots are configured, the Filesystem page shows a setup message.
 
 ## API Reference
 
-All endpoints require the `X-API-Token` header. Base path: `/api/resources`.
+All endpoints require the `X-API-Token` header. Base path: **`/api/configuration`**. The same handlers are also mounted at **`/api/resources`** for backward compatibility.
 
 ### Roots
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/resources/roots` | List configured roots (id and label only) |
+| GET | `/api/configuration/roots` | List configured roots (id and label only) |
 
 **Response:** `{ "roots": [{ "id": string, "label": string }] }`
 
@@ -45,7 +45,7 @@ Root paths are never exposed to the client.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/resources` | List directory contents |
+| GET | `/api/configuration` | List directory contents |
 
 **Query parameters:**
 
@@ -89,7 +89,7 @@ Listings are capped at 1000 entries.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/resources/download` | Stream a file for download |
+| GET | `/api/configuration/download` | Stream a file for download |
 
 **Query parameters:**
 
@@ -104,7 +104,7 @@ Listings are capped at 1000 entries.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | `/api/resources` | Upload a file (multipart) |
+| POST | `/api/configuration` | Upload a file (multipart) |
 
 **Query parameters:**
 
@@ -124,7 +124,7 @@ Listings are capped at 1000 entries.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | `/api/resources` | Create a directory (JSON) |
+| POST | `/api/configuration` | Create a directory (JSON) |
 
 **Query parameters:** Same as upload (`root`, `path`).
 
@@ -141,7 +141,7 @@ Listings are capped at 1000 entries.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| PATCH | `/api/resources` | Rename a file or directory |
+| PATCH | `/api/configuration` | Rename a file or directory |
 
 **Request body:**
 
@@ -157,7 +157,7 @@ Listings are capped at 1000 entries.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| DELETE | `/api/resources` | Delete a file or directory |
+| DELETE | `/api/configuration` | Delete a file or directory |
 
 **Query parameters:**
 

@@ -1,8 +1,11 @@
 ---
-description: UI Guidelines and Design System for Bench
+name: bench-ui
+description: Bench UI — React, Vite, TypeScript, Tailwind, shadcn/ui, side panels, tokens, flow editor, infrastructure diagram. Use for any work under ui/, frontend components, pages, styling, hooks, or UX. Invoke before or while changing the Bench frontend; required for UI-related tasks in this repo.
 ---
 
 # UI Guidelines for Bench
+
+**Invoke this skill whenever you touch `ui/`**, build or modify components, pages, styling, or user-facing behavior. It complements **bench-development** (repo-wide) with UI-specific patterns.
 
 When building or modifying frontend components, follow these UI guidelines derived from the existing layout and component patterns of the Bench project.
 

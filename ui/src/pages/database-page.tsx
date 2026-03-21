@@ -98,7 +98,7 @@ export function DatabasePage() {
       <div className="flex w-full min-h-0 flex-1 flex-col gap-4">
         <NotConfiguredCard
           title="No database resources configured"
-          description="Add database entries in the Resources config page to enable the database editor."
+          description="Add database entries on the Configuration page to enable the database editor."
         />
       </div>
     );
@@ -109,7 +109,7 @@ export function DatabasePage() {
       <div className="flex w-full min-h-0 flex-1 flex-col gap-4">
         <NotConfiguredCard
           title="No connected databases available"
-          description="Configure a database resource in the Resources config page and refresh status."
+          description="Configure a database resource on the Configuration page and refresh status."
         />
       </div>
     );

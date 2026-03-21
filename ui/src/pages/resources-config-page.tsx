@@ -1,14 +1,23 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import yaml from 'js-yaml';
 import { Pencil, Plus, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { cn } from '@/lib/utils';
-import { useQueryClient } from '@tanstack/react-query';
-import { fetchConfig, fetchConfigExample, saveConfig } from '@/services/api';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { fetchConfig, fetchConfigExample, fetchSchemaContent, saveConfig } from '@/services/api';
+import { detectSchemaType, parseSchema } from '@/lib/schema-registry';
 import { useStatus } from '@/hooks/use-status';
 
 interface FilesystemResource {
@@ -39,8 +48,17 @@ interface RestResource {
   id: string;
   label: string;
   baseUrl: string;
+  /** Registered OpenAPI schema id; takes precedence over openapiSpec when set. */
+  schemaId?: string;
   openapiSpec: string;
   auth?: RestAuthConfig;
+}
+
+interface SchemaResourceEntry {
+  id: string;
+  label: string;
+  type: 'openapi' | 'asyncapi' | 'json-schema';
+  source: { path: string };
 }
 
 interface FlowsConfig {
@@ -66,6 +84,7 @@ interface WorkspaceResource {
 
 interface ResourceFormState {
   filesystem: FilesystemResource[];
+  schemas: SchemaResourceEntry[];
   databases: DatabaseResource[];
   rest: RestResource[];
   workspaces: WorkspaceResource[];
@@ -77,6 +96,9 @@ interface ResourceFormState {
 type PanelMode =
   | 'add-filesystem'
   | 'edit-filesystem'
+  | 'add-schema'
+  | 'edit-schema'
+  | 'schema-detail'
   | 'add-database'
   | 'edit-database'
   | 'add-rest'
@@ -89,14 +111,25 @@ type PanelMode =
 
 type DeleteTarget =
   | { type: 'filesystem'; index: number }
+  | { type: 'schema'; index: number }
   | { type: 'database'; index: number }
   | { type: 'rest'; index: number }
   | { type: 'workspace'; index: number }
   | null;
 
+type ResourceConfigTab =
+  | 'filesystem'
+  | 'schemas'
+  | 'databases'
+  | 'rest'
+  | 'flows'
+  | 'infrastructure'
+  | 'agent';
+
 function emptyState(): ResourceFormState {
   return {
     filesystem: [],
+    schemas: [],
     databases: [],
     rest: [],
     workspaces: [],
@@ -114,6 +147,12 @@ function emptyState(): ResourceFormState {
 function parseConfigToState(rawConfig: string): ResourceFormState {
   const parsed = (yaml.load(rawConfig) as {
     resources?: {
+      schemas?: Array<{
+        id?: string;
+        label?: string;
+        type?: string;
+        source?: { path?: string };
+      }>;
       filesystem?: Array<{ id?: string; label?: string; path?: string }>;
       databases?: Array<{
         id?: string;
@@ -126,6 +165,7 @@ function parseConfigToState(rawConfig: string): ResourceFormState {
         id?: string;
         label?: string;
         baseUrl?: string;
+        schemaId?: string;
         openapiSpec?: string;
         auth?: {
           type?: string;
@@ -157,6 +197,18 @@ function parseConfigToState(rawConfig: string): ResourceFormState {
     path: entry.path ?? '',
   }));
 
+  const schemas = (parsed.resources?.schemas ?? []).map((entry) => {
+    const t = (entry.type ?? 'openapi') as SchemaResourceEntry['type'];
+    const safeType: SchemaResourceEntry['type'] =
+      t === 'asyncapi' || t === 'json-schema' ? t : 'openapi';
+    return {
+      id: entry.id ?? '',
+      label: entry.label ?? '',
+      type: safeType,
+      source: { path: entry.source?.path ?? '' },
+    };
+  });
+
   const databases = (parsed.resources?.databases ?? []).map((entry) => ({
     id: entry.id ?? '',
     label: entry.label ?? '',
@@ -169,6 +221,7 @@ function parseConfigToState(rawConfig: string): ResourceFormState {
     id: entry.id ?? '',
     label: entry.label ?? '',
     baseUrl: entry.baseUrl ?? '',
+    schemaId: entry.schemaId ?? '',
     openapiSpec: entry.openapiSpec ?? '',
     auth: entry.auth
       ? {
@@ -207,11 +260,19 @@ function parseConfigToState(rawConfig: string): ResourceFormState {
     model: agentRaw?.model ?? '',
   };
 
-  return { filesystem, databases, rest, workspaces, flows, infrastructure, agent };
+  return { filesystem, schemas, databases, rest, workspaces, flows, infrastructure, agent };
 }
 
 function stateToConfig(state: ResourceFormState): string {
   const resources = {
+    schemas: state.schemas
+      .filter((entry) => entry.id.trim() !== '' || entry.source.path.trim() !== '')
+      .map((entry) => ({
+        id: entry.id.trim(),
+        label: entry.label.trim() || undefined,
+        type: entry.type,
+        source: { path: entry.source.path.trim() },
+      })),
     filesystem: state.filesystem
       .filter((entry) => entry.id.trim() !== '' || entry.path.trim() !== '')
       .map((entry) => ({
@@ -235,6 +296,7 @@ function stateToConfig(state: ResourceFormState): string {
           id: entry.id.trim(),
           label: entry.label.trim() || undefined,
           baseUrl: entry.baseUrl.trim(),
+          schemaId: entry.schemaId?.trim() || undefined,
           openapiSpec: entry.openapiSpec.trim() || undefined,
         };
         const auth = entry.auth;
@@ -299,6 +361,7 @@ export function ResourcesConfigPage() {
   const [panelIndex, setPanelIndex] = useState<number | null>(null);
   const [panelError, setPanelError] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget>(null);
+  const [resourceTab, setResourceTab] = useState<ResourceConfigTab>('filesystem');
   const [filesystemDraft, setFilesystemDraft] = useState<FilesystemResource>({
     id: '',
     label: '',
@@ -315,8 +378,15 @@ export function ResourcesConfigPage() {
     id: '',
     label: '',
     baseUrl: '',
+    schemaId: '',
     openapiSpec: '',
     auth: { type: 'none' },
+  });
+  const [schemaDraft, setSchemaDraft] = useState<SchemaResourceEntry>({
+    id: '',
+    label: '',
+    type: 'openapi',
+    source: { path: '' },
   });
   const [flowsDraft, setFlowsDraft] = useState<FlowsConfig>({
     path: './flows',
@@ -435,11 +505,36 @@ export function ResourcesConfigPage() {
     setDeleteTarget({ type: 'database', index });
   };
 
+  const openAddSchema = () => {
+    setSchemaDraft({ id: '', label: '', type: 'openapi', source: { path: '' } });
+    setPanelIndex(null);
+    setPanelError(null);
+    setPanelMode('add-schema');
+  };
+
+  const openEditSchema = (index: number) => {
+    setSchemaDraft(state.schemas[index]);
+    setPanelIndex(index);
+    setPanelError(null);
+    setPanelMode('edit-schema');
+  };
+
+  const openSchemaDetail = (index: number) => {
+    setPanelIndex(index);
+    setPanelError(null);
+    setPanelMode('schema-detail');
+  };
+
+  const openRemoveSchema = (index: number) => {
+    setDeleteTarget({ type: 'schema', index });
+  };
+
   const openAddRest = () => {
     setRestDraft({
       id: '',
       label: '',
       baseUrl: '',
+      schemaId: '',
       openapiSpec: '',
       auth: { type: 'none' },
     });
@@ -500,6 +595,37 @@ export function ResourcesConfigPage() {
     setPanelIndex(null);
     setPanelError(null);
   };
+
+  const schemaDetailId =
+    panelMode === 'schema-detail' && panelIndex != null
+      ? (state.schemas[panelIndex]?.id ?? '').trim()
+      : '';
+  const schemaDetailEntry =
+    panelMode === 'schema-detail' && panelIndex != null ? state.schemas[panelIndex] : null;
+
+  const {
+    data: schemaDetailRaw,
+    isLoading: schemaDetailLoading,
+    error: schemaDetailFetchError,
+  } = useQuery({
+    queryKey: ['schemas', 'content', schemaDetailId],
+    queryFn: () => fetchSchemaContent(schemaDetailId),
+    enabled: panelMode === 'schema-detail' && schemaDetailId.length > 0,
+  });
+
+  const schemaDetailParsed = useMemo(() => {
+    if (!schemaDetailEntry || schemaDetailRaw == null) return null;
+    const detected = detectSchemaType(schemaDetailRaw);
+    const kind =
+      schemaDetailEntry.type === 'openapi' ||
+      schemaDetailEntry.type === 'asyncapi' ||
+      schemaDetailEntry.type === 'json-schema'
+        ? schemaDetailEntry.type
+        : detected !== 'unknown'
+          ? detected
+          : 'openapi';
+    return parseSchema(schemaDetailRaw, kind);
+  }, [schemaDetailEntry, schemaDetailRaw]);
 
   const applyFilesystemDraft = async () => {
     const id = filesystemDraft.id.trim();
@@ -613,6 +739,54 @@ export function ResourcesConfigPage() {
     }
   };
 
+  const applySchemaDraft = async () => {
+    const id = schemaDraft.id.trim();
+    const path = schemaDraft.source.path.trim();
+    if (id === '' || path === '') {
+      setPanelError('Schema ID and source path are required.');
+      return;
+    }
+
+    const duplicate = state.schemas.some(
+      (entry, idx) => idx !== panelIndex && entry.id.trim() === id
+    );
+    if (duplicate) {
+      setPanelError(`Schema ID "${id}" already exists.`);
+      return;
+    }
+
+    const nextEntry: SchemaResourceEntry = {
+      id,
+      label: schemaDraft.label.trim(),
+      type: schemaDraft.type,
+      source: { path },
+    };
+
+    const prevState = state;
+    const nextState =
+      panelMode === 'add-schema'
+        ? { ...prevState, schemas: [...prevState.schemas, nextEntry] }
+        : panelMode === 'edit-schema' && panelIndex != null
+          ? {
+            ...prevState,
+            schemas: prevState.schemas.map((entry, idx) =>
+              idx === panelIndex ? nextEntry : entry
+            ),
+          }
+          : prevState;
+
+    if (nextState === prevState) return;
+
+    setState(nextState);
+    try {
+      await persistState(nextState);
+      closePanel();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Save failed');
+      setState(prevState);
+    }
+  };
+
   const applyRestDraft = async () => {
     const id = restDraft.id.trim();
     const baseUrl = restDraft.baseUrl.trim();
@@ -647,6 +821,7 @@ export function ResourcesConfigPage() {
       id,
       label: restDraft.label.trim(),
       baseUrl,
+      schemaId: restDraft.schemaId?.trim() || undefined,
       openapiSpec: restDraft.openapiSpec.trim(),
       auth: auth && auth.type !== 'none' ? auth : undefined,
     };
@@ -795,28 +970,33 @@ export function ResourcesConfigPage() {
   const confirmRemove = async () => {
     if (!deleteTarget) return;
     const prevState = state;
-    const nextState =
-      deleteTarget.type === 'filesystem'
-        ? {
-          ...prevState,
-          filesystem: prevState.filesystem.filter((_, idx) => idx !== deleteTarget.index),
-        }
-        : deleteTarget.type === 'database'
-          ? {
-            ...prevState,
-            databases: prevState.databases.filter((_, idx) => idx !== deleteTarget.index),
-          }
-          : deleteTarget.type === 'workspace'
-            ? {
-              ...prevState,
-              workspaces: prevState.workspaces.filter(
-                (_, idx) => idx !== deleteTarget.index
-              ),
-            }
-            : {
-              ...prevState,
-              rest: prevState.rest.filter((_, idx) => idx !== deleteTarget.index),
-            };
+    let nextState: ResourceFormState;
+    if (deleteTarget.type === 'filesystem') {
+      nextState = {
+        ...prevState,
+        filesystem: prevState.filesystem.filter((_, idx) => idx !== deleteTarget.index),
+      };
+    } else if (deleteTarget.type === 'schema') {
+      nextState = {
+        ...prevState,
+        schemas: prevState.schemas.filter((_, idx) => idx !== deleteTarget.index),
+      };
+    } else if (deleteTarget.type === 'database') {
+      nextState = {
+        ...prevState,
+        databases: prevState.databases.filter((_, idx) => idx !== deleteTarget.index),
+      };
+    } else if (deleteTarget.type === 'workspace') {
+      nextState = {
+        ...prevState,
+        workspaces: prevState.workspaces.filter((_, idx) => idx !== deleteTarget.index),
+      };
+    } else {
+      nextState = {
+        ...prevState,
+        rest: prevState.rest.filter((_, idx) => idx !== deleteTarget.index),
+      };
+    }
 
     setState(nextState);
     setDeleteTarget(null);
@@ -834,33 +1014,45 @@ export function ResourcesConfigPage() {
       ? 'Add filesystem resource'
       : panelMode === 'edit-filesystem'
         ? 'Edit filesystem resource'
-        : panelMode === 'add-database'
-          ? 'Add database resource'
-          : panelMode === 'edit-database'
-            ? 'Edit database resource'
-            : panelMode === 'add-rest'
-              ? 'Add REST resource'
-              : panelMode === 'edit-rest'
-                ? 'Edit REST resource'
-                : panelMode === 'add-workspace'
-                  ? 'Add flow workspace'
-                  : panelMode === 'edit-workspace'
-                    ? 'Edit flow workspace'
-                    : panelMode === 'edit-flows'
-                      ? 'Configure flows'
-                      : panelMode === 'edit-infrastructure'
-                        ? 'Configure infrastructure'
-                        : panelMode === 'edit-agent'
-                          ? 'Configure AI agent'
-                          : 'Resource';
+        : panelMode === 'add-schema'
+          ? 'Add schema'
+          : panelMode === 'edit-schema'
+            ? 'Edit schema'
+            : panelMode === 'schema-detail'
+              ? schemaDetailEntry
+                ? `Schema: ${schemaDetailEntry.label?.trim() || schemaDetailEntry.id}`
+                : 'Schema details'
+              : panelMode === 'add-database'
+              ? 'Add database resource'
+              : panelMode === 'edit-database'
+                ? 'Edit database resource'
+                : panelMode === 'add-rest'
+                  ? 'Add REST resource'
+                  : panelMode === 'edit-rest'
+                    ? 'Edit REST resource'
+                    : panelMode === 'add-workspace'
+                      ? 'Add flow workspace'
+                      : panelMode === 'edit-workspace'
+                        ? 'Edit flow workspace'
+                        : panelMode === 'edit-flows'
+                          ? 'Configure flows'
+                          : panelMode === 'edit-infrastructure'
+                            ? 'Configure infrastructure'
+                            : panelMode === 'edit-agent'
+                              ? 'Configure AI agent'
+                              : 'Resource';
   const panelDescription = panelMode?.includes('filesystem')
     ? 'Configure filesystem resource fields used for file browsing.'
-    : panelMode?.includes('database')
-      ? 'Configure database resource fields.'
-      : panelMode?.includes('rest')
-        ? 'Configure REST API endpoint with optional auth and OpenAPI spec.'
+    : panelMode === 'add-schema' || panelMode === 'edit-schema'
+      ? 'Path is relative to the config directory.'
+      : panelMode === 'schema-detail' && schemaDetailEntry
+        ? `${schemaDetailEntry.type} · ${schemaDetailEntry.source.path}`
+        : panelMode?.includes('database')
+        ? 'Configure database resource fields.'
+        : panelMode?.includes('rest')
+          ? 'Configure REST API endpoint with optional auth. Use a registered OpenAPI schema or a spec file path.'
         : panelMode?.includes('workspace')
-          ? 'Flowpipe profile: named config for pipeline execution (host, port, etc.). Init adds block to flows/workspaces.fpc.'
+          ? 'Flowpipe profile: id, label, and server URL.'
           : panelMode === 'edit-flows'
             ? 'Flowpipe integration: flows directory and server URL.'
             : panelMode === 'edit-infrastructure'
@@ -959,6 +1151,165 @@ export function ResourcesConfigPage() {
           </div>
         )}
 
+        {(panelMode === 'add-schema' || panelMode === 'edit-schema') && (
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label>ID</Label>
+              <Input
+                value={schemaDraft.id}
+                onChange={(e) =>
+                  setSchemaDraft((prev) => ({ ...prev, id: e.target.value }))
+                }
+                placeholder="petstore-api"
+                className="font-mono"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>Label</Label>
+              <Input
+                value={schemaDraft.label}
+                onChange={(e) =>
+                  setSchemaDraft((prev) => ({ ...prev, label: e.target.value }))
+                }
+                placeholder="Petstore API"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>Type</Label>
+              <Select
+                value={schemaDraft.type}
+                onValueChange={(v) =>
+                  setSchemaDraft((prev) => ({
+                    ...prev,
+                    type: v as SchemaResourceEntry['type'],
+                  }))
+                }
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Schema type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="openapi">openapi</SelectItem>
+                  <SelectItem value="asyncapi">asyncapi</SelectItem>
+                  <SelectItem value="json-schema">json-schema</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Source path</Label>
+              <Input
+                value={schemaDraft.source.path}
+                onChange={(e) =>
+                  setSchemaDraft((prev) => ({
+                    ...prev,
+                    source: { ...prev.source, path: e.target.value },
+                  }))
+                }
+                placeholder="./workspace/rest/openapi.json"
+                className="font-mono"
+              />
+              <p className="text-xs text-muted-foreground">
+                Path to the schema file, relative to the Bench config directory.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {panelMode === 'schema-detail' && schemaDetailEntry && (
+          <div className="space-y-4 text-sm">
+            <div className="grid grid-cols-1 gap-2 rounded-lg border border-border bg-muted/20 p-3 font-mono text-xs sm:grid-cols-2">
+              <div>
+                <span className="text-muted-foreground">ID</span>
+                <p className="break-all">{schemaDetailEntry.id}</p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Label</span>
+                <p>{schemaDetailEntry.label?.trim() || '—'}</p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Type</span>
+                <p>{schemaDetailEntry.type}</p>
+              </div>
+              <div className="sm:col-span-2">
+                <span className="text-muted-foreground">Source path</span>
+                <p className="break-all">{schemaDetailEntry.source.path}</p>
+              </div>
+            </div>
+
+            {schemaDetailId === '' && (
+              <p className="text-destructive text-sm">
+                This schema has no ID. Set an ID in Edit schema to load content.
+              </p>
+            )}
+            {schemaDetailLoading && (
+              <p className="text-muted-foreground">Loading schema content...</p>
+            )}
+            {schemaDetailFetchError && (
+              <p className="text-destructive">
+                {schemaDetailFetchError instanceof Error
+                  ? schemaDetailFetchError.message
+                  : 'Failed to load schema content'}
+              </p>
+            )}
+            {schemaDetailRaw != null && schemaDetailParsed && (
+              <div className="rounded-lg border border-border bg-card p-4">
+                {schemaDetailParsed.type === 'openapi' && (
+                  <div className="space-y-4">
+                    {schemaDetailParsed.data.groups.map((g) => (
+                      <div key={g.tag}>
+                        <h3 className="mb-2 font-medium">{g.tag}</h3>
+                        <ul className="space-y-1 font-mono text-xs">
+                          {g.operations.map((op, i) => (
+                            <li key={`${op.path}-${op.method}-${i}`}>
+                              <span className="text-muted-foreground">{op.method}</span> {op.path}
+                              {op.summary ? (
+                                <span className="ml-2 text-muted-foreground">— {op.summary}</span>
+                              ) : null}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {schemaDetailParsed.type === 'asyncapi' && (
+                  <div className="space-y-3">
+                    <h3 className="font-medium">Channels</h3>
+                    <ul className="space-y-2">
+                      {schemaDetailParsed.data.operations.map((op, i) => (
+                        <li key={`${op.channel}-${op.direction}-${i}`} className="font-mono text-xs">
+                          <span className="text-muted-foreground">{op.direction}</span> {op.channel}
+                          {op.summary ? (
+                            <span className="ml-2 text-muted-foreground">— {op.summary}</span>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {schemaDetailParsed.type === 'json-schema' && (
+                  <div className="space-y-2">
+                    {schemaDetailParsed.data.title && (
+                      <p className="font-medium">{schemaDetailParsed.data.title}</p>
+                    )}
+                    <p className="text-muted-foreground">Properties</p>
+                    <ul className="list-inside list-disc font-mono text-xs">
+                      {schemaDetailParsed.data.properties
+                        ? Object.keys(schemaDetailParsed.data.properties).map((k) => (
+                            <li key={k}>{k}</li>
+                          ))
+                        : null}
+                    </ul>
+                  </div>
+                )}
+                {schemaDetailParsed.type === 'unknown' && (
+                  <p className="text-muted-foreground">Could not parse this schema for preview.</p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         {(panelMode === 'add-rest' || panelMode === 'edit-rest') && (
           <div className="space-y-3">
             <div className="space-y-1">
@@ -993,6 +1344,36 @@ export function ResourcesConfigPage() {
               />
             </div>
             <div className="space-y-1">
+              <Label>OpenAPI schema (registry)</Label>
+              <Select
+                value={restDraft.schemaId?.trim() ? restDraft.schemaId : '__none__'}
+                onValueChange={(v) =>
+                  setRestDraft((prev) => ({
+                    ...prev,
+                    schemaId: v === '__none__' ? '' : v,
+                  }))
+                }
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="None (use path below)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">None (use path below)</SelectItem>
+                  {state.schemas
+                    .filter((s) => s.type === 'openapi')
+                    .map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.label?.trim() || s.id}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Use a registered OpenAPI schema (recommended) or specify a file path below. Registry schema
+                takes precedence.
+              </p>
+            </div>
+            <div className="space-y-1">
               <Label>OpenAPI spec path</Label>
               <Input
                 value={restDraft.openapiSpec}
@@ -1003,29 +1384,33 @@ export function ResourcesConfigPage() {
                 className="font-mono"
               />
               <p className="text-xs text-muted-foreground">
-                Path relative to config directory.
+                Path relative to config directory. Leave empty when using a registry schema above.
               </p>
             </div>
             <div className="space-y-1">
               <Label>Auth type</Label>
-              <select
+              <Select
                 value={restDraft.auth?.type ?? 'none'}
-                onChange={(e) =>
+                onValueChange={(v) =>
                   setRestDraft((prev) => ({
                     ...prev,
                     auth: {
                       ...prev.auth,
-                      type: e.target.value as RestAuthConfig['type'],
+                      type: v as RestAuthConfig['type'],
                     },
                   }))
                 }
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
               >
-                <option value="none">None</option>
-                <option value="basic">Basic</option>
-                <option value="bearer">Bearer</option>
-                <option value="apiKey">API Key</option>
-              </select>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  <SelectItem value="basic">Basic</SelectItem>
+                  <SelectItem value="bearer">Bearer</SelectItem>
+                  <SelectItem value="apiKey">API Key</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             {restDraft.auth?.type === 'basic' && (
               <>
@@ -1098,19 +1483,23 @@ export function ResourcesConfigPage() {
                 </div>
                 <div className="space-y-1">
                   <Label>Location</Label>
-                  <select
+                  <Select
                     value={restDraft.auth.in ?? 'header'}
-                    onChange={(e) =>
+                    onValueChange={(v) =>
                       setRestDraft((prev) => ({
                         ...prev,
-                        auth: { ...prev.auth!, in: e.target.value },
+                        auth: { ...prev.auth!, in: v },
                       }))
                     }
-                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
                   >
-                    <option value="header">Header</option>
-                    <option value="query">Query</option>
-                  </select>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="header">Header</SelectItem>
+                      <SelectItem value="query">Query</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-1">
                   <Label>Value</Label>
@@ -1257,16 +1646,18 @@ export function ResourcesConfigPage() {
             </div>
             <div className="space-y-1">
               <Label>Agent type</Label>
-              <select
+              <Select
                 value={agentDraft.agent}
-                onChange={(e) =>
-                  setAgentDraft((prev) => ({ ...prev, agent: e.target.value }))
-                }
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+                onValueChange={(v) => setAgentDraft((prev) => ({ ...prev, agent: v }))}
               >
-                <option value="cursor">Cursor</option>
-                <option value="gemini">Gemini</option>
-              </select>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cursor">Cursor</SelectItem>
+                  <SelectItem value="gemini">Gemini</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-1">
               <Label>Model (optional)</Label>
@@ -1290,9 +1681,17 @@ export function ResourcesConfigPage() {
           <Button variant="outline" onClick={closePanel}>
             Cancel
           </Button>
-          {(panelMode === 'add-filesystem' || panelMode === 'edit-filesystem') && (
-            <Button onClick={applyFilesystemDraft}>
+          {panelMode === 'schema-detail' && panelIndex != null && (
+            <Button onClick={() => openEditSchema(panelIndex)}>Edit schema</Button>
+          )}
+        {(panelMode === 'add-filesystem' || panelMode === 'edit-filesystem') && (
+          <Button onClick={applyFilesystemDraft}>
               {panelMode === 'add-filesystem' ? 'Add' : 'Save changes'}
+            </Button>
+          )}
+          {(panelMode === 'add-schema' || panelMode === 'edit-schema') && (
+            <Button onClick={applySchemaDraft}>
+              {panelMode === 'add-schema' ? 'Add' : 'Save changes'}
             </Button>
           )}
           {(panelMode === 'add-database' || panelMode === 'edit-database') && (
@@ -1335,14 +1734,23 @@ export function ResourcesConfigPage() {
           'min-h-0 min-w-0 flex-1 overflow-auto p-4 md:p-6'
         )}
       >
-        <div className="flex w-full min-h-0 flex-1 flex-col gap-6">
-          <div className="rounded-lg border border-border bg-card p-4">
-            <h2 className="text-lg font-medium tracking-tight">Resources</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Configure filesystem roots, database resources, REST API endpoints, infrastructure (Terraform), and flows (Flowpipe).
-            </p>
-          </div>
+        <div className="flex w-full min-h-0 flex-1 flex-col gap-4">
+          <Tabs
+            value={resourceTab}
+            onValueChange={(v) => setResourceTab(v as ResourceConfigTab)}
+            className="flex min-h-0 flex-1 flex-col overflow-hidden"
+          >
+            <TabsList variant="line" className="w-full shrink-0 flex-wrap justify-start gap-x-1">
+              <TabsTrigger value="filesystem">Filesystem</TabsTrigger>
+              <TabsTrigger value="schemas">Schemas</TabsTrigger>
+              <TabsTrigger value="databases">Databases</TabsTrigger>
+              <TabsTrigger value="rest">REST</TabsTrigger>
+              <TabsTrigger value="flows">Flows</TabsTrigger>
+              <TabsTrigger value="infrastructure">Infrastructure</TabsTrigger>
+              <TabsTrigger value="agent">Agent</TabsTrigger>
+            </TabsList>
 
+            <TabsContent value="filesystem" className="mt-3 min-h-0 flex-1 overflow-auto">
           <section className="rounded-lg border border-border bg-card p-4">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-medium">Filesystem resources</h3>
@@ -1402,7 +1810,73 @@ export function ResourcesConfigPage() {
               </div>
             )}
           </section>
+            </TabsContent>
 
+            <TabsContent value="schemas" className="mt-3 min-h-0 flex-1 overflow-auto">
+          <section className="rounded-lg border border-border bg-card p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-base font-medium">Schemas</h3>
+              <Button variant="outline" size="sm" onClick={openAddSchema}>
+                <Plus className="size-4" />
+                Add schema
+              </Button>
+            </div>
+            {state.schemas.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No schemas registered.</p>
+            ) : (
+              <div className="overflow-x-auto rounded-lg border border-border bg-card">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/30">
+                      <th className="px-4 py-3 text-left font-medium">ID</th>
+                      <th className="px-4 py-3 text-left font-medium">Label</th>
+                      <th className="px-4 py-3 text-left font-medium">Type</th>
+                      <th className="px-4 py-3 text-left font-medium">Source path</th>
+                      <th className="w-28 px-2 py-3" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {state.schemas.map((entry, index) => (
+                      <tr
+                        key={`schema-${index}`}
+                        className="border-b border-border/50 last:border-b-0 cursor-pointer hover:bg-accent/30"
+                        onClick={() => openSchemaDetail(index)}
+                      >
+                        <td className="px-4 py-2 font-mono">{entry.id}</td>
+                        <td className="px-4 py-2">{entry.label || '—'}</td>
+                        <td className="px-4 py-2 font-mono">{entry.type}</td>
+                        <td className="px-4 py-2 font-mono">{entry.source.path}</td>
+                        <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon-xs"
+                              onClick={() => openEditSchema(index)}
+                              aria-label={`Edit schema ${entry.id}`}
+                            >
+                              <Pencil className="size-3" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon-xs"
+                              onClick={() => openRemoveSchema(index)}
+                              aria-label={`Remove schema ${entry.id}`}
+                              className="text-destructive hover:text-destructive"
+                            >
+                              <Trash2 className="size-3" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+            </TabsContent>
+
+            <TabsContent value="databases" className="mt-3 min-h-0 flex-1 overflow-auto">
           <section className="rounded-lg border border-border bg-card p-4">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-medium">Database resources</h3>
@@ -1466,7 +1940,9 @@ export function ResourcesConfigPage() {
               </div>
             )}
           </section>
+            </TabsContent>
 
+            <TabsContent value="rest" className="mt-3 min-h-0 flex-1 overflow-auto">
           <section className="rounded-lg border border-border bg-card p-4">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-medium">REST resources</h3>
@@ -1485,6 +1961,7 @@ export function ResourcesConfigPage() {
                       <th className="px-4 py-3 text-left font-medium">ID</th>
                       <th className="px-4 py-3 text-left font-medium">Label</th>
                       <th className="px-4 py-3 text-left font-medium">Base URL</th>
+                      <th className="px-4 py-3 text-left font-medium">Schema</th>
                       <th className="px-4 py-3 text-left font-medium">OpenAPI spec</th>
                       <th className="w-28 px-2 py-3" />
                     </tr>
@@ -1499,6 +1976,7 @@ export function ResourcesConfigPage() {
                         <td className="px-4 py-2 font-mono">{entry.id}</td>
                         <td className="px-4 py-2">{entry.label || '—'}</td>
                         <td className="px-4 py-2 font-mono truncate max-w-[200px]">{entry.baseUrl}</td>
+                        <td className="px-4 py-2 font-mono">{entry.schemaId?.trim() || '—'}</td>
                         <td className="px-4 py-2 font-mono">{entry.openapiSpec || '—'}</td>
                         <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-end gap-1">
@@ -1528,63 +2006,9 @@ export function ResourcesConfigPage() {
               </div>
             )}
           </section>
+            </TabsContent>
 
-          <section className="rounded-lg border border-border bg-card p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-base font-medium">Infrastructure</h3>
-              <Button variant="outline" size="sm" onClick={openEditInfrastructure}>
-                <Pencil className="size-4" />
-                Configure
-              </Button>
-            </div>
-            <div className="space-y-2 text-sm">
-              <div className="flex gap-2">
-                <span className="text-muted-foreground">Path:</span>
-                <span className="font-mono">{state.infrastructure.path || './workspace/infra'}</span>
-              </div>
-              <p className="text-muted-foreground">
-                Terraform configuration directory for infrastructure as code.
-              </p>
-            </div>
-          </section>
-
-          <section className="rounded-lg border border-border bg-card p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-base font-medium">AI Agent</h3>
-              <Button variant="outline" size="sm" onClick={openEditAgent}>
-                <Pencil className="size-4" />
-                Configure
-              </Button>
-            </div>
-            <div className="space-y-4 text-sm">
-              <div className="grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2">
-                <div className="flex gap-2">
-                  <span className="text-muted-foreground">Endpoint:</span>
-                  <span className="font-mono">{state.agent.endpoint}</span>
-                </div>
-                <div className="flex gap-2">
-                  <span className="text-muted-foreground">Type:</span>
-                  <span className="capitalize">{state.agent.agent}</span>
-                </div>
-                <div className="flex gap-2">
-                  <span className="text-muted-foreground">Directory:</span>
-                  <span className="font-mono truncate" title={state.agent.workingDirectory}>
-                    {state.agent.workingDirectory || '—'}
-                  </span>
-                </div>
-                {state.agent.model && (
-                  <div className="flex gap-2">
-                    <span className="text-muted-foreground">Model:</span>
-                    <span className="font-mono">{state.agent.model}</span>
-                  </div>
-                )}
-              </div>
-              <p className="text-muted-foreground text-xs">
-                AI agent configuration for the persistent chat and automated tasks.
-              </p>
-            </div>
-          </section>
-
+            <TabsContent value="flows" className="mt-3 min-h-0 flex-1 overflow-auto">
           <section className="rounded-lg border border-border bg-card p-4">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-medium">Flows</h3>
@@ -1663,6 +2087,68 @@ export function ResourcesConfigPage() {
               </div>
             </div>
           </section>
+            </TabsContent>
+
+            <TabsContent value="infrastructure" className="mt-3 min-h-0 flex-1 overflow-auto">
+          <section className="rounded-lg border border-border bg-card p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-base font-medium">Infrastructure</h3>
+              <Button variant="outline" size="sm" onClick={openEditInfrastructure}>
+                <Pencil className="size-4" />
+                Configure
+              </Button>
+            </div>
+            <div className="space-y-2 text-sm">
+              <div className="flex gap-2">
+                <span className="text-muted-foreground">Path:</span>
+                <span className="font-mono">{state.infrastructure.path || './workspace/infra'}</span>
+              </div>
+              <p className="text-muted-foreground">
+                Terraform configuration directory for infrastructure as code.
+              </p>
+            </div>
+          </section>
+            </TabsContent>
+
+            <TabsContent value="agent" className="mt-3 min-h-0 flex-1 overflow-auto">
+          <section className="rounded-lg border border-border bg-card p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-base font-medium">AI Agent</h3>
+              <Button variant="outline" size="sm" onClick={openEditAgent}>
+                <Pencil className="size-4" />
+                Configure
+              </Button>
+            </div>
+            <div className="space-y-4 text-sm">
+              <div className="grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2">
+                <div className="flex gap-2">
+                  <span className="text-muted-foreground">Endpoint:</span>
+                  <span className="font-mono">{state.agent.endpoint}</span>
+                </div>
+                <div className="flex gap-2">
+                  <span className="text-muted-foreground">Type:</span>
+                  <span className="capitalize">{state.agent.agent}</span>
+                </div>
+                <div className="flex gap-2">
+                  <span className="text-muted-foreground">Directory:</span>
+                  <span className="font-mono truncate" title={state.agent.workingDirectory}>
+                    {state.agent.workingDirectory || '—'}
+                  </span>
+                </div>
+                {state.agent.model && (
+                  <div className="flex gap-2">
+                    <span className="text-muted-foreground">Model:</span>
+                    <span className="font-mono">{state.agent.model}</span>
+                  </div>
+                )}
+              </div>
+              <p className="text-muted-foreground text-xs">
+                AI agent configuration for the persistent chat and automated tasks.
+              </p>
+            </div>
+          </section>
+            </TabsContent>
+          </Tabs>
 
           {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
@@ -1678,8 +2164,9 @@ export function ResourcesConfigPage() {
       </div>
       <div
         className={cn(
-          'bg-sidebar text-sidebar-foreground relative z-20 hidden min-h-0 w-[360px] flex-col overflow-auto border-l lg:flex',
-          panelOpen ? 'lg:flex' : 'lg:hidden'
+          'bg-sidebar text-sidebar-foreground relative z-20 hidden min-h-0 flex-col overflow-auto border-l lg:flex',
+          panelOpen ? 'lg:flex' : 'lg:hidden',
+          panelMode === 'schema-detail' ? 'lg:w-[min(560px,50vw)]' : 'lg:w-[360px]'
         )}
       >
         {panelBody}
@@ -1696,9 +2183,11 @@ export function ResourcesConfigPage() {
               ? `Remove database resource "${state.databases[deleteTarget.index]?.id}"?`
               : deleteTarget?.type === 'rest'
                 ? `Remove REST resource "${state.rest[deleteTarget.index]?.id}"?`
-                : deleteTarget?.type === 'workspace'
-                  ? `Remove flow profile "${state.workspaces[deleteTarget.index]?.id}"?`
-                  : 'Remove selected resource?'
+                : deleteTarget?.type === 'schema'
+                  ? `Remove schema "${state.schemas[deleteTarget.index]?.id}"?`
+                  : deleteTarget?.type === 'workspace'
+                    ? `Remove flow profile "${state.workspaces[deleteTarget.index]?.id}"?`
+                    : 'Remove selected resource?'
         }
         onConfirm={confirmRemove}
         confirmLabel="Remove"

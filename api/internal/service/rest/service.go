@@ -13,6 +13,7 @@ import (
 	"github.com/0x1d/bench/api/internal/config"
 	"github.com/0x1d/bench/api/internal/model"
 	restpkg "github.com/0x1d/bench/api/internal/rest"
+	"github.com/0x1d/bench/api/internal/service/schema"
 )
 
 var (
@@ -39,6 +40,7 @@ func (s *Service) List() []model.RestResource {
 			ID:          e.ID,
 			Label:       e.Label,
 			BaseURL:     e.BaseURL,
+			SchemaID:    e.SchemaID,
 			OpenAPISpec: e.OpenAPISpec,
 		})
 	}
@@ -64,6 +66,10 @@ func (s *Service) Spec(id string) ([]byte, error) {
 	entry, err := s.GetEntry(id)
 	if err != nil {
 		return nil, err
+	}
+	if entry.SchemaID != "" {
+		schemaSvc := schema.NewService()
+		return schemaSvc.Content(entry.SchemaID)
 	}
 	if entry.OpenAPISpec == "" {
 		return nil, ErrSpecNotFound

@@ -84,8 +84,9 @@ The token is never sent to the browser or bundled into the frontend.
 - **SSRF prevention**: The `baseUrl` is validated before proxying. Requests to localhost, 127.x, 10.x, 172.16–31.x, 192.168.x, 169.254.x, and ::1 are blocked.
 - URL scheme: only `http` and `https` are allowed.
 - OpenAPI spec path: resolved relative to config dir; path traversal is rejected.
+- **Schema registry** (`resources.schemas`): `source.path` uses the same resolution and traversal rules as REST `openapiSpec`.
 
-See [rest.md](rest.md) for the full API reference.
+See [rest.md](rest.md) and [schema-registry.md](schema-registry.md) for API details.
 
 ## Filesystem
 

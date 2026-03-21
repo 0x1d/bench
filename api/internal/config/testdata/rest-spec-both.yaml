@@ -1,0 +1,17 @@
+resources:
+  filesystem:
+    - id: x
+      label: x
+      path: /tmp
+  schemas:
+    - id: reg-schema
+      label: Registry
+      type: openapi
+      source:
+        path: petstore-from-registry.json
+  rest:
+    - id: r1
+      label: R
+      baseUrl: https://example.com
+      schemaId: reg-schema
+      openapiSpec: petstore-from-file.json

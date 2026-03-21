@@ -10,7 +10,15 @@ func RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/config/example", HandleConfigExample)
 	mux.HandleFunc("POST /api/config/save", HandleConfigSave)
 	mux.HandleFunc("POST /api/config", HandleConfigUpload)
-	// Resource routes: more specific paths first
+	// Filesystem routes (configured roots under config.yaml `resources.filesystem`).
+	// Primary path: /api/configuration/*; /api/resources/* kept for backward compatibility.
+	mux.HandleFunc("GET /api/configuration/roots", HandleResourceRoots)
+	mux.HandleFunc("GET /api/configuration/download", HandleResourceDownload)
+	mux.HandleFunc("POST /api/configuration", HandleResourcePost)
+	mux.HandleFunc("PUT /api/configuration", HandleResourceMove)
+	mux.HandleFunc("PATCH /api/configuration", HandleResourcePatch)
+	mux.HandleFunc("DELETE /api/configuration", HandleResourceDelete)
+	mux.HandleFunc("GET /api/configuration", HandleResourceList)
 	mux.HandleFunc("GET /api/resources/roots", HandleResourceRoots)
 	mux.HandleFunc("GET /api/resources/download", HandleResourceDownload)
 	mux.HandleFunc("POST /api/resources", HandleResourcePost)
@@ -18,6 +26,10 @@ func RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PATCH /api/resources", HandleResourcePatch)
 	mux.HandleFunc("DELETE /api/resources", HandleResourceDelete)
 	mux.HandleFunc("GET /api/resources", HandleResourceList)
+	// Schema registry: more specific paths first
+	mux.HandleFunc("GET /api/schemas/{id}/content", HandleSchemaContent)
+	mux.HandleFunc("GET /api/schemas/{id}", HandleSchemaGet)
+	mux.HandleFunc("GET /api/schemas", HandleSchemaList)
 	// REST routes: more specific paths first
 	mux.HandleFunc("GET /api/rest/{id}/spec", HandleRestSpec)
 	mux.HandleFunc("POST /api/rest/{id}/proxy", HandleRestProxy)

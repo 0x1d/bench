@@ -28,7 +28,7 @@ infrastructure:
 ```
 
 - `path` defaults to `./workspace/infra` (relative to config directory) when omitted in internal resolution.
-- In the Resources config UI, this is shown as "Infrastructure directory".
+- On the Configuration page, this is shown as "Infrastructure directory".
 
 ## UI Workflow
 

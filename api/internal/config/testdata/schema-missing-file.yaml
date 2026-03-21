@@ -1,0 +1,11 @@
+resources:
+  filesystem:
+    - id: x
+      label: x
+      path: /tmp
+  schemas:
+    - id: missing-file
+      label: Missing file
+      type: openapi
+      source:
+        path: this-file-intentionally-missing-xyz.json

@@ -1735,13 +1735,6 @@ export function ResourcesConfigPage() {
         )}
       >
         <div className="flex w-full min-h-0 flex-1 flex-col gap-4">
-          <div className="rounded-lg border border-border bg-card p-4">
-            <h2 className="text-lg font-medium tracking-tight">Resources</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Configure filesystem roots, database resources, REST API endpoints, infrastructure (Terraform), and flows (Flowpipe).
-            </p>
-          </div>
-
           <Tabs
             value={resourceTab}
             onValueChange={(v) => setResourceTab(v as ResourceConfigTab)}

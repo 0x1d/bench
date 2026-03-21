@@ -64,6 +64,19 @@ type RestEntry struct {
 	Auth        *RestAuth `yaml:"auth,omitempty"`
 }
 
+// SchemaSource holds the on-disk location for a schema entry.
+type SchemaSource struct {
+	Path string `yaml:"path"`
+}
+
+// SchemaEntry represents one registered schema in resources.schemas.
+type SchemaEntry struct {
+	ID     string       `yaml:"id"`
+	Label  string       `yaml:"label"`
+	Type   string       `yaml:"type"`
+	Source SchemaSource `yaml:"source"`
+}
+
 // IsEnabled returns true when the database entry is enabled.
 // Nil defaults to enabled.
 func (d DatabaseEntry) IsEnabled() bool {
@@ -87,6 +100,7 @@ type ResourcesConfig struct {
 	Filesystem []FilesystemEntry `yaml:"filesystem"`
 	Databases  []DatabaseEntry   `yaml:"databases"`
 	Rest       []RestEntry       `yaml:"rest"`
+	Schemas    []SchemaEntry     `yaml:"schemas"`
 }
 
 // FlowsConfig holds flow-related settings including workspaces.
@@ -201,6 +215,12 @@ var validRestAuthTypes = map[RestAuthType]bool{
 	RestAuthNone: true, RestAuthBasic: true, RestAuthBearer: true, RestAuthAPIKey: true,
 }
 
+var validSchemaTypes = map[string]struct{}{
+	"openapi":     {},
+	"asyncapi":    {},
+	"json-schema": {},
+}
+
 func validateConfig(cfg Config) error {
 	seenDB := map[string]struct{}{}
 	defaults := 0
@@ -258,6 +278,26 @@ func validateConfig(cfg Config) error {
 					return fmt.Errorf("resources.rest[%d].auth.in must be header or query for apiKey auth", i)
 				}
 			}
+		}
+	}
+
+	seenSchema := map[string]struct{}{}
+	for i, s := range cfg.Resources.Schemas {
+		if s.ID == "" {
+			return fmt.Errorf("resources.schemas[%d].id is required", i)
+		}
+		if _, ok := seenSchema[s.ID]; ok {
+			return fmt.Errorf("resources.schemas contains duplicate id %q", s.ID)
+		}
+		seenSchema[s.ID] = struct{}{}
+		if s.Type == "" {
+			return fmt.Errorf("resources.schemas[%d].type is required", i)
+		}
+		if _, ok := validSchemaTypes[s.Type]; !ok {
+			return fmt.Errorf("resources.schemas[%d].type must be one of: openapi, asyncapi, json-schema", i)
+		}
+		if s.Source.Path == "" {
+			return fmt.Errorf("resources.schemas[%d].source.path is required", i)
 		}
 	}
 
@@ -428,6 +468,38 @@ func RestResourcesWithError() ([]RestEntry, error) {
 		out = append(out, e)
 	}
 	return out, nil
+}
+
+// SchemaEntries returns configured schema entries from config.yaml.
+// Entries with empty id or type are skipped. Empty label defaults to id.
+// Returns nil when config cannot be read.
+func SchemaEntries() []SchemaEntry {
+	cfg, _, err := ReadConfig()
+	if err != nil {
+		return nil
+	}
+	out := make([]SchemaEntry, 0, len(cfg.Resources.Schemas))
+	for _, e := range cfg.Resources.Schemas {
+		if e.ID == "" || e.Type == "" {
+			continue
+		}
+		if e.Label == "" {
+			e.Label = e.ID
+		}
+		out = append(out, e)
+	}
+	return out
+}
+
+// SchemaByID returns the schema entry for the given id, or nil if not found.
+func SchemaByID(id string) *SchemaEntry {
+	for _, e := range SchemaEntries() {
+		if e.ID == id {
+			c := e
+			return &c
+		}
+	}
+	return nil
 }
 
 // Workspaces returns configured flow workspaces from config.yaml.

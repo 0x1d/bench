@@ -1,7 +1,7 @@
 ---
-state: READY
+state: IN_PROGRESS
 created: 2025-03-13
-updated: 2025-03-15
+updated: 2025-03-21
 ---
 
 # Schema Registry — Task Tracker
@@ -14,12 +14,12 @@ updated: 2025-03-15
 
 ## Phase 1: Schema Registry Core (API)
 
-**Phase status**: TODO  
+**Phase status**: IN_PROGRESS  
 **Deliverable**: API can list and serve schema content; no UI changes yet.
 
 ### Config
 
-- [ ] **1.1** Add schema config (SchemaEntry, schemas array, helpers, validation, example) — [specs/1.1-config.md](specs/1.1-config.md)
+- [x] **1.1** Add schema config (SchemaEntry, schemas array, helpers, validation, example) — [specs/1.1-config.md](specs/1.1-config.md)
 
 ### Model
 
@@ -114,7 +114,7 @@ Kafka/messaging step and AsyncAPI flow integration — not in current scope. Spe
 
 | Phase | Tasks | Done | Status |
 |-------|-------|------|--------|
-| 1 | 5 | 0 | TODO |
+| 1 | 5 | 1 | IN_PROGRESS |
 | 2 | 3 | 0 | TODO |
 | 3 | 3 | 0 | TODO |
 | 4 | 2 | 0 | TODO |

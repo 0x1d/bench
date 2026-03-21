@@ -1,7 +1,7 @@
 ---
-state: READY
+state: IN_PROGRESS
 created: 2025-03-13
-updated: 2025-03-14
+updated: 2025-03-21
 ---
 
 # Schema Registry Plan
@@ -20,7 +20,7 @@ updated: 2025-03-14
 
 | Phase | Status | Description |
 |-------|--------|-------------|
-| 1 | TODO | Schema registry API (list, get, content) |
+| 1 | IN_PROGRESS | Schema registry API (list, get, content) |
 | 2 | TODO | REST uses schemaId; backward compat |
 | 3 | TODO | Schema config UI, standalone schemas |
 | 4 | TODO | Schema type abstraction (parsers) |

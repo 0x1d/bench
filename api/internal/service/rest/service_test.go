@@ -2,6 +2,7 @@ package rest
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -75,5 +76,19 @@ func TestList_IncludesSchemaID(t *testing.T) {
 	}
 	if list[0].SchemaID != "reg-schema" {
 		t.Fatalf("expected schemaId reg-schema, got %q", list[0].SchemaID)
+	}
+}
+
+func TestSpec_NoOpenAPISource(t *testing.T) {
+	t.Setenv("BENCH_CONFIG", restTestConfig(t, "rest-no-spec.yaml"))
+	t.Cleanup(func() { _ = os.Unsetenv("BENCH_CONFIG") })
+
+	svc := NewService()
+	_, err := svc.Spec("r1")
+	if err == nil {
+		t.Fatal("expected error when schemaId and openapiSpec are both empty")
+	}
+	if !errors.Is(err, ErrSpecNotFound) {
+		t.Fatalf("expected ErrSpecNotFound, got %v", err)
 	}
 }

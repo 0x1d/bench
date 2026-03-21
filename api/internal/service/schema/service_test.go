@@ -135,3 +135,17 @@ func TestContent_JSONSchema(t *testing.T) {
 		t.Fatal("expected json-schema file bytes")
 	}
 }
+
+func TestContent_FileNotReadable(t *testing.T) {
+	t.Setenv("BENCH_CONFIG", configFixturePath(t, "schema-missing-file.yaml"))
+	t.Cleanup(func() { _ = os.Unsetenv("BENCH_CONFIG") })
+
+	svc := NewService()
+	_, err := svc.Content("missing-file")
+	if err == nil {
+		t.Fatal("expected error when schema file does not exist")
+	}
+	if err == ErrSchemaNotFound || err == ErrPathTraversal {
+		t.Fatalf("unexpected sentinel error: %v", err)
+	}
+}

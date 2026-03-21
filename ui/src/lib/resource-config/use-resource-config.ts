@@ -46,6 +46,7 @@ export function useResourceConfig() {
       await saveConfig(yaml);
       await refetchStatus();
       await queryClient.invalidateQueries({ queryKey: RESOURCE_CONFIG_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: ['resources', 'roots'] });
       queryClient.invalidateQueries({ queryKey: ['flows', 'workspaces'] });
       queryClient.invalidateQueries({ queryKey: ['infrastructure'] });
     },

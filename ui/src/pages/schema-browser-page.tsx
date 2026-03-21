@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Pencil, Plus, Search, Trash2, X } from 'lucide-react';
-import { fetchSchemaContent, fetchSchemaList } from '@/services/api';
+import { fetchSchemaContent } from '@/services/api';
 import { ContextPanel } from '@/components/context-panel';
 import { Button } from '@/components/ui/button';
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
@@ -51,25 +51,19 @@ export function SchemaBrowserPage() {
     return () => window.removeEventListener(BENCH_CLOSE_PANEL_EVENT, onClose);
   }, []);
 
-  const { data: listData, isLoading: listLoading, error: listError } = useQuery({
-    queryKey: ['schemas', 'list'],
-    queryFn: () => fetchSchemaList(),
-  });
-
   const searchLower = search.trim().toLowerCase();
   const filtered = useMemo(() => {
-    const schemas = listData?.schemas ?? [];
-    if (!searchLower) return schemas;
-    return schemas.filter(
+    if (!searchLower) return schemasFromConfig;
+    return schemasFromConfig.filter(
       (s) =>
         s.id.toLowerCase().includes(searchLower) ||
         (s.label || '').toLowerCase().includes(searchLower) ||
-        s.type.toLowerCase().includes(searchLower)
+        s.type.toLowerCase().includes(searchLower) ||
+        s.source.path.toLowerCase().includes(searchLower)
     );
-  }, [listData, searchLower]);
+  }, [schemasFromConfig, searchLower]);
 
-  const schemas = listData?.schemas ?? [];
-  const selected = selectedId ? schemas.find((s) => s.id === selectedId) : null;
+  const selected = selectedId ? schemasFromConfig.find((s) => s.id === selectedId) : null;
   const panelOpen = selectedId != null;
 
   const { data: content, isLoading: contentLoading, error: contentError } = useQuery({
@@ -93,12 +87,14 @@ export function SchemaBrowserPage() {
   }, [selected, content]);
 
   const openAddSchema = () => {
+    setSelectedId(null);
     setSchemaDraft(defaultSchemaDraft());
     setFormError(null);
     setEditingSchema('add');
   };
 
   const openEditSchema = (index: number) => {
+    setSelectedId(null);
     setSchemaDraft(schemasFromConfig[index]);
     setFormError(null);
     setEditingSchema(index);
@@ -155,6 +151,7 @@ export function SchemaBrowserPage() {
   const confirmDeleteSchema = async () => {
     if (deleteIndex == null) return;
     const idx = deleteIndex;
+    const removedId = schemasFromConfig[idx]?.id;
     setSavePending(true);
     try {
       await mergeAndPersist((prev) => ({
@@ -162,6 +159,9 @@ export function SchemaBrowserPage() {
         schemas: prev.schemas.filter((_, i) => i !== idx),
       }));
       setDeleteIndex(null);
+      if (removedId && selectedId === removedId) {
+        setSelectedId(null);
+      }
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Delete failed');
     } finally {
@@ -279,176 +279,125 @@ export function SchemaBrowserPage() {
 
   return (
     <div className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-row items-stretch overflow-hidden">
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        <div className="shrink-0 px-4 pt-4 md:px-6">
-          <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 shadow-sm">
-            <nav className="flex flex-wrap items-center gap-1 text-sm">
-              <span className="rounded px-2 py-1 font-medium">Schemas</span>
-            </nav>
-            <div className="relative min-w-0 flex-1 sm:max-w-xs">
-              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                type="search"
-                placeholder="Search schemas..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-9"
-                aria-label="Search schemas"
-              />
-            </div>
-            <Button variant="outline" size="sm" onClick={openAddSchema} className="shrink-0 gap-1.5">
-              <Plus className="size-4" />
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-auto px-4 md:px-6 pt-4 md:pt-6 pb-4 md:pb-6">
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 shadow-sm">
+          <nav className="flex flex-wrap items-center gap-1 text-sm">
+            <span className="rounded px-2 py-1 font-medium">Schemas</span>
+          </nav>
+          <div className="relative min-w-0 flex-1 sm:max-w-xs">
+            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              type="search"
+              placeholder="Search registry..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9"
+              aria-label="Search schemas"
+            />
+          </div>
+          <Button variant="outline" size="sm" onClick={openAddSchema} className="shrink-0 gap-1.5">
+            <Plus className="size-4" />
+            Add schema
+          </Button>
+        </div>
+
+        <p className="text-xs text-muted-foreground">
+          Registry entries are stored in configuration. OpenAPI schemas can be referenced from{' '}
+          <a href="#rest/settings" className="font-medium text-primary underline">
+            REST
+          </a>{' '}
+          resources.
+        </p>
+
+        {configPending && <p className="text-muted-foreground">Loading configuration...</p>}
+        {configErr && <p className="text-sm text-destructive">{configErr}</p>}
+
+        {!configPending && !configErr && schemasFromConfig.length === 0 && (
+          <div className="rounded-lg border border-border bg-card p-6 text-center">
+            <h2 className="text-lg font-medium">No schemas in registry</h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Add a schema entry to register OpenAPI, AsyncAPI, or JSON Schema files.
+            </p>
+            <Button type="button" className="mt-4" onClick={openAddSchema}>
               Add schema
             </Button>
           </div>
-        </div>
+        )}
 
-        <div className="flex min-h-0 flex-1 overflow-hidden">
-          <div className="min-h-0 min-w-0 flex-1 overflow-auto p-4 pt-3 md:p-6 md:pt-3">
-            <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-4">
-              {listLoading && (
-                <p className="text-muted-foreground">Loading schemas...</p>
-              )}
-              {listError && (
-                <p className="text-destructive">
-                  {listError instanceof Error ? listError.message : 'Failed to load schemas'}
-                </p>
-              )}
-              {!listLoading && !listError && schemas.length === 0 && (
-                <div className="rounded-lg border border-border bg-card p-6 text-center">
-                  <h2 className="text-lg font-medium">No schemas registered</h2>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    Add a schema registry entry below or use the Configuration page for other resource
-                    types.
-                  </p>
-                  <Button type="button" className="mt-4" onClick={openAddSchema}>
-                    Add schema
-                  </Button>
-                </div>
-              )}
-              {!listLoading && !listError && schemas.length > 0 && (
-                <div className="overflow-x-auto rounded-lg border border-border bg-card">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-border bg-muted/30">
-                        <th className="px-4 py-3 text-left font-medium">ID</th>
-                        <th className="px-4 py-3 text-left font-medium">Label</th>
-                        <th className="px-4 py-3 text-left font-medium">Type</th>
-                        <th className="px-4 py-3 text-left font-medium">Path</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filtered.map((s) => (
-                        <tr
-                          key={s.id}
-                          className={cn(
-                            'cursor-pointer border-b border-border/50 last:border-b-0 hover:bg-accent/30',
-                            selectedId === s.id && 'bg-accent/50'
-                          )}
-                          onClick={() => setSelectedId(s.id)}
-                        >
-                          <td className="px-4 py-2 font-mono">{s.id}</td>
-                          <td className="px-4 py-2">{s.label || '—'}</td>
-                          <td className="px-4 py-2 font-mono">{s.type}</td>
-                          <td className="px-4 py-2 font-mono">{s.source.path}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
+        {!configPending && !configErr && schemasFromConfig.length > 0 && filtered.length === 0 && (
+          <p className="text-sm text-muted-foreground">No schemas match your search.</p>
+        )}
+
+        {!configPending && !configErr && filtered.length > 0 && (
+          <div className="overflow-x-auto rounded-lg border border-border bg-card">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-muted/30">
+                  <th className="px-4 py-3 text-left font-medium">ID</th>
+                  <th className="px-4 py-3 text-left font-medium">Label</th>
+                  <th className="px-4 py-3 text-left font-medium">Type</th>
+                  <th className="px-4 py-3 text-left font-medium">Path</th>
+                  <th className="w-28 px-2 py-3" />
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((entry) => {
+                  const index = schemasFromConfig.findIndex((e) => e.id === entry.id);
+                  return (
+                    <tr
+                      key={entry.id}
+                      className={cn(
+                        'cursor-pointer border-b border-border/50 last:border-b-0 hover:bg-accent/30',
+                        selectedId === entry.id && 'bg-accent/50'
+                      )}
+                      onClick={() => setSelectedId(entry.id)}
+                    >
+                      <td className="px-4 py-2 font-mono">{entry.id}</td>
+                      <td className="px-4 py-2">{entry.label || '—'}</td>
+                      <td className="px-4 py-2 font-mono">{entry.type}</td>
+                      <td className="max-w-[200px] truncate px-4 py-2 font-mono" title={entry.source.path}>
+                        {entry.source.path}
+                      </td>
+                      <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            onClick={() => index >= 0 && openEditSchema(index)}
+                            aria-label={`Edit schema ${entry.id}`}
+                          >
+                            <Pencil className="size-3" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            onClick={() => index >= 0 && setDeleteIndex(index)}
+                            aria-label={`Remove schema ${entry.id}`}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="size-3" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-
-          <ContextPanel
-            expanded={panelOpen}
-            storageKey="bench-schema-preview-panel-width"
-            minWidth={280}
-            maxWidth={800}
-            defaultWidth={560}
-            mobileVariant="below-header"
-          >
-            {panelInner}
-          </ContextPanel>
-        </div>
-
-        <div className="max-h-[45vh] shrink-0 overflow-auto border-t border-border px-4 py-4 md:px-6">
-          {configPending && (
-            <p className="text-muted-foreground">Loading configuration...</p>
-          )}
-          {configErr && <p className="text-sm text-destructive">{configErr}</p>}
-          {!configPending && (
-            <section className="flex flex-col gap-4">
-              <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <h3 className="text-base font-medium">Schema registry</h3>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    OpenAPI entries can be referenced from{' '}
-                    <a href="#rest" className="font-medium text-primary underline">
-                      REST
-                    </a>{' '}
-                    resources.
-                  </p>
-                </div>
-              </div>
-              {schemasFromConfig.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No registry entries in configuration.</p>
-              ) : (
-                <div className="overflow-x-auto rounded-lg border border-border bg-card">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-border bg-muted/30">
-                        <th className="px-4 py-3 text-left font-medium">ID</th>
-                        <th className="px-4 py-3 text-left font-medium">Label</th>
-                        <th className="px-4 py-3 text-left font-medium">Type</th>
-                        <th className="px-4 py-3 text-left font-medium">Path</th>
-                        <th className="w-28 px-2 py-3" />
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {schemasFromConfig.map((entry, index) => (
-                        <tr
-                          key={`schema-${index}`}
-                          className="cursor-pointer border-b border-border/50 last:border-b-0 hover:bg-accent/30"
-                          onClick={() => openEditSchema(index)}
-                        >
-                          <td className="px-4 py-2 font-mono">{entry.id}</td>
-                          <td className="px-4 py-2">{entry.label || '—'}</td>
-                          <td className="px-4 py-2 font-mono">{entry.type}</td>
-                          <td className="max-w-[200px] truncate px-4 py-2 font-mono" title={entry.source.path}>
-                            {entry.source.path}
-                          </td>
-                          <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
-                            <div className="flex items-center justify-end gap-1">
-                              <Button
-                                variant="ghost"
-                                size="icon-xs"
-                                onClick={() => openEditSchema(index)}
-                                aria-label={`Edit schema ${entry.id}`}
-                              >
-                                <Pencil className="size-3" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon-xs"
-                                onClick={() => setDeleteIndex(index)}
-                                aria-label={`Remove schema ${entry.id}`}
-                                className="text-destructive hover:text-destructive"
-                              >
-                                <Trash2 className="size-3" />
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </section>
-          )}
-        </div>
+        )}
       </div>
+
+      <ContextPanel
+        expanded={panelOpen}
+        storageKey="bench-schema-preview-panel-width"
+        minWidth={280}
+        maxWidth={800}
+        defaultWidth={560}
+        mobileVariant="below-header"
+      >
+        {panelInner}
+      </ContextPanel>
 
       <ResourceSettingsSidePanel
         open={editingSchema !== null}

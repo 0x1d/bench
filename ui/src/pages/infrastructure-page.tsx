@@ -35,7 +35,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { NotConfiguredCard } from '@/components/not-configured-card';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   InfrastructurePathFields,
   ResourceSettingsSidePanel,
@@ -80,6 +79,8 @@ import {
   useResourceConfig,
   type InfrastructureConfig,
 } from '@/lib/resource-config';
+import { isResourceSettingsHash, type InfrastructureView } from '@/lib/app-hash';
+import { useAppHash } from '@/hooks/use-app-hash';
 
 /** Fits the diagram view when a Terraform command finishes (isRunning goes false). */
 function FitViewOnTerraformRun() {
@@ -327,7 +328,8 @@ function InfraDiagramInner({
   );
 }
 
-export function InfrastructurePage() {
+export function InfrastructurePage({ view }: { view: InfrastructureView }) {
+  const hash = useAppHash();
   const queryClient = useQueryClient();
   const {
     setSelectedNode,
@@ -362,7 +364,6 @@ export function InfrastructurePage() {
       return 'dependencies-at-top';
     }
   });
-  const [activeTab, setActiveTab] = useState<'files' | 'diagram' | 'settings'>('diagram');
   const [currentPath, setCurrentPath] = useState('.');
   const [showNewFile, setShowNewFile] = useState(false);
   const [newFileName, setNewFileName] = useState('');
@@ -396,7 +397,7 @@ export function InfrastructurePage() {
   const { data: graphData } = useQuery({
     queryKey: ['infrastructure', 'graph'],
     queryFn: () => fetchTerraformGraph(),
-    enabled: (status?.configured && status?.terraformAvailable && activeTab === 'diagram') ?? false,
+    enabled: (status?.configured && status?.terraformAvailable && view === 'diagram') ?? false,
   });
 
   const tfFiles = useMemo(() => {
@@ -591,16 +592,16 @@ export function InfrastructurePage() {
     }
   }, [diagramInitial, setNodes, setEdges]);
 
-  // Re-apply auto layout when switching to diagram tab (ensures layout is always fresh)
+  // Re-apply auto layout when switching to diagram view (ensures layout is always fresh)
   useEffect(() => {
-    if (activeTab === 'diagram') {
+    if (view === 'diagram') {
       const { nodes: n, edges: e } = diagramInitial;
       if (n.length > 0) {
         setNodes(n);
         setEdges(e);
       }
     }
-  }, [activeTab, diagramInitial, setNodes, setEdges]);
+  }, [view, diagramInitial, setNodes, setEdges]);
 
   const onLayoutDirectionChange = useCallback(() => {
     const next = layoutDirection === 'TB' ? 'LR' : 'TB';
@@ -725,7 +726,12 @@ export function InfrastructurePage() {
     configError instanceof Error ? configError.message : configError ? String(configError) : null;
 
   return (
-    <div className="flex w-full min-h-0 flex-1 flex-col gap-4">
+    <div
+      className={cn(
+        'flex w-full min-h-0 flex-1 flex-col gap-4',
+        isResourceSettingsHash(hash) && 'px-4 md:px-6 pt-4 md:pt-6 pb-4 md:pb-6'
+      )}
+    >
       {/* Breadcrumbs */}
       <nav className="flex flex-wrap items-center gap-1 text-sm">
         <span className="rounded px-2 py-1 font-medium">Infrastructure</span>
@@ -739,17 +745,7 @@ export function InfrastructurePage() {
 
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 shadow-sm">
-        <Tabs
-          value={activeTab}
-          onValueChange={(v) => setActiveTab(v as 'files' | 'diagram' | 'settings')}
-        >
-          <TabsList variant="line" className="w-fit max-w-full shrink-0 justify-start gap-x-1">
-            <TabsTrigger value="diagram">Diagram</TabsTrigger>
-            <TabsTrigger value="files">Files</TabsTrigger>
-            <TabsTrigger value="settings">Settings</TabsTrigger>
-          </TabsList>
-        </Tabs>
-        {activeTab === 'diagram' && (
+        {view === 'diagram' && (
           <>
             <Button
               variant="outline"
@@ -788,7 +784,7 @@ export function InfrastructurePage() {
         <div
           className={cn(
             'ml-auto flex flex-shrink-0 items-center gap-2',
-            activeTab === 'settings' && 'hidden'
+            view === 'settings' && 'hidden'
           )}
         >
           <Button
@@ -851,8 +847,9 @@ export function InfrastructurePage() {
       </div>
 
       {/* Main content */}
-      <div className="flex flex-1 min-h-0 min-w-0 overflow-hidden">
-        {activeTab === 'diagram' ? (
+      <div className="flex h-full min-h-0 min-w-0 flex-1 flex-row items-stretch overflow-hidden">
+        {view === 'diagram' ? (
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <ReactFlowProvider>
             <InfraDiagramInner
               nodes={nodes}
@@ -870,7 +867,8 @@ export function InfrastructurePage() {
               nodeTypes={nodeTypes}
             />
           </ReactFlowProvider>
-        ) : activeTab === 'files' ? (
+          </div>
+        ) : view === 'files' ? (
           <div className="flex-1 min-w-0 rounded-lg border border-border bg-card overflow-hidden flex flex-col">
             <div className="flex flex-wrap items-center gap-2 p-3 border-b border-border bg-muted/20">
               <nav className="flex items-center gap-1 text-sm">
@@ -1035,13 +1033,13 @@ export function InfrastructurePage() {
             )}
           </div>
         ) : (
-          <div className="flex flex-1 min-w-0 flex-col overflow-auto">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">
             {configPending && (
               <p className="text-muted-foreground">Loading configuration...</p>
             )}
             {configErr && <p className="text-sm text-destructive">{configErr}</p>}
             {!configPending && (
-              <section className="rounded-lg border border-border bg-card p-4">
+              <section className="flex flex-col gap-4">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <h3 className="text-base font-medium">Infrastructure directory</h3>

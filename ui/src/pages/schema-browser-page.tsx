@@ -2,20 +2,19 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import { fetchSchemaContent, fetchSchemaList } from '@/services/api';
+import { ContextPanel } from '@/components/context-panel';
 import { Button } from '@/components/ui/button';
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { ResourceSettingsSidePanel, SchemaResourceFields } from '@/components/resource-config';
 import { detectSchemaType, parseSchema } from '@/lib/schema-registry';
 import { Input } from '@/components/ui/input';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import {
   parseConfigToState,
   useResourceConfig,
   type SchemaResourceEntry,
 } from '@/lib/resource-config';
-
-const CLOSE_PANEL_EVENT = 'bench:close-panel';
+import { BENCH_CLOSE_PANEL_EVENT } from '@/lib/bench-close-panel';
 
 const defaultSchemaDraft = (): SchemaResourceEntry => ({
   id: '',
@@ -25,7 +24,6 @@ const defaultSchemaDraft = (): SchemaResourceEntry => ({
 });
 
 export function SchemaBrowserPage() {
-  const [pageTab, setPageTab] = useState<'browse' | 'settings'>('browse');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
 
@@ -43,16 +41,15 @@ export function SchemaBrowserPage() {
   const [savePending, setSavePending] = useState(false);
 
   useEffect(() => {
-    const onClose = () => setSelectedId(null);
-    window.addEventListener(CLOSE_PANEL_EVENT, onClose);
-    return () => window.removeEventListener(CLOSE_PANEL_EVENT, onClose);
-  }, []);
-
-  useEffect(() => {
-    if (pageTab === 'settings') {
+    const onClose = () => {
       setSelectedId(null);
-    }
-  }, [pageTab]);
+      setEditingSchema(null);
+      setFormError(null);
+      setDeleteIndex(null);
+    };
+    window.addEventListener(BENCH_CLOSE_PANEL_EVENT, onClose);
+    return () => window.removeEventListener(BENCH_CLOSE_PANEL_EVENT, onClose);
+  }, []);
 
   const { data: listData, isLoading: listLoading, error: listError } = useQuery({
     queryKey: ['schemas', 'list'],
@@ -73,12 +70,12 @@ export function SchemaBrowserPage() {
 
   const schemas = listData?.schemas ?? [];
   const selected = selectedId ? schemas.find((s) => s.id === selectedId) : null;
-  const panelOpen = selectedId != null && pageTab === 'browse';
+  const panelOpen = selectedId != null;
 
   const { data: content, isLoading: contentLoading, error: contentError } = useQuery({
     queryKey: ['schemas', 'content', selectedId ?? ''],
     queryFn: () => fetchSchemaContent(selectedId!),
-    enabled: !!selectedId && pageTab === 'browse',
+    enabled: !!selectedId,
   });
 
   const parsed = useMemo(() => {
@@ -223,7 +220,7 @@ export function SchemaBrowserPage() {
               </p>
             )}
             {content != null && parsed && (
-              <div className="rounded-lg border border-border bg-card p-4">
+              <div className="p-4">
                 {parsed.type === 'openapi' && (
                   <div className="space-y-4">
                     {parsed.data.groups.map((g) => (
@@ -281,126 +278,107 @@ export function SchemaBrowserPage() {
   );
 
   return (
-    <div className="flex min-h-0 w-full flex-1 flex-col overflow-hidden">
-      <Tabs
-        value={pageTab}
-        onValueChange={(v) => setPageTab(v as 'browse' | 'settings')}
-        className="flex min-h-0 flex-1 flex-col overflow-hidden"
-      >
+    <div className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-row items-stretch overflow-hidden">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <div className="shrink-0 px-4 pt-4 md:px-6">
-          <TabsList variant="line" className="w-fit max-w-full justify-start gap-x-1">
-            <TabsTrigger value="browse">Browse</TabsTrigger>
-            <TabsTrigger value="settings">Settings</TabsTrigger>
-          </TabsList>
+          <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 shadow-sm">
+            <nav className="flex flex-wrap items-center gap-1 text-sm">
+              <span className="rounded px-2 py-1 font-medium">Schemas</span>
+            </nav>
+            <div className="relative min-w-0 flex-1 sm:max-w-xs">
+              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                type="search"
+                placeholder="Search schemas..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9"
+                aria-label="Search schemas"
+              />
+            </div>
+            <Button variant="outline" size="sm" onClick={openAddSchema} className="shrink-0 gap-1.5">
+              <Plus className="size-4" />
+              Add schema
+            </Button>
+          </div>
         </div>
 
-        <TabsContent value="browse" className="mt-0 flex min-h-0 flex-1 flex-col overflow-hidden">
-          <div className="flex min-h-0 flex-1 overflow-hidden">
-            <div className="min-h-0 min-w-0 flex-1 overflow-auto p-4 pt-3 md:p-6 md:pt-3">
-              <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-4">
-                {listLoading && (
-                  <p className="text-muted-foreground">Loading schemas...</p>
-                )}
-                {listError && (
-                  <p className="text-destructive">
-                    {listError instanceof Error ? listError.message : 'Failed to load schemas'}
+        <div className="flex min-h-0 flex-1 overflow-hidden">
+          <div className="min-h-0 min-w-0 flex-1 overflow-auto p-4 pt-3 md:p-6 md:pt-3">
+            <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-4">
+              {listLoading && (
+                <p className="text-muted-foreground">Loading schemas...</p>
+              )}
+              {listError && (
+                <p className="text-destructive">
+                  {listError instanceof Error ? listError.message : 'Failed to load schemas'}
+                </p>
+              )}
+              {!listLoading && !listError && schemas.length === 0 && (
+                <div className="rounded-lg border border-border bg-card p-6 text-center">
+                  <h2 className="text-lg font-medium">No schemas registered</h2>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Add a schema registry entry below or use the Configuration page for other resource
+                    types.
                   </p>
-                )}
-                {!listLoading && !listError && schemas.length === 0 && (
-                  <div className="rounded-lg border border-border bg-card p-6 text-center">
-                    <h2 className="text-lg font-medium">No schemas registered</h2>
-                    <p className="mt-2 text-sm text-muted-foreground">
-                      Add schema registry entries in Settings, or use the Configuration page for other
-                      resource types.
-                    </p>
-                    <Button type="button" className="mt-4" onClick={() => setPageTab('settings')}>
-                      Open Settings
-                    </Button>
-                  </div>
-                )}
-                {!listLoading && !listError && schemas.length > 0 && (
-                  <>
-                    <nav className="flex flex-wrap items-center gap-1 text-sm">
-                      <span className="rounded px-2 py-1 font-medium">Schemas</span>
-                    </nav>
-
-                    <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 shadow-sm">
-                      <div className="relative min-w-0 flex-1 sm:max-w-xs">
-                        <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                          type="search"
-                          placeholder="Search schemas..."
-                          value={search}
-                          onChange={(e) => setSearch(e.target.value)}
-                          className="pl-9"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="overflow-x-auto rounded-lg border border-border bg-card">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b border-border bg-muted/30">
-                            <th className="px-4 py-3 text-left font-medium">ID</th>
-                            <th className="px-4 py-3 text-left font-medium">Label</th>
-                            <th className="px-4 py-3 text-left font-medium">Type</th>
-                            <th className="px-4 py-3 text-left font-medium">Path</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {filtered.map((s) => (
-                            <tr
-                              key={s.id}
-                              className={cn(
-                                'cursor-pointer border-b border-border/50 last:border-b-0 hover:bg-accent/30',
-                                selectedId === s.id && 'bg-accent/50'
-                              )}
-                              onClick={() => setSelectedId(s.id)}
-                            >
-                              <td className="px-4 py-2 font-mono">{s.id}</td>
-                              <td className="px-4 py-2">{s.label || '—'}</td>
-                              <td className="px-4 py-2 font-mono">{s.type}</td>
-                              <td className="px-4 py-2 font-mono">{s.source.path}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-
-            <div
-              className={cn(
-                'bg-sidebar text-sidebar-foreground fixed inset-x-0 bottom-0 top-[var(--header-height)] z-30 min-h-0 flex flex-col overflow-hidden border-l lg:hidden',
-                panelOpen ? 'flex' : 'hidden'
+                  <Button type="button" className="mt-4" onClick={openAddSchema}>
+                    Add schema
+                  </Button>
+                </div>
               )}
-            >
-              {panelInner}
-            </div>
-            <div
-              className={cn(
-                'bg-sidebar text-sidebar-foreground relative z-20 hidden min-h-0 flex flex-col overflow-hidden border-l lg:flex',
-                panelOpen ? 'lg:flex' : 'lg:hidden',
-                'lg:w-[min(560px,50vw)]'
+              {!listLoading && !listError && schemas.length > 0 && (
+                <div className="overflow-x-auto rounded-lg border border-border bg-card">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border bg-muted/30">
+                        <th className="px-4 py-3 text-left font-medium">ID</th>
+                        <th className="px-4 py-3 text-left font-medium">Label</th>
+                        <th className="px-4 py-3 text-left font-medium">Type</th>
+                        <th className="px-4 py-3 text-left font-medium">Path</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filtered.map((s) => (
+                        <tr
+                          key={s.id}
+                          className={cn(
+                            'cursor-pointer border-b border-border/50 last:border-b-0 hover:bg-accent/30',
+                            selectedId === s.id && 'bg-accent/50'
+                          )}
+                          onClick={() => setSelectedId(s.id)}
+                        >
+                          <td className="px-4 py-2 font-mono">{s.id}</td>
+                          <td className="px-4 py-2">{s.label || '—'}</td>
+                          <td className="px-4 py-2 font-mono">{s.type}</td>
+                          <td className="px-4 py-2 font-mono">{s.source.path}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
-            >
-              {panelInner}
             </div>
           </div>
-        </TabsContent>
 
-        <TabsContent
-          value="settings"
-          className="mt-0 flex min-h-0 flex-1 flex-col overflow-auto px-4 pb-4 pt-3 md:px-6"
-        >
+          <ContextPanel
+            expanded={panelOpen}
+            storageKey="bench-schema-preview-panel-width"
+            minWidth={280}
+            maxWidth={800}
+            defaultWidth={560}
+            mobileVariant="below-header"
+          >
+            {panelInner}
+          </ContextPanel>
+        </div>
+
+        <div className="max-h-[45vh] shrink-0 overflow-auto border-t border-border px-4 py-4 md:px-6">
           {configPending && (
             <p className="text-muted-foreground">Loading configuration...</p>
           )}
           {configErr && <p className="text-sm text-destructive">{configErr}</p>}
           {!configPending && (
-            <section className="rounded-lg border border-border bg-card p-4">
+            <section className="flex flex-col gap-4">
               <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <h3 className="text-base font-medium">Schema registry</h3>
@@ -412,13 +390,9 @@ export function SchemaBrowserPage() {
                     resources.
                   </p>
                 </div>
-                <Button variant="outline" size="sm" onClick={openAddSchema} className="shrink-0">
-                  <Plus className="size-4" />
-                  Add schema
-                </Button>
               </div>
               {schemasFromConfig.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No schemas registered.</p>
+                <p className="text-sm text-muted-foreground">No registry entries in configuration.</p>
               ) : (
                 <div className="overflow-x-auto rounded-lg border border-border bg-card">
                   <table className="w-full text-sm">
@@ -471,11 +445,10 @@ export function SchemaBrowserPage() {
                   </table>
                 </div>
               )}
-
             </section>
           )}
-        </TabsContent>
-      </Tabs>
+        </div>
+      </div>
 
       <ResourceSettingsSidePanel
         open={editingSchema !== null}

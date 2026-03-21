@@ -9,7 +9,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { DatabaseResourceFields, ResourceSettingsSidePanel } from '@/components/resource-config';
 import { useDatabaseTables, useTableData } from '@/hooks/use-database';
@@ -22,11 +21,11 @@ import {
   useResourceConfig,
   type DatabaseResource,
 } from '@/lib/resource-config';
+import { cn } from '@/lib/utils';
 
-export function DatabasePage() {
+export function DatabasePage({ mode }: { mode: 'browse' | 'settings' }) {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
-  const [pageTab, setPageTab] = useState<'browse' | 'settings'>('browse');
   const {
     selectedTable,
     setSelectedTable,
@@ -64,12 +63,12 @@ export function DatabasePage() {
     selectedDatabaseId ?? statusData?.database?.defaultId ?? databaseOptions[0]?.id ?? null;
 
   useEffect(() => {
-    if (pageTab === 'settings') {
+    if (mode === 'settings') {
       setPanelMode(null);
       setAlterTableName(null);
       setEditRowData(null);
     }
-  }, [pageTab, setPanelMode, setAlterTableName, setEditRowData]);
+  }, [mode, setPanelMode, setAlterTableName, setEditRowData]);
 
   useEffect(() => {
     if (effectiveDatabaseId && selectedDatabaseId !== effectiveDatabaseId) {
@@ -94,7 +93,7 @@ export function DatabasePage() {
 
   const { data: tablesData, error: tablesError, isLoading: tablesLoading } = useDatabaseTables(
     effectiveDatabaseId,
-    dbConfigured && pageTab === 'browse'
+    dbConfigured && mode === 'browse'
   );
   const allTables = tablesData?.tables ?? [];
   const searchLower = search.trim().toLowerCase();
@@ -107,7 +106,7 @@ export function DatabasePage() {
     page,
     search.trim(),
     effectiveDatabaseId,
-    dbConfigured && pageTab === 'browse' && !!selectedTable
+    dbConfigured && mode === 'browse' && !!selectedTable
   );
 
   const openAddDatabase = () => {
@@ -221,26 +220,23 @@ export function DatabasePage() {
   }
 
   return (
-    <div className="flex w-full min-h-0 flex-1 flex-col gap-4">
-      <Tabs
-        value={pageTab}
-        onValueChange={(v) => setPageTab(v as 'browse' | 'settings')}
-        className="flex min-h-0 flex-1 flex-col overflow-hidden"
+    <div className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-row items-stretch overflow-hidden">
+      <div
+        className={cn(
+          'flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-auto',
+          mode === 'settings' && 'px-4 md:px-6 pt-4 md:pt-6 pb-4 md:pb-6'
+        )}
       >
-        <TabsList variant="line" className="w-fit max-w-full shrink-0 justify-start gap-x-1">
-          <TabsTrigger value="browse">Browse</TabsTrigger>
-          <TabsTrigger value="settings">Settings</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="browse" className="mt-3 flex min-h-0 flex-1 flex-col gap-4">
+      {mode === 'browse' && (
+        <>
           {!dbConfigured && (
             <div className="rounded-lg border border-border bg-card p-6 text-center">
               <h2 className="text-lg font-medium">No database resources configured</h2>
               <p className="mt-2 text-sm text-muted-foreground">
-                Add connection entries in Settings or use the Configuration page.
+                Add connection entries under Database → Settings or use the Configuration page.
               </p>
-              <Button type="button" className="mt-4" onClick={() => setPageTab('settings')}>
-                Open Settings
+              <Button type="button" className="mt-4" asChild>
+                <a href="#database/settings">Open Settings</a>
               </Button>
             </div>
           )}
@@ -251,8 +247,8 @@ export function DatabasePage() {
                 Configure a database resource in Settings and ensure it connects, or check the
                 Configuration page.
               </p>
-              <Button type="button" className="mt-4" onClick={() => setPageTab('settings')}>
-                Open Settings
+              <Button type="button" className="mt-4" asChild>
+                <a href="#database/settings">Open Settings</a>
               </Button>
             </div>
           )}
@@ -392,18 +388,17 @@ export function DatabasePage() {
               </div>
             </>
           )}
-        </TabsContent>
+        </>
+      )}
 
-        <TabsContent
-          value="settings"
-          className="mt-3 flex min-h-0 flex-1 flex-col gap-4 overflow-auto"
-        >
+      {mode === 'settings' && (
+        <>
           {configPending && (
             <p className="text-muted-foreground">Loading configuration...</p>
           )}
           {configErr && <p className="text-sm text-destructive">{configErr}</p>}
           {!configPending && (
-            <section className="rounded-lg border border-border bg-card p-4">
+            <section className="flex flex-col gap-4">
               <div className="mb-3 flex items-center justify-between">
                 <h3 className="text-base font-medium">Database resources</h3>
                 <Button variant="outline" size="sm" onClick={openAddDatabase}>
@@ -467,11 +462,11 @@ export function DatabasePage() {
                   </table>
                 </div>
               )}
-
             </section>
           )}
-        </TabsContent>
-      </Tabs>
+        </>
+      )}
+      </div>
 
       <ResourceSettingsSidePanel
         open={editingDb !== null}

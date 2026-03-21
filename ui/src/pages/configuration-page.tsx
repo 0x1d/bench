@@ -13,6 +13,8 @@ import {
   SchemaResourceFields,
   WorkspaceResourceFields,
 } from '@/components/resource-config';
+import { ContextPanel } from '@/components/context-panel';
+import { BENCH_CLOSE_PANEL_EVENT } from '@/lib/bench-close-panel';
 import { cn } from '@/lib/utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useQuery } from '@tanstack/react-query';
@@ -145,8 +147,8 @@ export function ConfigurationPage() {
         setPanelError(null);
       }
     };
-    window.addEventListener('bench:close-panel', handleClosePanel);
-    return () => window.removeEventListener('bench:close-panel', handleClosePanel);
+    window.addEventListener(BENCH_CLOSE_PANEL_EVENT, handleClosePanel);
+    return () => window.removeEventListener(BENCH_CLOSE_PANEL_EVENT, handleClosePanel);
   }, [panelMode]);
 
   const openAddFilesystem = () => {
@@ -749,7 +751,7 @@ export function ConfigurationPage() {
                 : '';
 
   const panelBody = (
-    <>
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-sidebar-border px-4">
         <div>
           <p className="text-sm font-medium">{panelTitle}</p>
@@ -762,7 +764,7 @@ export function ConfigurationPage() {
         </Button>
       </div>
 
-      <div className="p-4">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4">
         {(panelMode === 'add-workspace' || panelMode === 'edit-workspace') && (
           <WorkspaceResourceFields draft={workspaceDraft} onChange={setWorkspaceDraft} />
         )}
@@ -813,7 +815,7 @@ export function ConfigurationPage() {
         {panelError && <p className="mt-3 text-sm text-destructive">{panelError}</p>}
       </div>
 
-      <div className="border-t px-4 py-3">
+      <div className="shrink-0 border-t border-sidebar-border px-4 py-3">
         <div className="flex w-full items-center justify-end gap-2">
           <Button variant="outline" onClick={closePanel}>
             Cancel
@@ -857,7 +859,7 @@ export function ConfigurationPage() {
           )}
         </div>
       </div>
-    </>
+    </div>
   );
 
   if (isPending) {
@@ -888,7 +890,7 @@ export function ConfigurationPage() {
             </TabsList>
 
             <TabsContent value="filesystem" className="mt-3 min-h-0 flex-1 overflow-auto">
-          <section className="rounded-lg border border-border bg-card p-4">
+          <section className="flex flex-col gap-4 p-4">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-medium">Filesystem resources</h3>
               <Button variant="outline" size="sm" onClick={openAddFilesystem}>
@@ -950,7 +952,7 @@ export function ConfigurationPage() {
             </TabsContent>
 
             <TabsContent value="schemas" className="mt-3 min-h-0 flex-1 overflow-auto">
-          <section className="rounded-lg border border-border bg-card p-4">
+          <section className="flex flex-col gap-4 p-4">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-medium">Schemas</h3>
               <Button variant="outline" size="sm" onClick={openAddSchema}>
@@ -1014,7 +1016,7 @@ export function ConfigurationPage() {
             </TabsContent>
 
             <TabsContent value="databases" className="mt-3 min-h-0 flex-1 overflow-auto">
-          <section className="rounded-lg border border-border bg-card p-4">
+          <section className="flex flex-col gap-4 p-4">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-medium">Database resources</h3>
               <Button variant="outline" size="sm" onClick={openAddDatabase}>
@@ -1080,7 +1082,7 @@ export function ConfigurationPage() {
             </TabsContent>
 
             <TabsContent value="rest" className="mt-3 min-h-0 flex-1 overflow-auto">
-          <section className="rounded-lg border border-border bg-card p-4">
+          <section className="flex flex-col gap-4 p-4">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-medium">REST resources</h3>
               <Button variant="outline" size="sm" onClick={openAddRest}>
@@ -1146,7 +1148,7 @@ export function ConfigurationPage() {
             </TabsContent>
 
             <TabsContent value="flows" className="mt-3 min-h-0 flex-1 overflow-auto">
-          <section className="rounded-lg border border-border bg-card p-4">
+          <section className="flex flex-col gap-4 p-4">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-medium">Flows</h3>
               <div className="flex gap-2">
@@ -1227,7 +1229,7 @@ export function ConfigurationPage() {
             </TabsContent>
 
             <TabsContent value="infrastructure" className="mt-3 min-h-0 flex-1 overflow-auto">
-          <section className="rounded-lg border border-border bg-card p-4">
+          <section className="flex flex-col gap-4 p-4">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-medium">Infrastructure</h3>
               <Button variant="outline" size="sm" onClick={openEditInfrastructure}>
@@ -1248,7 +1250,7 @@ export function ConfigurationPage() {
             </TabsContent>
 
             <TabsContent value="agent" className="mt-3 min-h-0 flex-1 overflow-auto">
-          <section className="rounded-lg border border-border bg-card p-4">
+          <section className="flex flex-col gap-4 p-4">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-medium">AI Agent</h3>
               <Button variant="outline" size="sm" onClick={openEditAgent}>
@@ -1291,23 +1293,16 @@ export function ConfigurationPage() {
         </div>
       </div>
 
-      <div
-        className={cn(
-          'bg-sidebar text-sidebar-foreground fixed inset-x-0 bottom-0 top-[var(--header-height)] z-30 min-h-0 flex-col overflow-auto border-l lg:hidden',
-          panelOpen ? 'flex' : 'hidden'
-        )}
+      <ContextPanel
+        expanded={panelOpen}
+        storageKey="bench-configuration-panel-width"
+        minWidth={320}
+        maxWidth={800}
+        defaultWidth={panelMode === 'schema-detail' ? 560 : 360}
+        mobileVariant="below-header"
       >
         {panelBody}
-      </div>
-      <div
-        className={cn(
-          'bg-sidebar text-sidebar-foreground relative z-20 hidden min-h-0 flex-col overflow-auto border-l lg:flex',
-          panelOpen ? 'lg:flex' : 'lg:hidden',
-          panelMode === 'schema-detail' ? 'lg:w-[min(560px,50vw)]' : 'lg:w-[360px]'
-        )}
-      >
-        {panelBody}
-      </div>
+      </ContextPanel>
 
       <ConfirmDeleteDialog
         open={deleteTarget != null}

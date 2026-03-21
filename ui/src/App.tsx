@@ -26,6 +26,15 @@ import { AgentChatProvider } from '@/contexts/agent-chat-context';
 import { AgentChat } from '@/components/agent-chat';
 import { cn } from '@/lib/utils';
 import { Toaster } from 'sonner';
+import {
+  getFlowsListView,
+  getInfrastructureView,
+  isFlowEditorRoute,
+  isFlowsListRoute,
+  isFlowsSection,
+  isResourceSettingsHash,
+} from '@/lib/app-hash';
+import { BENCH_CLOSE_PANEL_EVENT } from '@/lib/bench-close-panel';
 
 function normalizeHashSegment(raw: string) {
   return raw === 'resources' ? 'configuration' : raw;
@@ -35,14 +44,10 @@ function getHash() {
   return normalizeHashSegment(window.location.hash.slice(1) || 'status');
 }
 
-function isFlowsSection(hash: string) {
-  return hash === 'flows' || hash.startsWith('flows/');
-}
-
 function ClearFileViewOnNavigate({ hash }: { hash: string }) {
   const { setViewedFile } = useFileView();
   useEffect(() => {
-    if (hash !== 'filesystem') {
+    if (!hash.startsWith('filesystem')) {
       setViewedFile(null);
     }
   }, [hash, setViewedFile]);
@@ -52,7 +57,7 @@ function ClearFileViewOnNavigate({ hash }: { hash: string }) {
 function ClearDatabaseViewOnNavigate({ hash }: { hash: string }) {
   const { setPanelMode } = useDatabaseView();
   useEffect(() => {
-    if (hash !== 'database') {
+    if (!hash.startsWith('database')) {
       setPanelMode(null);
     }
   }, [hash, setPanelMode]);
@@ -62,7 +67,7 @@ function ClearDatabaseViewOnNavigate({ hash }: { hash: string }) {
 function ClearInfrastructureViewOnNavigate({ hash }: { hash: string }) {
   const { setSelectedNode, setSelectedFile, setFileContent, setOutputCommand } = useInfrastructureView();
   useEffect(() => {
-    if (hash !== 'infrastructure') {
+    if (!hash.startsWith('infrastructure')) {
       setSelectedNode(null);
       setSelectedFile(null);
       setFileContent('');
@@ -75,15 +80,12 @@ function ClearInfrastructureViewOnNavigate({ hash }: { hash: string }) {
 function ClearFlowViewOnNavigate({ hash }: { hash: string }) {
   const { setSelectedStep, setExecutionId, setModuleEditPath, setFlow } = useFlowView();
   useEffect(() => {
-    // Clear when leaving flows entirely, or when going back to flows list from editor
-    if (!isFlowsSection(hash) || hash === 'flows') {
+    if (!isFlowsSection(hash) || isFlowsListRoute(hash)) {
       setSelectedStep(null);
       setExecutionId(null);
       setModuleEditPath(null);
       setFlow(null);
-    }
-    // Close right panel when opening a flow in the editor
-    else if (hash.startsWith('flows/')) {
+    } else if (hash.startsWith('flows/')) {
       setModuleEditPath(null);
       setSelectedStep(null);
       setExecutionId(null);
@@ -91,8 +93,6 @@ function ClearFlowViewOnNavigate({ hash }: { hash: string }) {
   }, [hash, setSelectedStep, setExecutionId, setModuleEditPath, setFlow]);
   return null;
 }
-
-const CLOSE_PANEL_EVENT = 'bench:close-panel';
 
 function GlobalEscapeHandler() {
   const { setViewedFile } = useFileView();
@@ -112,7 +112,7 @@ function GlobalEscapeHandler() {
       setModuleEditPath(null);
       setSelectedNode(null);
       setSelectedFile(null);
-      window.dispatchEvent(new CustomEvent(CLOSE_PANEL_EVENT));
+      window.dispatchEvent(new CustomEvent(BENCH_CLOSE_PANEL_EVENT));
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
@@ -120,6 +120,33 @@ function GlobalEscapeHandler() {
   return null;
 }
 
+function MainRoutes({ hash }: { hash: string }) {
+  if (hash === 'configuration') {
+    return <ConfigurationPage />;
+  }
+  if (hash === 'filesystem' || hash === 'filesystem/settings') {
+    return <FilesystemPage mode={hash === 'filesystem/settings' ? 'settings' : 'browse'} />;
+  }
+  if (hash === 'database' || hash === 'database/settings') {
+    return <DatabasePage mode={hash === 'database/settings' ? 'settings' : 'browse'} />;
+  }
+  if (hash === 'rest' || hash === 'rest/settings') {
+    return <RestPage mode={hash === 'rest/settings' ? 'settings' : 'browse'} />;
+  }
+  if (hash === 'schemas') {
+    return <SchemaBrowserPage />;
+  }
+  if (isFlowsListRoute(hash)) {
+    return <FlowsPage view={getFlowsListView(hash)} />;
+  }
+  if (isFlowEditorRoute(hash)) {
+    return <FlowEditorPage />;
+  }
+  if (hash === 'infrastructure' || hash === 'infrastructure/files' || hash === 'infrastructure/settings') {
+    return <InfrastructurePage view={getInfrastructureView(hash)} />;
+  }
+  return <StatusPage />;
+}
 
 export function App() {
   const [hash, setHash] = useState(getHash);
@@ -135,6 +162,30 @@ export function App() {
     window.addEventListener('hashchange', onHashChange);
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
+
+  /** Close all context panels that listen for {@link BENCH_CLOSE_PANEL_EVENT} (same signal as Escape). */
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent(BENCH_CLOSE_PANEL_EVENT));
+  }, [hash]);
+
+  const insetOverflowHidden =
+    hash.startsWith('flows/') ||
+    hash === 'configuration' ||
+    hash === 'schemas' ||
+    isResourceSettingsHash(hash);
+
+  const mainStretch =
+    hash === 'configuration' ||
+    hash === 'schemas' ||
+    hash === 'filesystem' ||
+    hash.startsWith('filesystem/') ||
+    hash === 'database' ||
+    hash.startsWith('database/') ||
+    hash === 'rest' ||
+    hash.startsWith('rest/') ||
+    hash === 'infrastructure' ||
+    hash.startsWith('infrastructure/') ||
+    isFlowsSection(hash);
 
   return (
     <ThemeProvider>
@@ -158,38 +209,27 @@ export function App() {
                           className="top-[var(--header-height)] h-[calc(100svh-var(--header-height))]"
                         />
                         <SidebarInset
-                          className={cn(
-                            'min-h-0',
-                            (hash.startsWith('flows/') || hash === 'configuration' || hash === 'schemas')
-                              ? 'overflow-hidden'
-                              : 'overflow-auto'
-                          )}
+                          className={cn('min-h-0', insetOverflowHidden ? 'overflow-hidden' : 'overflow-auto')}
                         >
                           <section
                             id="main"
                             className={
                               hash === 'configuration' || hash === 'schemas'
                                 ? 'flex min-h-0 flex-1 flex-col items-stretch'
-                                : hash === 'filesystem' || hash === 'database' || hash === 'rest' || hash === 'infrastructure' || isFlowsSection(hash)
-                                  ? 'flex min-h-0 flex-1 flex-col items-stretch p-4 md:p-6'
+                                : mainStretch
+                                  ? isResourceSettingsHash(hash)
+                                    ? 'flex min-h-0 flex-1 flex-col items-stretch overflow-hidden p-0'
+                                    : 'flex min-h-0 flex-1 flex-col items-stretch p-4 md:p-6'
                                   : 'flex flex-1 items-start justify-center p-4 md:min-h-min'
                             }
                           >
-                            {hash === 'filesystem' && <FilesystemPage />}
-                            {hash === 'configuration' && <ConfigurationPage />}
-                            {hash === 'rest' && <RestPage />}
-                            {hash === 'schemas' && <SchemaBrowserPage />}
-                            {hash === 'database' && <DatabasePage />}
-                            {hash === 'flows' && <FlowsPage />}
-                            {hash.startsWith('flows/') && <FlowEditorPage />}
-                            {hash === 'infrastructure' && <InfrastructurePage />}
-                            {hash !== 'filesystem' && hash !== 'configuration' && hash !== 'rest' && hash !== 'schemas' && hash !== 'database' && hash !== 'infrastructure' && !isFlowsSection(hash) && <StatusPage />}
+                            <MainRoutes hash={hash} />
                           </section>
                         </SidebarInset>
                         <FileViewer />
-                        {hash === 'database' && <DatabasePanel />}
-                        {(hash === 'flows' || hash.startsWith('flows/')) && <FlowStepPanel />}
-                        {hash === 'infrastructure' && <InfrastructurePanel />}
+                        {hash.startsWith('database') && <DatabasePanel />}
+                        {isFlowsSection(hash) && <FlowStepPanel />}
+                        {hash.startsWith('infrastructure') && <InfrastructurePanel />}
                         <AgentChat />
                       </div>
                     </SidebarProvider>

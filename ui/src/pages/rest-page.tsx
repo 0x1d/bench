@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button';
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { RestClient } from '@/components/rest-client';
 import { Input } from '@/components/ui/input';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { RestResourceFields, ResourceSettingsSidePanel } from '@/components/resource-config';
 import { cn } from '@/lib/utils';
 import {
@@ -24,8 +23,7 @@ const defaultRestDraft = (): RestResource => ({
   auth: { type: 'none' },
 });
 
-export function RestPage() {
-  const [pageTab, setPageTab] = useState<'browse' | 'settings'>('browse');
+export function RestPage({ mode }: { mode: 'browse' | 'settings' }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
 
@@ -66,7 +64,7 @@ export function RestPage() {
   const { data: specData, isLoading: specLoading, error: specError } = useQuery({
     queryKey: ['rest', 'spec', selectedId ?? ''],
     queryFn: () => fetchRestSpec(selectedId!),
-    enabled: !!selectedId && pageTab === 'browse',
+    enabled: !!selectedId && mode === 'browse',
   });
 
   const openAddRest = () => {
@@ -172,18 +170,15 @@ export function RestPage() {
     configError instanceof Error ? configError.message : configError ? String(configError) : null;
 
   return (
-    <div className="flex w-full min-h-0 flex-1 flex-col gap-4">
-      <Tabs
-        value={pageTab}
-        onValueChange={(v) => setPageTab(v as 'browse' | 'settings')}
-        className="flex min-h-0 flex-1 flex-col overflow-hidden"
+    <div className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-row items-stretch overflow-hidden">
+      <div
+        className={cn(
+          'flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-auto',
+          mode === 'settings' && 'px-4 md:px-6 pt-4 md:pt-6 pb-4 md:pb-6'
+        )}
       >
-        <TabsList variant="line" className="w-fit max-w-full shrink-0 justify-start gap-x-1">
-          <TabsTrigger value="browse">Browse</TabsTrigger>
-          <TabsTrigger value="settings">Settings</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="browse" className="mt-3 flex min-h-0 flex-1 flex-col gap-4">
+      {mode === 'browse' && (
+        <>
           {listLoading && (
             <p className="text-muted-foreground">Loading REST resources...</p>
           )}
@@ -196,11 +191,11 @@ export function RestPage() {
             <div className="rounded-lg border border-border bg-card p-6 text-center">
               <h2 className="text-lg font-medium">No REST resources configured</h2>
               <p className="mt-2 text-sm text-muted-foreground">
-                Add REST API entries in Settings, or use the Configuration page for other resource
-                types.
+                Add REST API entries under REST → Settings, or use the Configuration page for other
+                resource types.
               </p>
-              <Button type="button" className="mt-4" onClick={() => setPageTab('settings')}>
-                Open Settings
+              <Button type="button" className="mt-4" asChild>
+                <a href="#rest/settings">Open Settings</a>
               </Button>
             </div>
           )}
@@ -245,7 +240,7 @@ export function RestPage() {
                 </div>
               )}
 
-              <div className="min-w-0 flex-1 overflow-auto">
+              <div className="min-h-0 flex-1 overflow-auto">
                 {!selectedId ? (
                   <div className="overflow-x-auto rounded-lg border border-border bg-card">
                     <table className="w-full text-sm">
@@ -316,18 +311,17 @@ export function RestPage() {
               </div>
             </>
           )}
-        </TabsContent>
+        </>
+      )}
 
-        <TabsContent
-          value="settings"
-          className="mt-3 flex min-h-0 flex-1 flex-col gap-4 overflow-auto"
-        >
+      {mode === 'settings' && (
+        <>
           {configPending && (
             <p className="text-muted-foreground">Loading configuration...</p>
           )}
           {configErr && <p className="text-sm text-destructive">{configErr}</p>}
           {!configPending && (
-            <section className="rounded-lg border border-border bg-card p-4">
+            <section className="flex flex-col gap-4">
               <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <h3 className="text-base font-medium">REST resources</h3>
@@ -406,11 +400,11 @@ export function RestPage() {
                   </table>
                 </div>
               )}
-
             </section>
           )}
-        </TabsContent>
-      </Tabs>
+        </>
+      )}
+      </div>
 
       <ResourceSettingsSidePanel
         open={editingRest !== null}

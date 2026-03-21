@@ -1,27 +1,25 @@
+import { useEffect } from 'react';
 import { X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import {
-  Sheet,
-  SheetContent,
-  SheetTitle,
-} from '@/components/ui/sheet';
-import { cn } from '@/lib/utils';
+import { ContextPanel } from '@/components/context-panel';
+import { BENCH_CLOSE_PANEL_EVENT } from '@/lib/bench-close-panel';
+
+const STORAGE_KEY = 'bench-resource-settings-panel-width';
 
 export interface ResourceSettingsSidePanelProps {
-  /** When false, the sheet is closed and not interactive. */
+  /** When false, the panel is not rendered. */
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
   subtitle?: string;
   children: React.ReactNode;
   footer: React.ReactNode;
-  /** Optional class for the sheet surface (width, etc.). */
+  /** Optional class for the panel surface (width constraints, etc.). */
   className?: string;
 }
 
 /**
- * Right-side sheet for add/edit forms on resource Settings tabs. Matches Bench side-panel
- * patterns (header title, close, scroll body, footer actions).
+ * Right column for add/edit forms on resource settings views. Uses {@link ContextPanel}.
  */
 export function ResourceSettingsSidePanel({
   open,
@@ -32,19 +30,26 @@ export function ResourceSettingsSidePanel({
   footer,
   className,
 }: ResourceSettingsSidePanelProps) {
+  useEffect(() => {
+    const onBenchClose = () => onOpenChange(false);
+    window.addEventListener(BENCH_CLOSE_PANEL_EVENT, onBenchClose);
+    return () => window.removeEventListener(BENCH_CLOSE_PANEL_EVENT, onBenchClose);
+  }, [onOpenChange]);
+
+  if (!open) return null;
+
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        side="right"
-        showCloseButton={false}
-        className={cn(
-          'flex h-full w-full flex-col gap-0 overflow-hidden border-l p-0 sm:max-w-[min(640px,92vw)]',
-          className
-        )}
-      >
-        <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-border px-4">
+    <ContextPanel
+      expanded
+      storageKey={STORAGE_KEY}
+      minWidth={240}
+      maxWidth={800}
+      className={className}
+    >
+      <div className="flex h-full min-h-0 w-full min-w-0 flex-col">
+        <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-sidebar-border px-4">
           <div className="min-w-0">
-            <SheetTitle className="text-left text-base font-medium leading-tight">{title}</SheetTitle>
+            <h2 className="text-left text-base font-medium leading-tight">{title}</h2>
             {subtitle ? (
               <p className="mt-0.5 truncate text-xs text-muted-foreground">{subtitle}</p>
             ) : null}
@@ -59,9 +64,11 @@ export function ResourceSettingsSidePanel({
             <X className="size-4" />
           </Button>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-4">{children}</div>
-        <div className="shrink-0 border-t border-border bg-background p-4">{footer}</div>
-      </SheetContent>
-    </Sheet>
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div className="min-h-0 w-full flex-1 overflow-y-auto overflow-x-hidden p-4">{children}</div>
+          <div className="shrink-0 border-t border-sidebar-border bg-sidebar p-4">{footer}</div>
+        </div>
+      </div>
+    </ContextPanel>
   );
 }

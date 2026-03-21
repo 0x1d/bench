@@ -45,7 +45,8 @@ import {
 import { toast } from 'sonner';
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { FlowsTreeView } from '@/components/flows-tree-view';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { isResourceSettingsHash, type FlowsListView } from '@/lib/app-hash';
+import { useAppHash } from '@/hooks/use-app-hash';
 import {
   FlowsConfigFields,
   ResourceSettingsSidePanel,
@@ -79,7 +80,8 @@ function filterTreeByFlowName(
     .filter((e): e is FlowWorkspaceTreeEntry => e !== null);
 }
 
-export function FlowsPage() {
+export function FlowsPage({ view }: { view: FlowsListView }) {
+  const hash = useAppHash();
   const [selectedWorkspace, setSelectedWorkspace] = useState<string | null>(null);
   const [currentPath, setCurrentPath] = useState<string>('.');
   const [deleteTarget, setDeleteTarget] = useState<Flow | FlowWorkspaceEntry | null>(null);
@@ -94,7 +96,6 @@ export function FlowsPage() {
   const [runTargetFlow, setRunTargetFlow] = useState<Flow | null>(null);
   const [runTargetModule, setRunTargetModule] = useState<string | null>(null);
   const [flowFilter, setFlowFilter] = useState('');
-  const [activeTab, setActiveTab] = useState<'modules' | 'executions' | 'settings'>('modules');
   const { setExecutionId, setSelectedStep, setFlowContext, setModuleEditPath } = useFlowView();
 
   const { data: rawConfig, mergeAndPersist, isPending: configPending, error: configError } =
@@ -140,7 +141,7 @@ export function FlowsPage() {
   const { data: processesData, isLoading: processesLoading, error: processesError } = useQuery({
     queryKey: ['flows', 'processes', displayWorkspace ?? 'default'],
     queryFn: () => fetchFlowProcesses(displayWorkspace ?? undefined),
-    enabled: workspaces.length > 0 && activeTab === 'executions',
+    enabled: workspaces.length > 0 && view === 'executions',
   });
 
   const processItems: Record<string, unknown>[] = (() => {
@@ -450,7 +451,13 @@ export function FlowsPage() {
   }
 
   return (
-    <div className="flex w-full min-h-0 flex-1 flex-col gap-4">
+    <div className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-row items-stretch overflow-hidden">
+      <div
+        className={cn(
+          'flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-hidden',
+          isResourceSettingsHash(hash) && 'px-4 md:px-6 pt-4 md:pt-6 pb-4 md:pb-6'
+        )}
+      >
       {/* Breadcrumbs */}
       <nav className="flex flex-wrap items-center gap-1 text-sm">
         <span className="rounded px-2 py-1 font-medium">Flows</span>
@@ -512,17 +519,9 @@ export function FlowsPage() {
         </div>
       </div>
 
-      <Tabs
-        value={activeTab}
-        onValueChange={(v) => setActiveTab(v as 'modules' | 'executions' | 'settings')}
-        className="flex-1 min-w-0 flex flex-col overflow-hidden"
-      >
-        <TabsList variant="line" className="w-fit max-w-full shrink-0 justify-start gap-x-1">
-          <TabsTrigger value="modules">Modules</TabsTrigger>
-          <TabsTrigger value="executions">Executions</TabsTrigger>
-          <TabsTrigger value="settings">Settings</TabsTrigger>
-        </TabsList>
-        <TabsContent value="modules" className="mt-3 flex-1 min-w-0 overflow-auto">
+      <div className="flex min-h-0 flex-1 min-w-0 flex-col overflow-hidden">
+        {view === 'modules' && (
+          <div className="mt-0 flex min-h-0 flex-1 min-w-0 overflow-auto">
           {workspaces.length === 0 ? (
             <div className="rounded-lg border border-dashed border-border p-8 text-center">
               <Workflow className="mx-auto size-10 text-muted-foreground" />
@@ -530,13 +529,8 @@ export function FlowsPage() {
               <p className="mt-1 text-xs text-muted-foreground">
                 Add a Flowpipe workspace in Settings to run flows from this page.
               </p>
-              <Button
-                type="button"
-                className="mt-4"
-                variant="secondary"
-                onClick={() => setActiveTab('settings')}
-              >
-                Open Settings
+              <Button type="button" className="mt-4" variant="secondary" asChild>
+                <a href="#flows/settings">Open Settings</a>
               </Button>
             </div>
           ) : entriesLoading ? (
@@ -602,8 +596,10 @@ export function FlowsPage() {
               </div>
             </div>
           )}
-        </TabsContent>
-        <TabsContent value="executions" className="mt-3 flex-1 min-w-0 overflow-auto">
+          </div>
+        )}
+        {view === 'executions' && (
+          <div className="mt-0 flex min-h-0 flex-1 min-w-0 overflow-auto">
           {workspaces.length === 0 ? (
             <div className="rounded-lg border border-dashed border-border p-8 text-center">
               <Workflow className="mx-auto size-10 text-muted-foreground" />
@@ -611,13 +607,8 @@ export function FlowsPage() {
               <p className="mt-1 text-xs text-muted-foreground">
                 Configure workspaces in Settings first.
               </p>
-              <Button
-                type="button"
-                className="mt-4"
-                variant="secondary"
-                onClick={() => setActiveTab('settings')}
-              >
-                Open Settings
+              <Button type="button" className="mt-4" variant="secondary" asChild>
+                <a href="#flows/settings">Open Settings</a>
               </Button>
             </div>
           ) : processesLoading ? (
@@ -706,15 +697,17 @@ export function FlowsPage() {
               })}
             </div>
           )}
-        </TabsContent>
-        <TabsContent value="settings" className="mt-3 flex-1 min-w-0 overflow-auto">
+          </div>
+        )}
+        {view === 'settings' && (
+          <div className="mt-0 flex min-h-0 flex-1 min-w-0 overflow-auto">
           {configPending && (
             <p className="text-muted-foreground">Loading configuration...</p>
           )}
           {configErr && <p className="text-sm text-destructive">{configErr}</p>}
           {!configPending && (
             <div className="flex flex-col gap-6">
-              <section className="rounded-lg border border-border bg-card p-4">
+              <section className="flex flex-col gap-4">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <h3 className="text-base font-medium">Flows directory</h3>
@@ -725,7 +718,7 @@ export function FlowsPage() {
                   </Button>
                 </div>
               </section>
-              <section className="rounded-lg border border-border bg-card p-4">
+              <section className="flex flex-col gap-4">
                 <div className="mb-3 flex items-center justify-between">
                   <h3 className="text-base font-medium">Flowpipe workspaces</h3>
                   <Button type="button" variant="outline" size="sm" onClick={openAddWorkspacePanel}>
@@ -790,8 +783,10 @@ export function FlowsPage() {
               </section>
             </div>
           )}
-        </TabsContent>
-      </Tabs>
+          </div>
+        )}
+      </div>
+      </div>
 
       <ResourceSettingsSidePanel
         open={settingsPanel === 'flows'}

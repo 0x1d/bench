@@ -1,7 +1,9 @@
-import { forwardRef, useCallback, useImperativeHandle, useRef, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { BENCH_CLOSE_PANEL_EVENT } from '@/lib/bench-close-panel';
 import { Trash2, X, Terminal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { CodeEditor } from '@/components/code-editor';
+import { ContextPanel } from '@/components/context-panel';
 import { useInfrastructureView } from '@/contexts/infrastructure-view-context';
 import { saveInfrastructureFile, deleteResource } from '@/services/api';
 import {
@@ -17,16 +19,7 @@ import { cn } from '@/lib/utils';
 
 const STORAGE_KEY = 'bench-infrastructure-panel-width';
 const MIN_WIDTH = 200;
-
-function getInitialWidth(): number {
-  if (typeof window === 'undefined') return 360;
-  const stored = localStorage.getItem(STORAGE_KEY);
-  if (stored) {
-    const n = parseInt(stored, 10);
-    if (Number.isFinite(n)) return Math.max(MIN_WIDTH, n);
-  }
-  return 360;
-}
+const MAX_WIDTH = 2000;
 
 interface InfraEditFormProps {
   initialContent: string;
@@ -79,10 +72,7 @@ export function InfrastructurePanel() {
     isRunning,
     onRefresh,
   } = useInfrastructureView();
-  const [width, setWidth] = useState(getInitialWidth);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const startXRef = useRef(0);
-  const startWidthRef = useRef(0);
   const editFormRef = useRef<InfraEditFormHandle | null>(null);
 
   const queryClient = useQueryClient();
@@ -124,35 +114,19 @@ export function InfrastructurePanel() {
     onError: (e: Error) => toast.error(`Delete failed: ${e.message}`),
   });
 
-  const handleResizeStart = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    startXRef.current = e.clientX;
-    startWidthRef.current = width;
-    const onMove = (moveEvent: MouseEvent) => {
-      const delta = startXRef.current - moveEvent.clientX;
-      const next = Math.max(MIN_WIDTH, startWidthRef.current + delta);
-      setWidth(next);
-      localStorage.setItem(STORAGE_KEY, String(next));
-    };
-    const onUp = () => {
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    };
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-  }, [width]);
-
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     setSelectedNode(null);
     setSelectedFile(null);
     setFileContent('');
     setOutput('');
     setOutputCommand(null);
-  };
+  }, [setSelectedNode, setSelectedFile, setFileContent, setOutput, setOutputCommand]);
+
+  useEffect(() => {
+    const onBenchClose = () => handleClose();
+    window.addEventListener(BENCH_CLOSE_PANEL_EVENT, onBenchClose);
+    return () => window.removeEventListener(BENCH_CLOSE_PANEL_EVENT, onBenchClose);
+  }, [handleClose]);
 
   const getProviderFileContent = (): string => {
     if (!selectedSourceFile || !selectedNodeName) return tfContent;
@@ -236,17 +210,6 @@ export function InfrastructurePanel() {
 
   const panelContent = () => (
     <>
-      {isExpanded && (
-        <div
-          role="separator"
-          aria-orientation="vertical"
-          aria-valuenow={width}
-          tabIndex={0}
-          onMouseDown={handleResizeStart}
-          className="absolute left-0 top-0 z-10 hidden h-full w-2 cursor-col-resize lg:block hover:bg-sidebar-accent/50"
-          title="Drag to resize"
-        />
-      )}
       <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-sidebar-border px-4">
         <span className="truncate text-sm font-medium flex items-center gap-2" title={panelTitle}>
           {!selectedNode && !selectedFile && (output.length > 0 || isRunning) && (
@@ -340,27 +303,15 @@ export function InfrastructurePanel() {
         onConfirm={handleDelete}
         isLoading={deleteMutation.isPending}
       />
-      <div
-        className={cn(
-          'bg-sidebar text-sidebar-foreground fixed inset-0 z-30 flex min-h-0 flex-col overflow-hidden border-l lg:hidden',
-          isExpanded ? 'translate-x-0' : 'hidden'
-        )}
+      <ContextPanel
+        expanded={isExpanded}
+        storageKey={STORAGE_KEY}
+        minWidth={MIN_WIDTH}
+        maxWidth={MAX_WIDTH}
+        defaultWidth={360}
       >
         {panelContent()}
-      </div>
-      <div
-        className={cn(
-          'bg-sidebar text-sidebar-foreground relative hidden min-h-0 flex-col overflow-hidden border-l lg:flex',
-          isExpanded ? 'shrink-0' : 'w-0 min-w-0 shrink-0'
-        )}
-        style={
-          isExpanded
-            ? ({ width: `${width}px`, minWidth: `${width}px` } as React.CSSProperties)
-            : undefined
-        }
-      >
-        {panelContent()}
-      </div>
+      </ContextPanel>
     </>
   );
 }

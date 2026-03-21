@@ -2,7 +2,6 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FilesystemResourceFields, ResourceSettingsSidePanel } from '@/components/resource-config';
 import { FileBrowser } from '@/components/file-browser';
 import { useRoots } from '@/hooks/use-resources';
@@ -12,6 +11,7 @@ import {
   useResourceConfig,
   type FilesystemResource,
 } from '@/lib/resource-config';
+import { cn } from '@/lib/utils';
 
 const FILESYSTEM_STATE_KEY = 'bench-filesystem-page';
 
@@ -54,7 +54,7 @@ function savePersistedState(paths: Record<string, string>, lastRoot: string | nu
   }
 }
 
-export function FilesystemPage() {
+export function FilesystemPage({ mode }: { mode: 'browse' | 'settings' }) {
   const { data: rawConfig, mergeAndPersist, isPending: configPending, error: configError } =
     useResourceConfig();
   const filesystemList = useMemo(
@@ -62,7 +62,6 @@ export function FilesystemPage() {
     [rawConfig]
   );
 
-  const [pageTab, setPageTab] = useState<'browse' | 'settings'>('browse');
   const [editingFs, setEditingFs] = useState<'add' | number | null>(null);
   const [filesystemDraft, setFilesystemDraft] = useState<FilesystemResource>({
     id: '',
@@ -93,7 +92,7 @@ export function FilesystemPage() {
     setPath,
     displayRoot,
     setSelectedRoot,
-    !!displayRoot
+    mode === 'browse' && !!displayRoot
   );
 
   const handleRootChange = useCallback(
@@ -193,18 +192,15 @@ export function FilesystemPage() {
     configError instanceof Error ? configError.message : configError ? String(configError) : null;
 
   return (
-    <div className="flex w-full min-h-0 flex-1 flex-col gap-4">
-      <Tabs
-        value={pageTab}
-        onValueChange={(v) => setPageTab(v as 'browse' | 'settings')}
-        className="flex min-h-0 flex-1 flex-col overflow-hidden"
+    <div className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-row items-stretch overflow-hidden">
+      <div
+        className={cn(
+          'flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-auto',
+          mode === 'settings' && 'px-4 md:px-6 pt-4 md:pt-6 pb-4 md:pb-6'
+        )}
       >
-        <TabsList variant="line" className="w-fit max-w-full shrink-0 justify-start gap-x-1">
-          <TabsTrigger value="browse">Browse</TabsTrigger>
-          <TabsTrigger value="settings">Settings</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="browse" className="mt-3 flex min-h-0 flex-1 flex-col gap-4">
+      {mode === 'browse' && (
+        <>
           {rootsLoading && (
             <p className="text-muted-foreground">Loading roots...</p>
           )}
@@ -217,10 +213,10 @@ export function FilesystemPage() {
             <div className="rounded-lg border border-border bg-card p-6 text-center">
               <h2 className="text-lg font-medium">No filesystem resources configured</h2>
               <p className="mt-2 text-sm text-muted-foreground">
-                Add at least one root folder in Settings to browse files here.
+                Add at least one root folder under Filesystem → Settings to browse files here.
               </p>
-              <Button type="button" className="mt-4" onClick={() => setPageTab('settings')}>
-                Open Settings
+              <Button type="button" className="mt-4" asChild>
+                <a href="#filesystem/settings">Open Settings</a>
               </Button>
             </div>
           )}
@@ -234,15 +230,17 @@ export function FilesystemPage() {
               onRootChange={handleRootChange}
             />
           )}
-        </TabsContent>
+        </>
+      )}
 
-        <TabsContent value="settings" className="mt-3 flex min-h-0 flex-1 flex-col gap-4 overflow-auto">
+      {mode === 'settings' && (
+        <>
           {configPending && (
             <p className="text-muted-foreground">Loading configuration...</p>
           )}
           {configErr && <p className="text-sm text-destructive">{configErr}</p>}
           {!configPending && (
-            <section className="rounded-lg border border-border bg-card p-4">
+            <section className="flex flex-col gap-4">
               <div className="mb-3 flex items-center justify-between">
                 <h3 className="text-base font-medium">Filesystem resources</h3>
                 <Button variant="outline" size="sm" onClick={openAddFilesystem}>
@@ -302,8 +300,9 @@ export function FilesystemPage() {
               )}
             </section>
           )}
-        </TabsContent>
-      </Tabs>
+        </>
+      )}
+      </div>
 
       <ResourceSettingsSidePanel
         open={editingFs !== null}

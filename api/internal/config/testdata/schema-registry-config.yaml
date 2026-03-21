@@ -1,10 +1,17 @@
-# Minimal config for schema registry tests.
-# Use with BENCH_CONFIG pointing to this file (absolute path).
+# Test fixture for schema registry (BENCH_CONFIG points to this file).
 resources:
+  filesystem:
+    - id: test-fs
+      label: Test FS
+      path: /tmp
   schemas:
-    - id: test-openapi
-      label: Test OpenAPI
+    - id: test-api
+      label: Test API
       type: openapi
       source:
         path: petstore-minimal.json
-  rest: []
+    - id: bad-traversal
+      label: Bad
+      type: openapi
+      source:
+        path: ../../../etc/passwd

@@ -1,5 +1,5 @@
 ---
-state: IN_PROGRESS
+state: DONE
 created: 2025-03-13
 updated: 2025-03-21
 ---
@@ -14,7 +14,7 @@ updated: 2025-03-21
 
 ## Phase 1: Schema Registry Core (API)
 
-**Phase status**: IN_PROGRESS  
+**Phase status**: DONE  
 **Deliverable**: API can list and serve schema content; no UI changes yet.
 
 ### Config
@@ -31,72 +31,72 @@ updated: 2025-03-21
 
 ### Handler & Routes
 
-- [ ] **1.4** Create schema handlers and register routes — [specs/1.4-handler.md](specs/1.4-handler.md)
+- [x] **1.4** Create schema handlers and register routes — [specs/1.4-handler.md](specs/1.4-handler.md)
 
 ### Tests
 
-- [ ] **1.5** Unit and integration tests — [specs/1.5-tests.md](specs/1.5-tests.md)
+- [x] **1.5** Unit and integration tests — [specs/1.5-tests.md](specs/1.5-tests.md)
 
 ---
 
 ## Phase 2: REST Migration to Schema Registry
 
-**Phase status**: TODO  
+**Phase status**: DONE  
 **Deliverable**: Config can use `schemaId`; existing `openapiSpec` still works.
 
 ### Config
 
-- [ ] **2.1** Add SchemaID to RestEntry, validation — [specs/2.1-config.md](specs/2.1-config.md)
+- [x] **2.1** Add SchemaID to RestEntry, validation — [specs/2.1-config.md](specs/2.1-config.md)
 
 ### REST Service
 
-- [ ] **2.2** Update Spec() to use schema registry, add SchemaID to RestResource — [specs/2.2-rest-service.md](specs/2.2-rest-service.md)
+- [x] **2.2** Update Spec() to use schema registry, add SchemaID to RestResource — [specs/2.2-rest-service.md](specs/2.2-rest-service.md)
 
 ### Tests
 
-- [ ] **2.3** REST spec resolution tests — [specs/2.3-tests.md](specs/2.3-tests.md)
+- [x] **2.3** REST spec resolution tests — [specs/2.3-tests.md](specs/2.3-tests.md)
 
 ---
 
 ## Phase 3: Schema Registry UI & Standalone Schemas
 
-**Phase status**: TODO  
+**Phase status**: DONE  
 **Deliverable**: Users can manage schemas in config; REST can reference them.
 
 ### Resources Config Page
 
-- [ ] **3.1** Add schemas section (list, add, edit, remove) — [specs/3.1-resources-config.md](specs/3.1-resources-config.md)
+- [x] **3.1** Add schemas section (list, add, edit, remove) — [specs/3.1-resources-config.md](specs/3.1-resources-config.md)
 
 ### REST Resource Form
 
-- [ ] **3.2** Add schemaId dropdown to REST form — [specs/3.2-rest-form.md](specs/3.2-rest-form.md)
+- [x] **3.2** Add schemaId dropdown to REST form — [specs/3.2-rest-form.md](specs/3.2-rest-form.md)
 
 ### Schema Browser
 
-- [ ] **3.3** Schema browser page — [specs/3.3-schema-browser.md](specs/3.3-schema-browser.md)
+- [x] **3.3** Schema browser page — [specs/3.3-schema-browser.md](specs/3.3-schema-browser.md)
 
 ---
 
 ## Phase 4: Schema Type Abstraction (Parsers)
 
-**Phase status**: TODO  
+**Phase status**: DONE  
 **Deliverable**: Parsing layer supports OpenAPI + AsyncAPI; JSON Schema later.
 
 ### UI Lib
 
-- [ ] **4.1** Create schema-registry.ts (detectSchemaType, parseSchema) — [specs/4.1-schema-registry-lib.md](specs/4.1-schema-registry-lib.md)
-- [ ] **4.2** Create asyncapi.ts — [specs/4.2-asyncapi-lib.md](specs/4.2-asyncapi-lib.md)
+- [x] **4.1** Create schema-registry.ts (detectSchemaType, parseSchema) — [specs/4.1-schema-registry-lib.md](specs/4.1-schema-registry-lib.md)
+- [x] **4.2** Create asyncapi.ts — [specs/4.2-asyncapi-lib.md](specs/4.2-asyncapi-lib.md)
 
 ---
 
 ## Phase 5: JSON Schema & Validation
 
-**Phase status**: TODO  
+**Phase status**: DONE  
 **Deliverable**: JSON Schema schemas registered and usable for validation.
 
 ### Config & API
 
-- [ ] **6.1** JSON Schema support and optional validation — [specs/6.1-json-schema.md](specs/6.1-json-schema.md)
+- [x] **6.1** JSON Schema support and optional validation — [specs/6.1-json-schema.md](specs/6.1-json-schema.md)
 
 ---
 
@@ -114,10 +114,10 @@ Kafka/messaging step and AsyncAPI flow integration — not in current scope. Spe
 
 | Phase | Tasks | Done | Status |
 |-------|-------|------|--------|
-| 1 | 5 | 3 | IN_PROGRESS |
-| 2 | 3 | 0 | TODO |
-| 3 | 3 | 0 | TODO |
-| 4 | 2 | 0 | TODO |
-| 5 | 1 | 0 | TODO |
+| 1 | 5 | 5 | DONE |
+| 2 | 3 | 3 | DONE |
+| 3 | 3 | 3 | DONE |
+| 4 | 2 | 2 | DONE |
+| 5 | 1 | 1 | DONE |
 
 Metadata in frontmatter (`updated`).

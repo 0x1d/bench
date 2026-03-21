@@ -16,6 +16,7 @@ import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import { FilesystemPage } from '@/pages/resources-page';
 import { ResourcesConfigPage } from '@/pages/resources-config-page';
 import { RestPage } from '@/pages/rest-page';
+import { SchemaBrowserPage } from '@/pages/schema-browser-page';
 import { StatusPage } from '@/pages/status-page';
 import { DatabasePage } from '@/pages/database-page';
 import { FlowsPage } from '@/pages/flows-page';
@@ -157,7 +158,7 @@ export function App() {
                             className={
                               hash === 'resources'
                                 ? 'flex min-h-0 flex-1 flex-col items-stretch'
-                                : hash === 'filesystem' || hash === 'database' || hash === 'rest' || hash === 'infrastructure' || isFlowsSection(hash)
+                                : hash === 'filesystem' || hash === 'database' || hash === 'rest' || hash === 'schemas' || hash === 'infrastructure' || isFlowsSection(hash)
                                   ? 'flex min-h-0 flex-1 flex-col items-stretch p-4 md:p-6'
                                   : 'flex flex-1 items-start justify-center p-4 md:min-h-min'
                             }
@@ -165,11 +166,12 @@ export function App() {
                             {hash === 'filesystem' && <FilesystemPage />}
                             {hash === 'resources' && <ResourcesConfigPage />}
                             {hash === 'rest' && <RestPage />}
+                            {hash === 'schemas' && <SchemaBrowserPage />}
                             {hash === 'database' && <DatabasePage />}
                             {hash === 'flows' && <FlowsPage />}
                             {hash.startsWith('flows/') && <FlowEditorPage />}
                             {hash === 'infrastructure' && <InfrastructurePage />}
-                            {hash !== 'filesystem' && hash !== 'resources' && hash !== 'rest' && hash !== 'database' && hash !== 'infrastructure' && !isFlowsSection(hash) && <StatusPage />}
+                            {hash !== 'filesystem' && hash !== 'resources' && hash !== 'rest' && hash !== 'schemas' && hash !== 'database' && hash !== 'infrastructure' && !isFlowsSection(hash) && <StatusPage />}
                           </section>
                         </SidebarInset>
                         <FileViewer />

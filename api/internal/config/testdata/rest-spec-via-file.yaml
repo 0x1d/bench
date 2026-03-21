@@ -1,0 +1,10 @@
+resources:
+  filesystem:
+    - id: x
+      label: x
+      path: /tmp
+  rest:
+    - id: r1
+      label: R
+      baseUrl: https://example.com
+      openapiSpec: petstore-from-file.json

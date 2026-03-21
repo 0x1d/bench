@@ -24,7 +24,8 @@ export function RestPage() {
           r.id.toLowerCase().includes(searchLower) ||
           (r.label || '').toLowerCase().includes(searchLower) ||
           (r.baseUrl || '').toLowerCase().includes(searchLower) ||
-          (r.openapiSpec || '').toLowerCase().includes(searchLower)
+          (r.openapiSpec || '').toLowerCase().includes(searchLower) ||
+          (r.schemaId || '').toLowerCase().includes(searchLower)
       )
     : resources;
 

@@ -39,8 +39,17 @@ interface RestResource {
   id: string;
   label: string;
   baseUrl: string;
+  /** Registered OpenAPI schema id; takes precedence over openapiSpec when set. */
+  schemaId?: string;
   openapiSpec: string;
   auth?: RestAuthConfig;
+}
+
+interface SchemaResourceEntry {
+  id: string;
+  label: string;
+  type: 'openapi' | 'asyncapi' | 'json-schema';
+  source: { path: string };
 }
 
 interface FlowsConfig {
@@ -66,6 +75,7 @@ interface WorkspaceResource {
 
 interface ResourceFormState {
   filesystem: FilesystemResource[];
+  schemas: SchemaResourceEntry[];
   databases: DatabaseResource[];
   rest: RestResource[];
   workspaces: WorkspaceResource[];
@@ -77,6 +87,8 @@ interface ResourceFormState {
 type PanelMode =
   | 'add-filesystem'
   | 'edit-filesystem'
+  | 'add-schema'
+  | 'edit-schema'
   | 'add-database'
   | 'edit-database'
   | 'add-rest'
@@ -89,6 +101,7 @@ type PanelMode =
 
 type DeleteTarget =
   | { type: 'filesystem'; index: number }
+  | { type: 'schema'; index: number }
   | { type: 'database'; index: number }
   | { type: 'rest'; index: number }
   | { type: 'workspace'; index: number }
@@ -97,6 +110,7 @@ type DeleteTarget =
 function emptyState(): ResourceFormState {
   return {
     filesystem: [],
+    schemas: [],
     databases: [],
     rest: [],
     workspaces: [],
@@ -114,6 +128,12 @@ function emptyState(): ResourceFormState {
 function parseConfigToState(rawConfig: string): ResourceFormState {
   const parsed = (yaml.load(rawConfig) as {
     resources?: {
+      schemas?: Array<{
+        id?: string;
+        label?: string;
+        type?: string;
+        source?: { path?: string };
+      }>;
       filesystem?: Array<{ id?: string; label?: string; path?: string }>;
       databases?: Array<{
         id?: string;
@@ -126,6 +146,7 @@ function parseConfigToState(rawConfig: string): ResourceFormState {
         id?: string;
         label?: string;
         baseUrl?: string;
+        schemaId?: string;
         openapiSpec?: string;
         auth?: {
           type?: string;
@@ -157,6 +178,18 @@ function parseConfigToState(rawConfig: string): ResourceFormState {
     path: entry.path ?? '',
   }));
 
+  const schemas = (parsed.resources?.schemas ?? []).map((entry) => {
+    const t = (entry.type ?? 'openapi') as SchemaResourceEntry['type'];
+    const safeType: SchemaResourceEntry['type'] =
+      t === 'asyncapi' || t === 'json-schema' ? t : 'openapi';
+    return {
+      id: entry.id ?? '',
+      label: entry.label ?? '',
+      type: safeType,
+      source: { path: entry.source?.path ?? '' },
+    };
+  });
+
   const databases = (parsed.resources?.databases ?? []).map((entry) => ({
     id: entry.id ?? '',
     label: entry.label ?? '',
@@ -169,6 +202,7 @@ function parseConfigToState(rawConfig: string): ResourceFormState {
     id: entry.id ?? '',
     label: entry.label ?? '',
     baseUrl: entry.baseUrl ?? '',
+    schemaId: entry.schemaId ?? '',
     openapiSpec: entry.openapiSpec ?? '',
     auth: entry.auth
       ? {
@@ -207,11 +241,19 @@ function parseConfigToState(rawConfig: string): ResourceFormState {
     model: agentRaw?.model ?? '',
   };
 
-  return { filesystem, databases, rest, workspaces, flows, infrastructure, agent };
+  return { filesystem, schemas, databases, rest, workspaces, flows, infrastructure, agent };
 }
 
 function stateToConfig(state: ResourceFormState): string {
   const resources = {
+    schemas: state.schemas
+      .filter((entry) => entry.id.trim() !== '' || entry.source.path.trim() !== '')
+      .map((entry) => ({
+        id: entry.id.trim(),
+        label: entry.label.trim() || undefined,
+        type: entry.type,
+        source: { path: entry.source.path.trim() },
+      })),
     filesystem: state.filesystem
       .filter((entry) => entry.id.trim() !== '' || entry.path.trim() !== '')
       .map((entry) => ({
@@ -235,6 +277,7 @@ function stateToConfig(state: ResourceFormState): string {
           id: entry.id.trim(),
           label: entry.label.trim() || undefined,
           baseUrl: entry.baseUrl.trim(),
+          schemaId: entry.schemaId?.trim() || undefined,
           openapiSpec: entry.openapiSpec.trim() || undefined,
         };
         const auth = entry.auth;
@@ -315,8 +358,15 @@ export function ResourcesConfigPage() {
     id: '',
     label: '',
     baseUrl: '',
+    schemaId: '',
     openapiSpec: '',
     auth: { type: 'none' },
+  });
+  const [schemaDraft, setSchemaDraft] = useState<SchemaResourceEntry>({
+    id: '',
+    label: '',
+    type: 'openapi',
+    source: { path: '' },
   });
   const [flowsDraft, setFlowsDraft] = useState<FlowsConfig>({
     path: './flows',
@@ -435,11 +485,30 @@ export function ResourcesConfigPage() {
     setDeleteTarget({ type: 'database', index });
   };
 
+  const openAddSchema = () => {
+    setSchemaDraft({ id: '', label: '', type: 'openapi', source: { path: '' } });
+    setPanelIndex(null);
+    setPanelError(null);
+    setPanelMode('add-schema');
+  };
+
+  const openEditSchema = (index: number) => {
+    setSchemaDraft(state.schemas[index]);
+    setPanelIndex(index);
+    setPanelError(null);
+    setPanelMode('edit-schema');
+  };
+
+  const openRemoveSchema = (index: number) => {
+    setDeleteTarget({ type: 'schema', index });
+  };
+
   const openAddRest = () => {
     setRestDraft({
       id: '',
       label: '',
       baseUrl: '',
+      schemaId: '',
       openapiSpec: '',
       auth: { type: 'none' },
     });
@@ -613,6 +682,54 @@ export function ResourcesConfigPage() {
     }
   };
 
+  const applySchemaDraft = async () => {
+    const id = schemaDraft.id.trim();
+    const path = schemaDraft.source.path.trim();
+    if (id === '' || path === '') {
+      setPanelError('Schema ID and source path are required.');
+      return;
+    }
+
+    const duplicate = state.schemas.some(
+      (entry, idx) => idx !== panelIndex && entry.id.trim() === id
+    );
+    if (duplicate) {
+      setPanelError(`Schema ID "${id}" already exists.`);
+      return;
+    }
+
+    const nextEntry: SchemaResourceEntry = {
+      id,
+      label: schemaDraft.label.trim(),
+      type: schemaDraft.type,
+      source: { path },
+    };
+
+    const prevState = state;
+    const nextState =
+      panelMode === 'add-schema'
+        ? { ...prevState, schemas: [...prevState.schemas, nextEntry] }
+        : panelMode === 'edit-schema' && panelIndex != null
+          ? {
+            ...prevState,
+            schemas: prevState.schemas.map((entry, idx) =>
+              idx === panelIndex ? nextEntry : entry
+            ),
+          }
+          : prevState;
+
+    if (nextState === prevState) return;
+
+    setState(nextState);
+    try {
+      await persistState(nextState);
+      closePanel();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Save failed');
+      setState(prevState);
+    }
+  };
+
   const applyRestDraft = async () => {
     const id = restDraft.id.trim();
     const baseUrl = restDraft.baseUrl.trim();
@@ -647,6 +764,7 @@ export function ResourcesConfigPage() {
       id,
       label: restDraft.label.trim(),
       baseUrl,
+      schemaId: restDraft.schemaId?.trim() || undefined,
       openapiSpec: restDraft.openapiSpec.trim(),
       auth: auth && auth.type !== 'none' ? auth : undefined,
     };
@@ -795,28 +913,33 @@ export function ResourcesConfigPage() {
   const confirmRemove = async () => {
     if (!deleteTarget) return;
     const prevState = state;
-    const nextState =
-      deleteTarget.type === 'filesystem'
-        ? {
-          ...prevState,
-          filesystem: prevState.filesystem.filter((_, idx) => idx !== deleteTarget.index),
-        }
-        : deleteTarget.type === 'database'
-          ? {
-            ...prevState,
-            databases: prevState.databases.filter((_, idx) => idx !== deleteTarget.index),
-          }
-          : deleteTarget.type === 'workspace'
-            ? {
-              ...prevState,
-              workspaces: prevState.workspaces.filter(
-                (_, idx) => idx !== deleteTarget.index
-              ),
-            }
-            : {
-              ...prevState,
-              rest: prevState.rest.filter((_, idx) => idx !== deleteTarget.index),
-            };
+    let nextState: ResourceFormState;
+    if (deleteTarget.type === 'filesystem') {
+      nextState = {
+        ...prevState,
+        filesystem: prevState.filesystem.filter((_, idx) => idx !== deleteTarget.index),
+      };
+    } else if (deleteTarget.type === 'schema') {
+      nextState = {
+        ...prevState,
+        schemas: prevState.schemas.filter((_, idx) => idx !== deleteTarget.index),
+      };
+    } else if (deleteTarget.type === 'database') {
+      nextState = {
+        ...prevState,
+        databases: prevState.databases.filter((_, idx) => idx !== deleteTarget.index),
+      };
+    } else if (deleteTarget.type === 'workspace') {
+      nextState = {
+        ...prevState,
+        workspaces: prevState.workspaces.filter((_, idx) => idx !== deleteTarget.index),
+      };
+    } else {
+      nextState = {
+        ...prevState,
+        rest: prevState.rest.filter((_, idx) => idx !== deleteTarget.index),
+      };
+    }
 
     setState(nextState);
     setDeleteTarget(null);
@@ -834,31 +957,37 @@ export function ResourcesConfigPage() {
       ? 'Add filesystem resource'
       : panelMode === 'edit-filesystem'
         ? 'Edit filesystem resource'
-        : panelMode === 'add-database'
-          ? 'Add database resource'
-          : panelMode === 'edit-database'
-            ? 'Edit database resource'
-            : panelMode === 'add-rest'
-              ? 'Add REST resource'
-              : panelMode === 'edit-rest'
-                ? 'Edit REST resource'
-                : panelMode === 'add-workspace'
-                  ? 'Add flow workspace'
-                  : panelMode === 'edit-workspace'
-                    ? 'Edit flow workspace'
-                    : panelMode === 'edit-flows'
-                      ? 'Configure flows'
-                      : panelMode === 'edit-infrastructure'
-                        ? 'Configure infrastructure'
-                        : panelMode === 'edit-agent'
-                          ? 'Configure AI agent'
-                          : 'Resource';
+        : panelMode === 'add-schema'
+          ? 'Add schema'
+          : panelMode === 'edit-schema'
+            ? 'Edit schema'
+            : panelMode === 'add-database'
+              ? 'Add database resource'
+              : panelMode === 'edit-database'
+                ? 'Edit database resource'
+                : panelMode === 'add-rest'
+                  ? 'Add REST resource'
+                  : panelMode === 'edit-rest'
+                    ? 'Edit REST resource'
+                    : panelMode === 'add-workspace'
+                      ? 'Add flow workspace'
+                      : panelMode === 'edit-workspace'
+                        ? 'Edit flow workspace'
+                        : panelMode === 'edit-flows'
+                          ? 'Configure flows'
+                          : panelMode === 'edit-infrastructure'
+                            ? 'Configure infrastructure'
+                            : panelMode === 'edit-agent'
+                              ? 'Configure AI agent'
+                              : 'Resource';
   const panelDescription = panelMode?.includes('filesystem')
     ? 'Configure filesystem resource fields used for file browsing.'
-    : panelMode?.includes('database')
-      ? 'Configure database resource fields.'
-      : panelMode?.includes('rest')
-        ? 'Configure REST API endpoint with optional auth and OpenAPI spec.'
+    : panelMode === 'add-schema' || panelMode === 'edit-schema'
+      ? 'Register a schema file (OpenAPI, AsyncAPI, or JSON Schema). Path is relative to the config directory.'
+      : panelMode?.includes('database')
+        ? 'Configure database resource fields.'
+        : panelMode?.includes('rest')
+          ? 'Configure REST API endpoint with optional auth. Use a registered OpenAPI schema or a spec file path.'
         : panelMode?.includes('workspace')
           ? 'Flowpipe profile: named config for pipeline execution (host, port, etc.). Init adds block to flows/workspaces.fpc.'
           : panelMode === 'edit-flows'
@@ -959,6 +1088,66 @@ export function ResourcesConfigPage() {
           </div>
         )}
 
+        {(panelMode === 'add-schema' || panelMode === 'edit-schema') && (
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label>ID</Label>
+              <Input
+                value={schemaDraft.id}
+                onChange={(e) =>
+                  setSchemaDraft((prev) => ({ ...prev, id: e.target.value }))
+                }
+                placeholder="petstore-api"
+                className="font-mono"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>Label</Label>
+              <Input
+                value={schemaDraft.label}
+                onChange={(e) =>
+                  setSchemaDraft((prev) => ({ ...prev, label: e.target.value }))
+                }
+                placeholder="Petstore API"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>Type</Label>
+              <select
+                value={schemaDraft.type}
+                onChange={(e) =>
+                  setSchemaDraft((prev) => ({
+                    ...prev,
+                    type: e.target.value as SchemaResourceEntry['type'],
+                  }))
+                }
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+              >
+                <option value="openapi">openapi</option>
+                <option value="asyncapi">asyncapi</option>
+                <option value="json-schema">json-schema</option>
+              </select>
+            </div>
+            <div className="space-y-1">
+              <Label>Source path</Label>
+              <Input
+                value={schemaDraft.source.path}
+                onChange={(e) =>
+                  setSchemaDraft((prev) => ({
+                    ...prev,
+                    source: { ...prev.source, path: e.target.value },
+                  }))
+                }
+                placeholder="./workspace/rest/openapi.json"
+                className="font-mono"
+              />
+              <p className="text-xs text-muted-foreground">
+                Path to the schema file, relative to the Bench config directory.
+              </p>
+            </div>
+          </div>
+        )}
+
         {(panelMode === 'add-rest' || panelMode === 'edit-rest') && (
           <div className="space-y-3">
             <div className="space-y-1">
@@ -993,6 +1182,29 @@ export function ResourcesConfigPage() {
               />
             </div>
             <div className="space-y-1">
+              <Label>OpenAPI schema (registry)</Label>
+              <select
+                value={restDraft.schemaId ?? ''}
+                onChange={(e) =>
+                  setRestDraft((prev) => ({ ...prev, schemaId: e.target.value }))
+                }
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+              >
+                <option value="">None (use path below)</option>
+                {state.schemas
+                  .filter((s) => s.type === 'openapi')
+                  .map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.label?.trim() || s.id}
+                    </option>
+                  ))}
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Use a registered OpenAPI schema (recommended) or specify a file path below. Registry schema
+                takes precedence.
+              </p>
+            </div>
+            <div className="space-y-1">
               <Label>OpenAPI spec path</Label>
               <Input
                 value={restDraft.openapiSpec}
@@ -1003,7 +1215,7 @@ export function ResourcesConfigPage() {
                 className="font-mono"
               />
               <p className="text-xs text-muted-foreground">
-                Path relative to config directory.
+                Path relative to config directory. Leave empty when using a registry schema above.
               </p>
             </div>
             <div className="space-y-1">
@@ -1290,9 +1502,14 @@ export function ResourcesConfigPage() {
           <Button variant="outline" onClick={closePanel}>
             Cancel
           </Button>
-          {(panelMode === 'add-filesystem' || panelMode === 'edit-filesystem') && (
-            <Button onClick={applyFilesystemDraft}>
+        {(panelMode === 'add-filesystem' || panelMode === 'edit-filesystem') && (
+          <Button onClick={applyFilesystemDraft}>
               {panelMode === 'add-filesystem' ? 'Add' : 'Save changes'}
+            </Button>
+          )}
+          {(panelMode === 'add-schema' || panelMode === 'edit-schema') && (
+            <Button onClick={applySchemaDraft}>
+              {panelMode === 'add-schema' ? 'Add' : 'Save changes'}
             </Button>
           )}
           {(panelMode === 'add-database' || panelMode === 'edit-database') && (
@@ -1405,6 +1622,68 @@ export function ResourcesConfigPage() {
 
           <section className="rounded-lg border border-border bg-card p-4">
             <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-base font-medium">Schemas</h3>
+              <Button variant="outline" size="sm" onClick={openAddSchema}>
+                <Plus className="size-4" />
+                Add schema
+              </Button>
+            </div>
+            {state.schemas.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No schemas registered.</p>
+            ) : (
+              <div className="overflow-x-auto rounded-lg border border-border bg-card">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/30">
+                      <th className="px-4 py-3 text-left font-medium">ID</th>
+                      <th className="px-4 py-3 text-left font-medium">Label</th>
+                      <th className="px-4 py-3 text-left font-medium">Type</th>
+                      <th className="px-4 py-3 text-left font-medium">Source path</th>
+                      <th className="w-28 px-2 py-3" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {state.schemas.map((entry, index) => (
+                      <tr
+                        key={`schema-${index}`}
+                        className="border-b border-border/50 last:border-b-0 cursor-pointer hover:bg-accent/30"
+                        onClick={() => openEditSchema(index)}
+                      >
+                        <td className="px-4 py-2 font-mono">{entry.id}</td>
+                        <td className="px-4 py-2">{entry.label || '—'}</td>
+                        <td className="px-4 py-2 font-mono">{entry.type}</td>
+                        <td className="px-4 py-2 font-mono">{entry.source.path}</td>
+                        <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon-xs"
+                              onClick={() => openEditSchema(index)}
+                              aria-label={`Edit schema ${entry.id}`}
+                            >
+                              <Pencil className="size-3" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon-xs"
+                              onClick={() => openRemoveSchema(index)}
+                              aria-label={`Remove schema ${entry.id}`}
+                              className="text-destructive hover:text-destructive"
+                            >
+                              <Trash2 className="size-3" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+
+          <section className="rounded-lg border border-border bg-card p-4">
+            <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-medium">Database resources</h3>
               <Button variant="outline" size="sm" onClick={openAddDatabase}>
                 <Plus className="size-4" />
@@ -1485,6 +1764,7 @@ export function ResourcesConfigPage() {
                       <th className="px-4 py-3 text-left font-medium">ID</th>
                       <th className="px-4 py-3 text-left font-medium">Label</th>
                       <th className="px-4 py-3 text-left font-medium">Base URL</th>
+                      <th className="px-4 py-3 text-left font-medium">Schema</th>
                       <th className="px-4 py-3 text-left font-medium">OpenAPI spec</th>
                       <th className="w-28 px-2 py-3" />
                     </tr>
@@ -1499,6 +1779,7 @@ export function ResourcesConfigPage() {
                         <td className="px-4 py-2 font-mono">{entry.id}</td>
                         <td className="px-4 py-2">{entry.label || '—'}</td>
                         <td className="px-4 py-2 font-mono truncate max-w-[200px]">{entry.baseUrl}</td>
+                        <td className="px-4 py-2 font-mono">{entry.schemaId?.trim() || '—'}</td>
                         <td className="px-4 py-2 font-mono">{entry.openapiSpec || '—'}</td>
                         <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-end gap-1">
@@ -1696,9 +1977,11 @@ export function ResourcesConfigPage() {
               ? `Remove database resource "${state.databases[deleteTarget.index]?.id}"?`
               : deleteTarget?.type === 'rest'
                 ? `Remove REST resource "${state.rest[deleteTarget.index]?.id}"?`
-                : deleteTarget?.type === 'workspace'
-                  ? `Remove flow profile "${state.workspaces[deleteTarget.index]?.id}"?`
-                  : 'Remove selected resource?'
+                : deleteTarget?.type === 'schema'
+                  ? `Remove schema "${state.schemas[deleteTarget.index]?.id}"?`
+                  : deleteTarget?.type === 'workspace'
+                    ? `Remove flow profile "${state.workspaces[deleteTarget.index]?.id}"?`
+                    : 'Remove selected resource?'
         }
         onConfirm={confirmRemove}
         confirmLabel="Remove"

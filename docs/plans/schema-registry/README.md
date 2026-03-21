@@ -1,5 +1,5 @@
 ---
-state: IN_PROGRESS
+state: DONE
 created: 2025-03-13
 updated: 2025-03-21
 ---
@@ -20,17 +20,17 @@ updated: 2025-03-21
 
 | Phase | Status | Description |
 |-------|--------|-------------|
-| 1 | IN_PROGRESS | Schema registry API (list, get, content) |
-| 2 | TODO | REST uses schemaId; backward compat |
-| 3 | TODO | Schema config UI, standalone schemas |
-| 4 | TODO | Schema type abstraction (parsers) |
-| 5 | TODO | JSON Schema support |
+| 1 | DONE | Schema registry API (list, get, content) |
+| 2 | DONE | REST uses schemaId; backward compat |
+| 3 | DONE | Schema config UI, standalone schemas |
+| 4 | DONE | Schema type abstraction (parsers) |
+| 5 | DONE | JSON Schema support |
 
 **Deferred**: Kafka/messaging step, AsyncAPI flow integration
 
 **Phase 4**: AsyncAPI for storing and browsing schemas (schema browser).
 
-**Next up**: Phase 1 — implement schema registry API. Kafka step deferred.
+**Status**: Plan implementation complete. Kafka/messaging items remain deferred.
 
 ## How to Use This Plan
 

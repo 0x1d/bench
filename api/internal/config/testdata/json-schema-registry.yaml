@@ -1,0 +1,11 @@
+resources:
+  filesystem:
+    - id: x
+      label: x
+      path: /tmp
+  schemas:
+    - id: js-fixture
+      label: JSON Schema fixture
+      type: json-schema
+      source:
+        path: json-schema-minimal.json

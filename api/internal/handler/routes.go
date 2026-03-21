@@ -18,6 +18,10 @@ func RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PATCH /api/resources", HandleResourcePatch)
 	mux.HandleFunc("DELETE /api/resources", HandleResourceDelete)
 	mux.HandleFunc("GET /api/resources", HandleResourceList)
+	// Schema registry: more specific paths first
+	mux.HandleFunc("GET /api/schemas/{id}/content", HandleSchemaContent)
+	mux.HandleFunc("GET /api/schemas/{id}", HandleSchemaGet)
+	mux.HandleFunc("GET /api/schemas", HandleSchemaList)
 	// REST routes: more specific paths first
 	mux.HandleFunc("GET /api/rest/{id}/spec", HandleRestSpec)
 	mux.HandleFunc("POST /api/rest/{id}/proxy", HandleRestProxy)

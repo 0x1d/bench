@@ -607,6 +607,7 @@ export interface RestResource {
   id: string;
   label: string;
   baseUrl: string;
+  schemaId?: string;
   openapiSpec?: string;
 }
 
@@ -620,6 +621,34 @@ export async function fetchRestList(): Promise<RestListResponse> {
     throw new Error(`Failed to fetch REST resources: ${response.status} ${response.statusText}`);
   }
   return response.json();
+}
+
+export interface SchemaRegistryEntry {
+  id: string;
+  label: string;
+  type: string;
+  source: { path: string };
+}
+
+export interface SchemaListResponse {
+  schemas: SchemaRegistryEntry[];
+}
+
+export async function fetchSchemaList(): Promise<SchemaListResponse> {
+  const response = await fetch(`${API_BASE}/schemas`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch schemas: ${response.status} ${response.statusText}`);
+  }
+  return response.json();
+}
+
+export async function fetchSchemaContent(id: string): Promise<string> {
+  const response = await fetch(`${API_BASE}/schemas/${encodeURIComponent(id)}/content`);
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Failed to fetch schema: ${response.status}`);
+  }
+  return response.text();
 }
 
 export async function fetchRestSpec(id: string): Promise<string> {

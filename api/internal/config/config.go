@@ -56,10 +56,12 @@ type RestAuth struct {
 }
 
 // RestEntry represents one configured REST resource.
+// When both SchemaID and OpenAPISpec are set, SchemaID takes precedence for spec resolution.
 type RestEntry struct {
 	ID          string    `yaml:"id"`
 	Label       string    `yaml:"label"`
 	BaseURL     string    `yaml:"baseUrl"`
+	SchemaID    string    `yaml:"schemaId,omitempty"`
 	OpenAPISpec string    `yaml:"openapiSpec,omitempty"`
 	Auth        *RestAuth `yaml:"auth,omitempty"`
 }
@@ -277,6 +279,18 @@ func validateConfig(cfg Config) error {
 				if rest.Auth.In != "" && rest.Auth.In != "header" && rest.Auth.In != "query" {
 					return fmt.Errorf("resources.rest[%d].auth.in must be header or query for apiKey auth", i)
 				}
+			}
+		}
+		if rest.SchemaID != "" {
+			var sch *SchemaEntry
+			for j := range cfg.Resources.Schemas {
+				if cfg.Resources.Schemas[j].ID == rest.SchemaID {
+					sch = &cfg.Resources.Schemas[j]
+					break
+				}
+			}
+			if sch == nil || sch.Type != "openapi" {
+				return fmt.Errorf("resources.rest[%d].schemaId %q references non-existent or non-openapi schema", i, rest.SchemaID)
 			}
 		}
 	}

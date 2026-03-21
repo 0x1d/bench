@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Activity, Boxes, Database, FolderOpen, Globe, Server, Workflow } from 'lucide-react';
+import { Activity, Boxes, Braces, Database, FolderOpen, Globe, Server, Workflow } from 'lucide-react';
 import { NavMain } from '@/components/nav-main';
 import { cn } from '@/lib/utils';
 import {
@@ -15,6 +15,7 @@ const navItems = [
   { title: 'Filesystem', url: '#filesystem', icon: FolderOpen },
   { title: 'Database', url: '#database', icon: Database },
   { title: 'REST', url: '#rest', icon: Globe },
+  { title: 'Schemas', url: '#schemas', icon: Braces },
   { title: 'Flows', url: '#flows', icon: Workflow },
   { title: 'Infrastructure', url: '#infrastructure', icon: Server },
 ];

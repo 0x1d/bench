@@ -39,15 +39,7 @@ const navItems: NavItem[] = [
       { title: 'Settings', url: '#database/settings' },
     ],
   },
-  {
-    kind: 'group',
-    title: 'REST',
-    icon: Globe,
-    items: [
-      { title: 'Browse', url: '#rest' },
-      { title: 'Settings', url: '#rest/settings' },
-    ],
-  },
+  { kind: 'link', title: 'REST', url: '#rest', icon: Globe },
   { kind: 'link', title: 'Schemas', url: '#schemas', icon: Braces },
   {
     kind: 'group',

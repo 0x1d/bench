@@ -131,7 +131,7 @@ function MainRoutes({ hash }: { hash: string }) {
     return <DatabasePage mode={hash === 'database/settings' ? 'settings' : 'browse'} />;
   }
   if (hash === 'rest' || hash === 'rest/settings') {
-    return <RestPage mode={hash === 'rest/settings' ? 'settings' : 'browse'} />;
+    return <RestPage />;
   }
   if (hash === 'schemas') {
     return <SchemaBrowserPage />;
@@ -158,6 +158,12 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    if (hash === 'rest/settings') {
+      window.location.replace('#rest');
+    }
+  }, [hash]);
+
+  useEffect(() => {
     const onHashChange = () => setHash(getHash());
     window.addEventListener('hashchange', onHashChange);
     return () => window.removeEventListener('hashchange', onHashChange);
@@ -172,6 +178,7 @@ export function App() {
     hash.startsWith('flows/') ||
     hash === 'configuration' ||
     hash === 'schemas' ||
+    hash === 'rest' ||
     isResourceSettingsHash(hash);
 
   const mainStretch =
@@ -214,7 +221,7 @@ export function App() {
                           <section
                             id="main"
                             className={
-                              hash === 'configuration' || hash === 'schemas'
+                              hash === 'configuration' || hash === 'schemas' || hash === 'rest'
                                 ? 'flex min-h-0 flex-1 flex-col items-stretch'
                                 : mainStretch
                                   ? isResourceSettingsHash(hash)

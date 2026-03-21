@@ -303,7 +303,7 @@ export function SchemaBrowserPage() {
 
         <p className="text-xs text-muted-foreground">
           Registry entries are stored in configuration. OpenAPI schemas can be referenced from{' '}
-          <a href="#rest/settings" className="font-medium text-primary underline">
+          <a href="#rest" className="font-medium text-primary underline">
             REST
           </a>{' '}
           resources.

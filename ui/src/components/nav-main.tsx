@@ -25,7 +25,11 @@ export type NavItem =
     };
 
 function linkIsActive(item: { url: string }, currentHash: string): boolean {
-  return currentHash === hashFromUrl(item.url);
+  const h = hashFromUrl(item.url);
+  if (h === 'rest' && (currentHash === 'rest' || currentHash === 'rest/settings')) {
+    return true;
+  }
+  return currentHash === h;
 }
 
 function groupIsActive(

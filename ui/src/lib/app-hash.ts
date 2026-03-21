@@ -63,7 +63,6 @@ export function isResourceSettingsHash(hash: string): boolean {
   return (
     hash === 'filesystem/settings' ||
     hash === 'database/settings' ||
-    hash === 'rest/settings' ||
     hash === 'flows/settings' ||
     hash === 'infrastructure/settings'
   );

@@ -27,7 +27,7 @@ updated: 2025-03-21
 
 ### Service
 
-- [ ] **1.3** Create schema service (List, Get, Content) — [specs/1.3-service.md](specs/1.3-service.md)
+- [x] **1.3** Create schema service (List, Get, Content) — [specs/1.3-service.md](specs/1.3-service.md)
 
 ### Handler & Routes
 
@@ -114,7 +114,7 @@ Kafka/messaging step and AsyncAPI flow integration — not in current scope. Spe
 
 | Phase | Tasks | Done | Status |
 |-------|-------|------|--------|
-| 1 | 5 | 2 | IN_PROGRESS |
+| 1 | 5 | 3 | IN_PROGRESS |
 | 2 | 3 | 0 | TODO |
 | 3 | 3 | 0 | TODO |
 | 4 | 2 | 0 | TODO |

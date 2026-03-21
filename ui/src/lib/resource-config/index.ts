@@ -11,3 +11,4 @@ export type {
   WorkspaceResource,
 } from './types';
 export { emptyState, parseConfigToState, stateToConfig } from './parse-serialize';
+export { RESOURCE_CONFIG_QUERY_KEY, useResourceConfig } from './use-resource-config';

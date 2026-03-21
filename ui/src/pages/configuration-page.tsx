@@ -14,14 +14,13 @@ import {
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { cn } from '@/lib/utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { fetchConfig, fetchConfigExample, fetchSchemaContent, saveConfig } from '@/services/api';
+import { useQuery } from '@tanstack/react-query';
+import { fetchSchemaContent } from '@/services/api';
 import { detectSchemaType, parseSchema } from '@/lib/schema-registry';
-import { useStatus } from '@/hooks/use-status';
 import {
   emptyState,
   parseConfigToState,
-  stateToConfig,
+  useResourceConfig,
   type AgentConfig,
   type DatabaseResource,
   type FilesystemResource,
@@ -68,11 +67,22 @@ type ResourceConfigTab =
   | 'agent';
 
 export function ConfigurationPage() {
-  const queryClient = useQueryClient();
-  const { refetch: refetchStatus } = useStatus();
-  const [state, setState] = useState<ResourceFormState>(emptyState);
-  const [loading, setLoading] = useState(true);
+  const {
+    data: rawConfig,
+    isPending,
+    error: queryError,
+    persistState: persistConfigToServer,
+  } = useResourceConfig();
+  const [draft, setDraft] = useState<ResourceFormState | null>(null);
+  const state = useMemo(() => {
+    if (draft !== null) return draft;
+    if (rawConfig !== undefined) return parseConfigToState(rawConfig);
+    return emptyState();
+  }, [draft, rawConfig]);
   const [error, setError] = useState<string | null>(null);
+  const loadErrorMessage =
+    queryError instanceof Error ? queryError.message : queryError ? String(queryError) : null;
+  const displayError = error ?? loadErrorMessage;
   const [panelMode, setPanelMode] = useState<PanelMode | null>(null);
   const [panelIndex, setPanelIndex] = useState<number | null>(null);
   const [panelError, setPanelError] = useState<string | null>(null);
@@ -124,47 +134,8 @@ export function ConfigurationPage() {
 
   const persistState = async (newState: ResourceFormState) => {
     setError(null);
-    const nextConfig = stateToConfig(newState);
-    await saveConfig(nextConfig);
-    await refetchStatus();
-    queryClient.invalidateQueries({ queryKey: ['flows', 'workspaces'] });
-    queryClient.invalidateQueries({ queryKey: ['infrastructure'] });
+    await persistConfigToServer(newState);
   };
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadConfig = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const [currentResult, exampleResult] = await Promise.allSettled([
-          fetchConfig(),
-          fetchConfigExample(),
-        ]);
-        if (cancelled) return;
-        const base =
-          currentResult.status === 'fulfilled'
-            ? currentResult.value
-            : exampleResult.status === 'fulfilled'
-              ? exampleResult.value
-              : '';
-        setState(parseConfigToState(base));
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Failed to load config');
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-
-    void loadConfig();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   useEffect(() => {
     const handleClosePanel = () => {
@@ -380,13 +351,13 @@ export function ConfigurationPage() {
 
     if (nextState === prevState) return;
 
-    setState(nextState);
+    setDraft(nextState);
     try {
       await persistState(nextState);
       closePanel();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Save failed');
-      setState(prevState);
+      setDraft(prevState);
     }
   };
 
@@ -445,13 +416,13 @@ export function ConfigurationPage() {
 
     if (nextState === prevState) return;
 
-    setState(nextState);
+    setDraft(nextState);
     try {
       await persistState(nextState);
       closePanel();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Save failed');
-      setState(prevState);
+      setDraft(prevState);
     }
   };
 
@@ -493,13 +464,13 @@ export function ConfigurationPage() {
 
     if (nextState === prevState) return;
 
-    setState(nextState);
+    setDraft(nextState);
     try {
       await persistState(nextState);
       closePanel();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Save failed');
-      setState(prevState);
+      setDraft(prevState);
     }
   };
 
@@ -557,13 +528,13 @@ export function ConfigurationPage() {
 
     if (nextState === prevState) return;
 
-    setState(nextState);
+    setDraft(nextState);
     try {
       await persistState(nextState);
       closePanel();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Save failed');
-      setState(prevState);
+      setDraft(prevState);
     }
   };
 
@@ -576,13 +547,13 @@ export function ConfigurationPage() {
       flows: { path },
     };
 
-    setState(nextState);
+    setDraft(nextState);
     try {
       await persistState(nextState);
       closePanel();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Save failed');
-      setState(prevState);
+      setDraft(prevState);
     }
   };
 
@@ -595,13 +566,13 @@ export function ConfigurationPage() {
       infrastructure: { path },
     };
 
-    setState(nextState);
+    setDraft(nextState);
     try {
       await persistState(nextState);
       closePanel();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Save failed');
-      setState(prevState);
+      setDraft(prevState);
     }
   };
 
@@ -641,13 +612,13 @@ export function ConfigurationPage() {
 
     if (nextState === prevState) return;
 
-    setState(nextState);
+    setDraft(nextState);
     try {
       await persistState(nextState);
       closePanel();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Save failed');
-      setState(prevState);
+      setDraft(prevState);
     }
   };
 
@@ -673,13 +644,13 @@ export function ConfigurationPage() {
       },
     };
 
-    setState(nextState);
+    setDraft(nextState);
     try {
       await persistState(nextState);
       closePanel();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Save failed');
-      setState(prevState);
+      setDraft(prevState);
     }
   };
 
@@ -714,13 +685,13 @@ export function ConfigurationPage() {
       };
     }
 
-    setState(nextState);
+    setDraft(nextState);
     setDeleteTarget(null);
     try {
       await persistState(nextState);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Save failed');
-      setState(prevState);
+      setDraft(prevState);
     }
   };
 
@@ -1439,7 +1410,7 @@ export function ConfigurationPage() {
     </>
   );
 
-  if (loading) {
+  if (isPending) {
     return <p className="text-muted-foreground">Loading resource configuration...</p>;
   }
 
@@ -1866,7 +1837,7 @@ export function ConfigurationPage() {
             </TabsContent>
           </Tabs>
 
-          {error && <p className="text-sm text-destructive">{error}</p>}
+          {displayError && <p className="text-sm text-destructive">{displayError}</p>}
         </div>
       </div>
 

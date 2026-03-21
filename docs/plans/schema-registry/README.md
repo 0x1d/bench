@@ -28,8 +28,6 @@ updated: 2025-03-21
 
 **Deferred**: Kafka/messaging step, AsyncAPI flow integration
 
-**Phase 4**: AsyncAPI for storing and browsing schemas (schema browser).
-
 **Status**: Plan implementation complete. Kafka/messaging items remain deferred.
 
 ## How to Use This Plan

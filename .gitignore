@@ -39,6 +39,7 @@ workspace/flows/local/
 workspace/infra/.terraform/
 workspace/infra/terraform.tfstate
 workspace/infra/terraform.tfstate.backup
+workspace/infra/terraform.tfvars
 
 server
 

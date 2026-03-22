@@ -20,7 +20,6 @@ import {
 
 const navItems: NavItem[] = [
   { kind: 'link', title: 'Status', url: '#status', icon: Activity },
-  { kind: 'link', title: 'Configuration', url: '#configuration', icon: Settings },
   {
     kind: 'group',
     title: 'Filesystem',
@@ -39,8 +38,6 @@ const navItems: NavItem[] = [
       { title: 'Settings', url: '#database/settings' },
     ],
   },
-  { kind: 'link', title: 'REST', url: '#rest', icon: Globe },
-  { kind: 'link', title: 'Schemas', url: '#schemas', icon: Braces },
   {
     kind: 'group',
     title: 'Flows',
@@ -61,6 +58,9 @@ const navItems: NavItem[] = [
       { title: 'Settings', url: '#infrastructure/settings' },
     ],
   },
+  { kind: 'link', title: 'Schemas', url: '#schemas', icon: Braces },
+  { kind: 'link', title: 'REST', url: '#rest', icon: Globe },
+  { kind: 'link', title: 'Configuration', url: '#configuration', icon: Settings },
 ];
 
 export function SidebarLeft({

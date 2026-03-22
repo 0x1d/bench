@@ -40,7 +40,7 @@ function groupIsActive(
 }
 
 export function NavMain({ items, currentHash }: { items: NavItem[]; currentHash: string }) {
-  const { isMobile, setOpenMobile } = useSidebar();
+  const { isMobile, setOpenMobile, state } = useSidebar();
 
   const closeMobile = () => {
     if (isMobile) setOpenMobile(false);
@@ -66,6 +66,23 @@ export function NavMain({ items, currentHash }: { items: NavItem[]; currentHash:
         const openDefault =
           groupIsActive(item, currentHash) ||
           (item.title === 'Flows' && isFlowsSection(currentHash));
+
+        const firstSub = item.items[0];
+        const groupActive = groupIsActive(item, currentHash);
+
+        // Icon-collapsed sidebar hides submenus; link the row to the first child route.
+        if (state === 'collapsed' && !isMobile && firstSub) {
+          return (
+            <SidebarMenuItem key={item.title}>
+              <SidebarMenuButton asChild isActive={groupActive} tooltip={item.title}>
+                <a href={firstSub.url} onClick={closeMobile}>
+                  <item.icon />
+                  <span>{item.title}</span>
+                </a>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          );
+        }
 
         return (
           <SidebarMenuItem key={item.title}>

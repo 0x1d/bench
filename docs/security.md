@@ -36,6 +36,15 @@ The API uses a middleware chain:
 
 All routes are protected by this chain; there is no bypass for unauthenticated access.
 
+## Configuration API (`/api/config*`)
+
+- `GET /api/config`, `GET /api/config/example`, `POST /api/config`, and `POST /api/config/save` are all token-protected.
+- Config writes are validated server-side before acceptance.
+- `${VAR}` placeholders in config are resolved on the API host; missing variables cause validation errors.
+- After successful save/upload, Bench attempts to apply runtime updates immediately (database runtime reload and flows workspace sync).
+
+Because config writes can change database connections, REST targets, flow workspaces, infrastructure paths, and agent behavior, treat access to config endpoints as privileged.
+
 ## Database Security
 
 ### Credentials

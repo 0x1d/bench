@@ -8,6 +8,12 @@ export interface EditRowData {
   row: Record<string, unknown>;
 }
 
+export interface QueryResult {
+  columns?: string[];
+  rows?: unknown[][] | null;
+  rowsAffected?: number;
+}
+
 interface DatabaseViewContextValue {
   panelMode: DatabasePanelMode;
   setPanelMode: (mode: DatabasePanelMode) => void;
@@ -19,6 +25,10 @@ interface DatabaseViewContextValue {
   setEditRowData: (data: EditRowData | null) => void;
   selectedDatabaseId: string | null;
   setSelectedDatabaseId: (id: string | null) => void;
+  querySql: string;
+  setQuerySql: (sql: string) => void;
+  queryResult: QueryResult | null;
+  setQueryResult: (result: QueryResult | null) => void;
 }
 
 const DatabaseViewContext = createContext<DatabaseViewContextValue | null>(null);
@@ -29,6 +39,8 @@ export function DatabaseViewProvider({ children }: { children: React.ReactNode }
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
   const [alterTableName, setAlterTableName] = useState<string | null>(null);
   const [editRowData, setEditRowData] = useState<EditRowData | null>(null);
+  const [querySql, setQuerySql] = useState('SELECT 1');
+  const [queryResult, setQueryResult] = useState<QueryResult | null>(null);
   const [selectedDatabaseId, setSelectedDatabaseId] = useState<string | null>(() => {
     try {
       return sessionStorage.getItem(SELECTED_DB_STORAGE_KEY);
@@ -62,6 +74,10 @@ export function DatabaseViewProvider({ children }: { children: React.ReactNode }
         setEditRowData,
         selectedDatabaseId,
         setSelectedDatabaseId: setAndPersistSelectedDatabaseId,
+        querySql,
+        setQuerySql,
+        queryResult,
+        setQueryResult,
       }}
     >
       {children}

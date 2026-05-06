@@ -181,6 +181,9 @@ func connectPool(ctx context.Context, connString string) (*pgxpool.Pool, error) 
 	if err != nil {
 		return nil, fmt.Errorf("invalid database url: %w", err)
 	}
+
+	translateParams(cfg)
+
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("connect failed: %w", err)
@@ -190,6 +193,17 @@ func connectPool(ctx context.Context, connString string) (*pgxpool.Pool, error) 
 		return nil, fmt.Errorf("ping failed: %w", err)
 	}
 	return pool, nil
+}
+
+func translateParams(cfg *pgxpool.Config) {
+	// pgx doesn't support currentSchema parameter but many users expect it.
+	// Translate to search_path which PostgreSQL understands.
+	if val, ok := cfg.ConnConfig.RuntimeParams["currentSchema"]; ok {
+		if _, hasSearchPath := cfg.ConnConfig.RuntimeParams["search_path"]; !hasSearchPath {
+			cfg.ConnConfig.RuntimeParams["search_path"] = val
+		}
+		delete(cfg.ConnConfig.RuntimeParams, "currentSchema")
+	}
 }
 
 // Close releases the connection pool.

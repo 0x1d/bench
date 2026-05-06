@@ -16,6 +16,7 @@ import { useStatus } from '@/hooks/use-status';
 import { useDatabaseView } from '@/contexts/database-view-context';
 import { DatabaseTableList } from '@/components/database-table-list';
 import { DatabaseTableData } from '@/components/database-table-data';
+import { DatabaseQueryResult } from '@/components/database-query-result';
 import {
   parseConfigToState,
   useResourceConfig,
@@ -35,6 +36,7 @@ export function DatabasePage({ mode }: { mode: 'browse' | 'settings' }) {
     setEditRowData,
     selectedDatabaseId,
     setSelectedDatabaseId,
+    setQueryResult,
   } = useDatabaseView();
   const previousSelectedTableRef = useRef<string | null>(selectedTable);
 
@@ -259,13 +261,20 @@ export function DatabasePage({ mode }: { mode: 'browse' | 'settings' }) {
                   type="button"
                   onClick={() => {
                     setSelectedTable(null);
+                    setPanelMode(null);
+                    setQueryResult(null);
                     setPage(1);
                   }}
                   className="rounded px-2 py-1 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
                 >
                   Tables
                 </button>
-                {selectedTable && (
+                {panelMode === 'query' ? (
+                  <>
+                    <span className="text-muted-foreground">/</span>
+                    <span className="rounded px-2 py-1 font-medium">Query</span>
+                  </>
+                ) : selectedTable && (
                   <>
                     <span className="text-muted-foreground">/</span>
                     <span className="rounded px-2 py-1 font-mono">{selectedTable}</span>
@@ -355,7 +364,9 @@ export function DatabasePage({ mode }: { mode: 'browse' | 'settings' }) {
               </div>
 
               <div className="min-h-0 min-w-0 w-full flex-1 overflow-auto">
-                {!selectedTable ? (
+                {panelMode === 'query' ? (
+                  <DatabaseQueryResult />
+                ) : !selectedTable ? (
                   <DatabaseTableList
                     tables={tables}
                     selectedTable={selectedTable}

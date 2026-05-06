@@ -42,6 +42,7 @@ export function DatabasePanel() {
     setAlterTableName,
     editRowData,
     setEditRowData,
+    setQueryResult,
   } = useDatabaseView();
   const alterTarget = alterTableName ?? selectedTable;
 
@@ -51,7 +52,9 @@ export function DatabasePanel() {
     setPanelMode(null);
     setAlterTableName(null);
     setEditRowData(null);
-  }, [setPanelMode, setAlterTableName, setEditRowData]);
+    setQueryResult(null);
+  }, [setPanelMode, setAlterTableName, setEditRowData, setQueryResult]);
+
 
   useEffect(() => {
     const onBenchClose = () => handleClose();

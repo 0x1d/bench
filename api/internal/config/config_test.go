@@ -216,3 +216,113 @@ resources:
 		t.Fatalf("expected label default to id, got %+v", entries)
 	}
 }
+
+// Trigger validation tests
+func TestValidateConfig_Triggers_DuplicateID(t *testing.T) {
+	cfg := mustUnmarshal(t, `
+flowpipe_triggers:
+  triggers:
+    - id: dup
+      flow: pipeline1
+      type: webhook
+      config:
+        description: A
+    - id: dup
+      flow: pipeline2
+      type: webhook
+      config:
+        description: B
+`)
+	err := validateConfig(cfg)
+	if err == nil || !strings.Contains(err.Error(), "duplicate id") {
+		t.Fatalf("expected duplicate id error, got %v", err)
+	}
+}
+
+func TestValidateConfig_Triggers_InvalidType(t *testing.T) {
+	cfg := mustUnmarshal(t, `
+flowpipe_triggers:
+  triggers:
+    - id: t1
+      flow: pipeline1
+      type: invalid-type
+      config:
+        description: Test
+`)
+	err := validateConfig(cfg)
+	if err == nil || !strings.Contains(err.Error(), "type must be one of") {
+		t.Fatalf("expected invalid type error, got %v", err)
+	}
+}
+
+func TestValidateConfig_Triggers_EmptyType(t *testing.T) {
+	cfg := mustUnmarshal(t, `
+flowpipe_triggers:
+  triggers:
+    - id: t1
+      flow: pipeline1
+      type: ""
+      config:
+        description: Test
+`)
+	err := validateConfig(cfg)
+	if err == nil || !strings.Contains(err.Error(), "type is required") {
+		t.Fatalf("expected type required error, got %v", err)
+	}
+}
+
+func TestValidateConfig_Triggers_EmptyFlow(t *testing.T) {
+	cfg := mustUnmarshal(t, `
+flowpipe_triggers:
+  triggers:
+    - id: t1
+      flow: ""
+      type: webhook
+      config:
+        description: Test
+`)
+	err := validateConfig(cfg)
+	if err == nil || !strings.Contains(err.Error(), "flow is required") {
+		t.Fatalf("expected flow required error, got %v", err)
+	}
+}
+
+func TestValidateConfig_Triggers_EmptyID(t *testing.T) {
+	cfg := mustUnmarshal(t, `
+flowpipe_triggers:
+  triggers:
+    - id: ""
+      flow: pipeline1
+      type: webhook
+      config:
+        description: Test
+`)
+	err := validateConfig(cfg)
+	if err == nil || !strings.Contains(err.Error(), "id is required") {
+		t.Fatalf("expected id required error, got %v", err)
+	}
+}
+
+func TestValidateConfig_Triggers_Complete(t *testing.T) {
+	cfg := mustUnmarshal(t, `
+flowpipe_triggers:
+  triggers:
+    - id: webhook-trigger
+      flow: daily_report
+      type: webhook
+      config:
+        description: "Webhook trigger"
+        pipeline: pipeline.daily_report
+    - id: schedule-trigger
+      flow: hourly_check
+      type: schedule
+      config:
+        description: "Schedule trigger"
+        pipeline: pipeline.hourly_check
+        schedule:
+          cron: "0 * * * *"
+`)
+	if err := validateConfig(cfg); err != nil {
+		t.Fatalf("expected valid config, got %v", err)
+	}
+}

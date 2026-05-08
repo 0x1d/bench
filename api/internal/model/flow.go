@@ -30,6 +30,7 @@ type Flow struct {
 	Description string     `json:"description,omitempty"`
 	Steps       []FlowStep `json:"steps"`
 	Edges       []FlowEdge `json:"edges,omitempty"`
+	Triggers    []string   `json:"triggers,omitempty"` // list of trigger IDs attached to this flow
 }
 
 // FlowStepConfigHTTP holds config for an HTTP step (REST).

@@ -1,5 +1,7 @@
 package model
 
+import "time"
+
 // TriggerType defines Flowpipe trigger types.
 type TriggerType string
 
@@ -44,11 +46,11 @@ type HTTPConfig struct {
 
 // NotificationConfig holds configuration for notification triggers.
 type NotificationConfig struct {
-	Description string `yaml:"description,omitempty" json:"description,omitempty"`
-	Pipeline    string `yaml:"pipeline" json:"pipeline"`
-	Source      string `yaml:"source,omitempty" json:"source,omitempty"`
-	Channel     string `yaml:"channel,omitempty" json:"channel,omitempty"`
-	Conditions  string `yaml:"conditions,omitempty" json:"conditions,omitempty"`
+	Description  string   `yaml:"description,omitempty" json:"description,omitempty"`
+	Pipeline     string   `yaml:"pipeline" json:"pipeline"`
+	Source       string   `yaml:"source,omitempty" json:"source,omitempty"`
+	Channel      string   `yaml:"channel,omitempty" json:"channel,omitempty"`
+	Conditions   []string `yaml:"conditions,omitempty" json:"conditions,omitempty"`
 }
 
 // TriggerConfig holds type-specific configuration for a trigger.
@@ -74,14 +76,30 @@ type TriggerEntry struct {
 
 // TriggerState represents the runtime state of a trigger for API responses.
 type TriggerState struct {
-	ID        string       `json:"id"`
-	Label     string       `json:"label"`
-	Flow      string       `json:"flow"`
-	Type      TriggerType  `json:"type"`
-	Workspace string       `json:"workspace"`
-	Enabled   bool         `json:"enabled"`
+	ID        string        `json:"id"`
+	Label     string        `json:"label"`
+	Flow      string        `json:"flow"`
+	Type      TriggerType   `json:"type"`
+	Workspace string        `json:"workspace"`
+	Enabled   bool          `json:"enabled"`
 	Config    TriggerConfig `json:"config,omitempty"`
-	LastRun   string       `json:"lastRun,omitempty"`
-	NextRun   string       `json:"nextRun,omitempty"`
-	Status    string       `json:"status,omitempty"`
+	LastRun   *time.Time    `json:"lastRun,omitempty"`
+	NextRun   *time.Time    `json:"nextRun,omitempty"`
+	Status    string        `json:"status,omitempty"`
+}
+
+// TriggerListResponse represents the response for listing triggers.
+type TriggerListResponse struct {
+	Triggers []TriggerState `json:"triggers"`
+}
+
+// TriggerWebhookURLResponse represents the response for getting a webhook URL.
+type TriggerWebhookURLResponse struct {
+	URL string `json:"url"`
+}
+
+// TriggerTestResponse represents the response for testing a trigger.
+type TriggerTestResponse struct {
+	ExecutedAt time.Time `json:"executedAt"`
+	Status     string    `json:"status"`
 }

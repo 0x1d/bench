@@ -1,43 +1,120 @@
-import { type LucideIcon } from "lucide-react"
-
+import { type LucideIcon, ChevronRight } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
   useSidebar,
-} from "@/components/ui/sidebar"
+} from '@/components/ui/sidebar';
+import { isFlowsSection } from '@/lib/app-hash';
 
-export function NavMain({
-  items,
-}: {
-  items: {
-    title: string
-    url: string
-    icon: LucideIcon
-    isActive?: boolean
-  }[]
-}) {
-  const { isMobile, setOpenMobile } = useSidebar()
+function hashFromUrl(url: string): string {
+  return url.startsWith('#') ? url.slice(1) : url;
+}
+
+export type NavItem =
+  | { kind: 'link'; title: string; url: string; icon: LucideIcon }
+  | {
+      kind: 'group';
+      title: string;
+      icon: LucideIcon;
+      items: { title: string; url: string }[];
+    };
+
+function linkIsActive(item: { url: string }, currentHash: string): boolean {
+  const h = hashFromUrl(item.url);
+  if (h === 'rest' && (currentHash === 'rest' || currentHash === 'rest/settings')) {
+    return true;
+  }
+  return currentHash === h;
+}
+
+function groupIsActive(
+  group: { items: { url: string }[] },
+  currentHash: string
+): boolean {
+  return group.items.some((sub) => currentHash === hashFromUrl(sub.url));
+}
+
+export function NavMain({ items, currentHash }: { items: NavItem[]; currentHash: string }) {
+  const { isMobile, setOpenMobile, state } = useSidebar();
+
+  const closeMobile = () => {
+    if (isMobile) setOpenMobile(false);
+  };
 
   return (
     <SidebarMenu>
-      {items.map((item) => (
-        <SidebarMenuItem key={item.title}>
-          <SidebarMenuButton asChild isActive={item.isActive} tooltip={item.title}>
-            <a
-              href={item.url}
-              onClick={() => {
-                if (isMobile) {
-                  setOpenMobile(false)
-                }
-              }}
-            >
-              <item.icon />
-              <span>{item.title}</span>
-            </a>
-          </SidebarMenuButton>
-        </SidebarMenuItem>
-      ))}
+      {items.map((item) => {
+        if (item.kind === 'link') {
+          const active = linkIsActive(item, currentHash);
+          return (
+            <SidebarMenuItem key={item.title}>
+              <SidebarMenuButton asChild isActive={active} tooltip={item.title}>
+                <a href={item.url} onClick={closeMobile}>
+                  <item.icon />
+                  <span>{item.title}</span>
+                </a>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          );
+        }
+
+        const openDefault =
+          groupIsActive(item, currentHash) ||
+          (item.title === 'Flows' && isFlowsSection(currentHash));
+
+        const firstSub = item.items[0];
+        const groupActive = groupIsActive(item, currentHash);
+
+        // Icon-collapsed sidebar hides submenus; link the row to the first child route.
+        if (state === 'collapsed' && !isMobile && firstSub) {
+          return (
+            <SidebarMenuItem key={item.title}>
+              <SidebarMenuButton asChild isActive={groupActive} tooltip={item.title}>
+                <a href={firstSub.url} onClick={closeMobile}>
+                  <item.icon />
+                  <span>{item.title}</span>
+                </a>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          );
+        }
+
+        return (
+          <SidebarMenuItem key={item.title}>
+            <Collapsible key={`${item.title}-${openDefault}`} defaultOpen={openDefault}>
+              <CollapsibleTrigger asChild>
+                <SidebarMenuButton tooltip={item.title}>
+                  <item.icon />
+                  <span>{item.title}</span>
+                  <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
+                </SidebarMenuButton>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <SidebarMenuSub>
+                  {item.items.map((subItem) => {
+                    const subHash = hashFromUrl(subItem.url);
+                    const subActive = currentHash === subHash;
+                    return (
+                      <SidebarMenuSubItem key={subItem.title}>
+                        <SidebarMenuSubButton asChild isActive={subActive}>
+                          <a href={subItem.url} onClick={closeMobile}>
+                            <span>{subItem.title}</span>
+                          </a>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    );
+                  })}
+                </SidebarMenuSub>
+              </CollapsibleContent>
+            </Collapsible>
+          </SidebarMenuItem>
+        );
+      })}
     </SidebarMenu>
-  )
+  );
 }

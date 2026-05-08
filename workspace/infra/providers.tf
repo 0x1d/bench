@@ -17,6 +17,7 @@ terraform {
 
 provider "vercel" {
   # VERCEL_API_TOKEN env var required
+  api_token = var.vercel_api_token
 }
 
 provider "supabase" {

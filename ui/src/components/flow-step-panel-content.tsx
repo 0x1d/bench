@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ApplyStepButton } from '@/components/apply-step-button';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -58,7 +59,6 @@ export function FlowStepPanelContent({
 
   const handleSave = (finalConfig?: Record<string, unknown>) => {
     onSave({ ...step, label, config: finalConfig ?? config });
-    onClose();
   };
 
   if (step.type === 'http') {
@@ -681,9 +681,8 @@ function HttpStepConfig({
         <Button variant="outline" size="sm" onClick={onClose}>
           Cancel
         </Button>
-        <Button
-          size="sm"
-          onClick={() => {
+        <ApplyStepButton
+          onApply={() => {
             const saveConfig = { ...config };
             if (selectedOp) {
               saveConfig.method = selectedOp.method;
@@ -691,9 +690,7 @@ function HttpStepConfig({
             }
             onSaveWithConfig(saveConfig);
           }}
-        >
-          Save
-        </Button>
+        />
       </div>
     </div>
   );
@@ -811,9 +808,7 @@ function QueryStepConfig({
         <Button variant="outline" size="sm" onClick={onClose}>
           Cancel
         </Button>
-        <Button size="sm" onClick={onSave}>
-          Save
-        </Button>
+        <ApplyStepButton onApply={onSave} />
       </div>
     </div>
   );
@@ -942,9 +937,7 @@ function InputStepConfig({
         <Button variant="outline" size="sm" onClick={onClose}>
           Cancel
         </Button>
-        <Button size="sm" onClick={onSave}>
-          Save
-        </Button>
+        <ApplyStepButton onApply={onSave} />
       </div>
     </div>
   );
@@ -1058,9 +1051,7 @@ function OutputStepConfig({
         <Button variant="outline" size="sm" onClick={onClose}>
           Cancel
         </Button>
-        <Button size="sm" onClick={onSave}>
-          Save
-        </Button>
+        <ApplyStepButton onApply={onSave} />
       </div>
     </div>
   );
@@ -1143,9 +1134,7 @@ function MessageStepConfig({
         <Button variant="outline" size="sm" onClick={onClose}>
           Cancel
         </Button>
-        <Button size="sm" onClick={onSave}>
-          Save
-        </Button>
+        <ApplyStepButton onApply={onSave} />
       </div>
     </div>
   );
@@ -1214,9 +1203,7 @@ function SleepStepConfig({
         <Button variant="outline" size="sm" onClick={onClose}>
           Cancel
         </Button>
-        <Button size="sm" onClick={onSave}>
-          Save
-        </Button>
+        <ApplyStepButton onApply={onSave} />
       </div>
     </div>
   );
@@ -1287,9 +1274,7 @@ function TransformStepConfig({
         <Button variant="outline" size="sm" onClick={onClose}>
           Cancel
         </Button>
-        <Button size="sm" onClick={onSave}>
-          Save
-        </Button>
+        <ApplyStepButton onApply={onSave} />
       </div>
     </div>
   );
@@ -1439,10 +1424,72 @@ function ContainerStepConfig({
         <Button variant="outline" size="sm" onClick={onClose}>
           Cancel
         </Button>
-        <Button size="sm" onClick={onSave}>
-          Save
-        </Button>
+        <ApplyStepButton onApply={onSave} />
       </div>
+    </div>
+  );
+}
+
+function PipelineRefInput({
+  id,
+  value,
+  onChange,
+  availableFlows,
+}: {
+  id: string;
+  value: string;
+  onChange: (v: string) => void;
+  availableFlows: { id: string; name?: string }[];
+}) {
+  const [open, setOpen] = useState(false);
+
+  if (availableFlows.length === 0) {
+    return (
+      <Input
+        id={id}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="e.g. my_flow"
+        className="w-full font-mono text-sm"
+      />
+    );
+  }
+
+  const matched = availableFlows.find((f) => f.id === value);
+
+  return (
+    <div className="relative">
+      <Input
+        id={id}
+        value={value}
+        onChange={(e) => { onChange(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        placeholder="Select or type pipeline name"
+        className="w-full font-mono text-sm"
+        autoComplete="off"
+      />
+      {open && (
+        <div className="absolute z-50 w-full mt-1 rounded-md border border-border bg-popover shadow-md max-h-48 overflow-auto">
+          {availableFlows
+            .filter((f) =>
+              !value || f.id.toLowerCase().includes(value.toLowerCase()) || (f.name ?? '').toLowerCase().includes(value.toLowerCase())
+            )
+            .map((f) => (
+              <div
+                key={f.id}
+                className={`px-3 py-2 text-sm cursor-pointer font-mono hover:bg-accent hover:text-accent-foreground ${matched?.id === f.id ? 'bg-accent/50' : ''}`}
+                onMouseDown={(e) => { e.preventDefault(); onChange(f.id); setOpen(false); }}
+              >
+                {f.name && f.name !== f.id ? (
+                  <span>{f.name} <span className="text-muted-foreground text-xs">({f.id})</span></span>
+                ) : (
+                  f.id
+                )}
+              </div>
+            ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -1516,31 +1563,12 @@ function PipelineStepConfig({
           Pipeline
           <span className="ml-1 text-muted-foreground font-normal">(reference)</span>
         </Label>
-        {availableFlows.length > 0 ? (
-          <Select
-            value={pipelineRef}
-            onValueChange={(v) => setConfig({ ...config, pipelineRef: v })}
-          >
-            <SelectTrigger id="pipeline-ref" className="w-full">
-              <SelectValue placeholder="Select pipeline" />
-            </SelectTrigger>
-            <SelectContent>
-              {availableFlows.map((f) => (
-                <SelectItem key={f.id} value={f.id}>
-                  {f.name || f.id}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        ) : (
-          <Input
-            id="pipeline-ref"
-            value={pipelineRef}
-            onChange={(e) => setConfig({ ...config, pipelineRef: e.target.value })}
-            placeholder="e.g. my_flow"
-            className="w-full font-mono text-sm"
-          />
-        )}
+        <PipelineRefInput
+          id="pipeline-ref"
+          value={pipelineRef}
+          onChange={(v) => setConfig({ ...config, pipelineRef: v })}
+          availableFlows={availableFlows}
+        />
         <p className="text-[10px] text-muted-foreground mt-1 px-1">
           Flow/pipeline to invoke (same module).
         </p>
@@ -1576,9 +1604,7 @@ function PipelineStepConfig({
         <Button variant="outline" size="sm" onClick={onClose}>
           Cancel
         </Button>
-        <Button size="sm" onClick={onSave}>
-          Save
-        </Button>
+        <ApplyStepButton onApply={onSave} />
       </div>
     </div>
   );

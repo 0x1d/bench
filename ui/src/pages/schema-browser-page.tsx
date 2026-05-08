@@ -1,44 +1,69 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Search, X } from 'lucide-react';
-import { fetchSchemaContent, fetchSchemaList } from '@/services/api';
-import { NotConfiguredCard } from '@/components/not-configured-card';
+import { Pencil, Plus, Search, Trash2, X } from 'lucide-react';
+import { fetchSchemaContent } from '@/services/api';
+import { ContextPanel } from '@/components/context-panel';
+import { Button } from '@/components/ui/button';
+import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
+import { ResourceSettingsSidePanel, SchemaResourceFields } from '@/components/resource-config';
 import { detectSchemaType, parseSchema } from '@/lib/schema-registry';
 import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import {
+  parseConfigToState,
+  useResourceConfig,
+  type SchemaResourceEntry,
+} from '@/lib/resource-config';
+import { BENCH_CLOSE_PANEL_EVENT } from '@/lib/bench-close-panel';
 
-const CLOSE_PANEL_EVENT = 'bench:close-panel';
+const defaultSchemaDraft = (): SchemaResourceEntry => ({
+  id: '',
+  label: '',
+  type: 'openapi',
+  source: { path: '' },
+});
 
 export function SchemaBrowserPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
 
-  useEffect(() => {
-    const onClose = () => setSelectedId(null);
-    window.addEventListener(CLOSE_PANEL_EVENT, onClose);
-    return () => window.removeEventListener(CLOSE_PANEL_EVENT, onClose);
-  }, []);
+  const { data: rawConfig, mergeAndPersist, isPending: configPending, error: configError } =
+    useResourceConfig();
+  const schemasFromConfig = useMemo(
+    () => parseConfigToState(rawConfig ?? '').schemas,
+    [rawConfig]
+  );
 
-  const { data: listData, isLoading: listLoading, error: listError } = useQuery({
-    queryKey: ['schemas', 'list'],
-    queryFn: () => fetchSchemaList(),
-  });
+  const [editingSchema, setEditingSchema] = useState<'add' | number | null>(null);
+  const [schemaDraft, setSchemaDraft] = useState<SchemaResourceEntry>(defaultSchemaDraft);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [deleteIndex, setDeleteIndex] = useState<number | null>(null);
+  const [savePending, setSavePending] = useState(false);
+
+  useEffect(() => {
+    const onClose = () => {
+      setSelectedId(null);
+      setEditingSchema(null);
+      setFormError(null);
+      setDeleteIndex(null);
+    };
+    window.addEventListener(BENCH_CLOSE_PANEL_EVENT, onClose);
+    return () => window.removeEventListener(BENCH_CLOSE_PANEL_EVENT, onClose);
+  }, []);
 
   const searchLower = search.trim().toLowerCase();
   const filtered = useMemo(() => {
-    const schemas = listData?.schemas ?? [];
-    if (!searchLower) return schemas;
-    return schemas.filter(
+    if (!searchLower) return schemasFromConfig;
+    return schemasFromConfig.filter(
       (s) =>
         s.id.toLowerCase().includes(searchLower) ||
         (s.label || '').toLowerCase().includes(searchLower) ||
-        s.type.toLowerCase().includes(searchLower)
+        s.type.toLowerCase().includes(searchLower) ||
+        s.source.path.toLowerCase().includes(searchLower)
     );
-  }, [listData, searchLower]);
+  }, [schemasFromConfig, searchLower]);
 
-  const schemas = listData?.schemas ?? [];
-  const selected = selectedId ? schemas.find((s) => s.id === selectedId) : null;
+  const selected = selectedId ? schemasFromConfig.find((s) => s.id === selectedId) : null;
   const panelOpen = selectedId != null;
 
   const { data: content, isLoading: contentLoading, error: contentError } = useQuery({
@@ -61,31 +86,91 @@ export function SchemaBrowserPage() {
     return parseSchema(content, kind);
   }, [selected, content]);
 
-  if (listLoading) {
-    return <p className="text-muted-foreground">Loading schemas...</p>;
-  }
+  const openAddSchema = () => {
+    setSelectedId(null);
+    setSchemaDraft(defaultSchemaDraft());
+    setFormError(null);
+    setEditingSchema('add');
+  };
 
-  if (listError) {
-    return (
-      <p className="text-destructive">
-        {listError instanceof Error ? listError.message : 'Failed to load schemas'}
-      </p>
-    );
-  }
+  const openEditSchema = (index: number) => {
+    setSelectedId(null);
+    setSchemaDraft(schemasFromConfig[index]);
+    setFormError(null);
+    setEditingSchema(index);
+  };
 
-  if (schemas.length === 0) {
-    return (
-      <div className="flex w-full min-h-0 flex-1 flex-col gap-4">
-        <nav className="flex flex-wrap items-center gap-1 text-sm">
-          <span className="rounded px-2 py-1 text-muted-foreground">Schemas</span>
-        </nav>
-        <NotConfiguredCard
-          title="No schemas registered"
-          description="Add schemas on the Configuration page."
-        />
-      </div>
+  const applySchemaDraft = async () => {
+    const id = schemaDraft.id.trim();
+    const path = schemaDraft.source.path.trim();
+    if (id === '' || path === '') {
+      setFormError('Schema ID and source path are required.');
+      return;
+    }
+
+    const duplicate = schemasFromConfig.some(
+      (entry, idx) => idx !== (editingSchema === 'add' ? -1 : editingSchema) && entry.id.trim() === id
     );
-  }
+    if (duplicate) {
+      setFormError(`Schema ID "${id}" already exists.`);
+      return;
+    }
+
+    const nextEntry: SchemaResourceEntry = {
+      id,
+      label: schemaDraft.label.trim(),
+      type: schemaDraft.type,
+      source: { path },
+    };
+
+    setFormError(null);
+    setSavePending(true);
+    try {
+      await mergeAndPersist((prev) => {
+        if (editingSchema === 'add') {
+          return { ...prev, schemas: [...prev.schemas, nextEntry] };
+        }
+        if (typeof editingSchema === 'number') {
+          return {
+            ...prev,
+            schemas: prev.schemas.map((entry, idx) =>
+              idx === editingSchema ? nextEntry : entry
+            ),
+          };
+        }
+        return prev;
+      });
+      setEditingSchema(null);
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Save failed');
+    } finally {
+      setSavePending(false);
+    }
+  };
+
+  const confirmDeleteSchema = async () => {
+    if (deleteIndex == null) return;
+    const idx = deleteIndex;
+    const removedId = schemasFromConfig[idx]?.id;
+    setSavePending(true);
+    try {
+      await mergeAndPersist((prev) => ({
+        ...prev,
+        schemas: prev.schemas.filter((_, i) => i !== idx),
+      }));
+      setDeleteIndex(null);
+      if (removedId && selectedId === removedId) {
+        setSelectedId(null);
+      }
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Delete failed');
+    } finally {
+      setSavePending(false);
+    }
+  };
+
+  const configErr =
+    configError instanceof Error ? configError.message : configError ? String(configError) : null;
 
   const panelHeaderTitle = selected
     ? `Schema: ${selected.label?.trim() || selected.id}`
@@ -106,7 +191,7 @@ export function SchemaBrowserPage() {
         </Button>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto p-4">
+      <div className="min-h-0 min-w-0 w-full flex-1 overflow-auto p-4">
         {selected && (
           <div className="space-y-4 text-sm">
             <div className="grid grid-cols-1 gap-2 rounded-lg border border-border bg-muted/20 p-3 font-mono text-xs sm:grid-cols-2">
@@ -135,7 +220,7 @@ export function SchemaBrowserPage() {
               </p>
             )}
             {content != null && parsed && (
-              <div className="rounded-lg border border-border bg-card p-4">
+              <div className="p-4">
                 {parsed.type === 'openapi' && (
                   <div className="space-y-4">
                     {parsed.data.groups.map((g) => (
@@ -193,26 +278,57 @@ export function SchemaBrowserPage() {
   );
 
   return (
-    <div className="flex w-full min-h-0 flex-1 overflow-hidden">
-      <div className="min-h-0 min-w-0 flex-1 overflow-auto p-4 md:p-6">
-        <div className="flex w-full min-h-0 flex-1 flex-col gap-4">
+    <div className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-row items-stretch overflow-hidden">
+      <div className="flex min-h-0 min-w-0 w-full flex-1 flex-col gap-4 overflow-auto px-4 md:px-6 pt-4 md:pt-6 pb-4 md:pb-6">
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 shadow-sm">
           <nav className="flex flex-wrap items-center gap-1 text-sm">
             <span className="rounded px-2 py-1 font-medium">Schemas</span>
           </nav>
-
-          <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 shadow-sm">
-            <div className="relative min-w-0 flex-1 sm:max-w-xs">
-              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                type="search"
-                placeholder="Search schemas..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-9"
-              />
-            </div>
+          <div className="relative min-w-0 flex-1 sm:max-w-xs">
+            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              type="search"
+              placeholder="Search registry..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9"
+              aria-label="Search schemas"
+            />
           </div>
+          <Button variant="outline" size="sm" onClick={openAddSchema} className="shrink-0 gap-1.5">
+            <Plus className="size-4" />
+            Add schema
+          </Button>
+        </div>
 
+        <p className="text-xs text-muted-foreground">
+          Registry entries are stored in configuration. OpenAPI schemas can be referenced from{' '}
+          <a href="#rest" className="font-medium text-primary underline">
+            REST
+          </a>{' '}
+          resources.
+        </p>
+
+        {configPending && <p className="text-muted-foreground">Loading configuration...</p>}
+        {configErr && <p className="text-sm text-destructive">{configErr}</p>}
+
+        {!configPending && !configErr && schemasFromConfig.length === 0 && (
+          <div className="rounded-lg border border-border bg-card p-6 text-center">
+            <h2 className="text-lg font-medium">No schemas in registry</h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Add a schema entry to register OpenAPI, AsyncAPI, or JSON Schema files.
+            </p>
+            <Button type="button" className="mt-4" onClick={openAddSchema}>
+              Add schema
+            </Button>
+          </div>
+        )}
+
+        {!configPending && !configErr && schemasFromConfig.length > 0 && filtered.length === 0 && (
+          <p className="text-sm text-muted-foreground">No schemas match your search.</p>
+        )}
+
+        {!configPending && !configErr && filtered.length > 0 && (
           <div className="overflow-x-auto rounded-lg border border-border bg-card">
             <table className="w-full text-sm">
               <thead>
@@ -221,47 +337,113 @@ export function SchemaBrowserPage() {
                   <th className="px-4 py-3 text-left font-medium">Label</th>
                   <th className="px-4 py-3 text-left font-medium">Type</th>
                   <th className="px-4 py-3 text-left font-medium">Path</th>
+                  <th className="w-28 px-2 py-3" />
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((s) => (
-                  <tr
-                    key={s.id}
-                    className={cn(
-                      'cursor-pointer border-b border-border/50 last:border-b-0 hover:bg-accent/30',
-                      selectedId === s.id && 'bg-accent/50'
-                    )}
-                    onClick={() => setSelectedId(s.id)}
-                  >
-                    <td className="px-4 py-2 font-mono">{s.id}</td>
-                    <td className="px-4 py-2">{s.label || '—'}</td>
-                    <td className="px-4 py-2 font-mono">{s.type}</td>
-                    <td className="px-4 py-2 font-mono">{s.source.path}</td>
-                  </tr>
-                ))}
+                {filtered.map((entry) => {
+                  const index = schemasFromConfig.findIndex((e) => e.id === entry.id);
+                  return (
+                    <tr
+                      key={entry.id}
+                      className={cn(
+                        'cursor-pointer border-b border-border/50 last:border-b-0 hover:bg-accent/30',
+                        selectedId === entry.id && 'bg-accent/50'
+                      )}
+                      onClick={() => setSelectedId(entry.id)}
+                    >
+                      <td className="px-4 py-2 font-mono">{entry.id}</td>
+                      <td className="px-4 py-2">{entry.label || '—'}</td>
+                      <td className="px-4 py-2 font-mono">{entry.type}</td>
+                      <td className="max-w-[200px] truncate px-4 py-2 font-mono" title={entry.source.path}>
+                        {entry.source.path}
+                      </td>
+                      <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            onClick={() => index >= 0 && openEditSchema(index)}
+                            aria-label={`Edit schema ${entry.id}`}
+                          >
+                            <Pencil className="size-3" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            onClick={() => index >= 0 && setDeleteIndex(index)}
+                            aria-label={`Remove schema ${entry.id}`}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="size-3" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
-        </div>
+        )}
       </div>
 
-      <div
-        className={cn(
-          'bg-sidebar text-sidebar-foreground fixed inset-x-0 bottom-0 top-[var(--header-height)] z-30 min-h-0 flex flex-col overflow-hidden border-l lg:hidden',
-          panelOpen ? 'flex' : 'hidden'
-        )}
+      <ContextPanel
+        expanded={panelOpen}
+        storageKey="bench-schema-preview-panel-width"
+        minWidth={280}
+        maxWidth={800}
+        defaultWidth={560}
+        mobileVariant="below-header"
       >
         {panelInner}
-      </div>
-      <div
-        className={cn(
-          'bg-sidebar text-sidebar-foreground relative z-20 hidden min-h-0 flex flex-col overflow-hidden border-l lg:flex',
-          panelOpen ? 'lg:flex' : 'lg:hidden',
-          'lg:w-[min(560px,50vw)]'
-        )}
+      </ContextPanel>
+
+      <ResourceSettingsSidePanel
+        open={editingSchema !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setEditingSchema(null);
+            setFormError(null);
+          }
+        }}
+        title={editingSchema === 'add' ? 'Add schema' : 'Edit schema'}
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setEditingSchema(null);
+                setFormError(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button type="button" onClick={applySchemaDraft} disabled={savePending}>
+              {editingSchema === 'add' ? 'Add' : 'Save changes'}
+            </Button>
+          </div>
+        }
       >
-        {panelInner}
-      </div>
+        <SchemaResourceFields draft={schemaDraft} onChange={setSchemaDraft} />
+        {formError && <p className="mt-2 text-sm text-destructive">{formError}</p>}
+      </ResourceSettingsSidePanel>
+
+      <ConfirmDeleteDialog
+        open={deleteIndex != null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteIndex(null);
+        }}
+        title="Remove schema?"
+        description={
+          deleteIndex != null && schemasFromConfig[deleteIndex]
+            ? `Remove "${schemasFromConfig[deleteIndex].id}" from configuration?`
+            : 'Remove this schema?'
+        }
+        onConfirm={confirmDeleteSchema}
+        isLoading={savePending}
+      />
     </div>
   );
 }

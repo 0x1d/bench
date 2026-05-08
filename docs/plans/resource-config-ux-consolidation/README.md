@@ -1,0 +1,35 @@
+---
+state: IN_PROGRESS
+created: 2025-03-21
+updated: 2025-03-21
+---
+
+# Resource config UX consolidation
+
+> Move resource configuration onto each feature page; slim Configuration to Overview + Agent; rename `resources-page` / `resources-config-page` for clarity.
+
+## Quick links
+
+| Document | Description |
+|----------|-------------|
+| [plan.md](./plan.md) | Full design document |
+| [TASKS.md](./TASKS.md) | Task index and status |
+| [specs/](./specs/) | Task specs |
+
+## Current status
+
+| Phase | Status | Description |
+|-------|--------|-------------|
+| 1 | DONE | Rename modules; config lib; RMW hook |
+| 2 | DONE | Extract editor components |
+| 3 | DONE | Per-page Settings + RMW; resource edit forms use right sheet panel |
+| 4 | TODO | Configuration Overview + Agent |
+| 5 | TODO | Copy, queries, verification |
+
+**Next up**: Phase 4 — Task 4.1 — Configuration Overview and Agent tabs.
+
+## How to use this plan
+
+1. Work on a single task from [TASKS.md](./TASKS.md) following its spec in [specs/](specs/).
+2. Check off the task in TASKS.md when done and update phase status.
+3. Update `updated` dates in frontmatter when making progress.

@@ -1,6 +1,15 @@
 import * as React from 'react';
-import { Activity, Braces, Database, FolderOpen, Globe, Server, Settings, Workflow } from 'lucide-react';
-import { NavMain } from '@/components/nav-main';
+import {
+  Activity,
+  Braces,
+  Database,
+  FolderOpen,
+  Globe,
+  Server,
+  Settings,
+  Workflow,
+} from 'lucide-react';
+import { type NavItem, NavMain } from '@/components/nav-main';
 import { cn } from '@/lib/utils';
 import {
   Sidebar,
@@ -9,15 +18,49 @@ import {
   SidebarRail,
 } from '@/components/ui/sidebar';
 
-const navItems = [
-  { title: 'Status', url: '#status', icon: Activity },
-  { title: 'Configuration', url: '#configuration', icon: Settings },
-  { title: 'Filesystem', url: '#filesystem', icon: FolderOpen },
-  { title: 'Database', url: '#database', icon: Database },
-  { title: 'REST', url: '#rest', icon: Globe },
-  { title: 'Schemas', url: '#schemas', icon: Braces },
-  { title: 'Flows', url: '#flows', icon: Workflow },
-  { title: 'Infrastructure', url: '#infrastructure', icon: Server },
+const navItems: NavItem[] = [
+  { kind: 'link', title: 'Status', url: '#status', icon: Activity },
+  {
+    kind: 'group',
+    title: 'Filesystem',
+    icon: FolderOpen,
+    items: [
+      { title: 'Browse', url: '#filesystem' },
+      { title: 'Settings', url: '#filesystem/settings' },
+    ],
+  },
+  {
+    kind: 'group',
+    title: 'Database',
+    icon: Database,
+    items: [
+      { title: 'Browse', url: '#database' },
+      { title: 'Settings', url: '#database/settings' },
+    ],
+  },
+  {
+    kind: 'group',
+    title: 'Flows',
+    icon: Workflow,
+    items: [
+      { title: 'Modules', url: '#flows' },
+      { title: 'Executions', url: '#flows/executions' },
+      { title: 'Settings', url: '#flows/settings' },
+    ],
+  },
+  {
+    kind: 'group',
+    title: 'Infrastructure',
+    icon: Server,
+    items: [
+      { title: 'Diagram', url: '#infrastructure' },
+      { title: 'Files', url: '#infrastructure/files' },
+      { title: 'Settings', url: '#infrastructure/settings' },
+    ],
+  },
+  { kind: 'link', title: 'Schemas', url: '#schemas', icon: Braces },
+  { kind: 'link', title: 'REST', url: '#rest', icon: Globe },
+  { kind: 'link', title: 'Configuration', url: '#configuration', icon: Settings },
 ];
 
 export function SidebarLeft({
@@ -25,21 +68,10 @@ export function SidebarLeft({
   currentHash = 'status',
   ...props
 }: React.ComponentProps<typeof Sidebar> & { currentHash?: string }) {
-  const items = navItems.map((item) => {
-    const hash = item.url.slice(1);
-    const isActive =
-      hash === 'flows'
-        ? currentHash === 'flows' || currentHash.startsWith('flows/')
-        : hash === 'infrastructure'
-          ? currentHash === 'infrastructure' || currentHash.startsWith('infrastructure/')
-          : currentHash === hash;
-    return { ...item, isActive };
-  });
-
   return (
     <Sidebar collapsible="icon" className={cn('border-r-0', className)} {...props}>
       <SidebarHeader>
-        <NavMain items={items} />
+        <NavMain items={navItems} currentHash={currentHash} />
       </SidebarHeader>
       <SidebarContent />
       <SidebarRail />

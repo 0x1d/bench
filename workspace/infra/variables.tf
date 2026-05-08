@@ -41,6 +41,10 @@ variable "vercel_framework" {
   description = "Vercel project framework"
 }
 
+variable "vercel_api_token" {
+  type = string
+}
+
 variable "vercel_git_repo" {
   type        = string
   description = "GitHub repo in format owner/repo (e.g. myorg/my-app)"

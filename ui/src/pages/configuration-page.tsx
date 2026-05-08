@@ -1,97 +1,39 @@
 import { useEffect, useMemo, useState } from 'react';
-import yaml from 'js-yaml';
 import { Pencil, Plus, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
+import {
+  AgentConfigFields,
+  DatabaseResourceFields,
+  FilesystemResourceFields,
+  FlowsConfigFields,
+  InfrastructurePathFields,
+  RestResourceFields,
+  SchemaDetailPreview,
+  SchemaResourceFields,
+  WorkspaceResourceFields,
+} from '@/components/resource-config';
+import { ContextPanel } from '@/components/context-panel';
+import { BENCH_CLOSE_PANEL_EVENT } from '@/lib/bench-close-panel';
 import { cn } from '@/lib/utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { fetchConfig, fetchConfigExample, fetchSchemaContent, saveConfig } from '@/services/api';
+import { useQuery } from '@tanstack/react-query';
+import { fetchSchemaContent } from '@/services/api';
 import { detectSchemaType, parseSchema } from '@/lib/schema-registry';
-import { useStatus } from '@/hooks/use-status';
-
-interface FilesystemResource {
-  id: string;
-  label: string;
-  path: string;
-}
-
-interface DatabaseResource {
-  id: string;
-  label: string;
-  url: string;
-  enabled: boolean;
-  default: boolean;
-}
-
-interface RestAuthConfig {
-  type: 'none' | 'basic' | 'bearer' | 'apiKey';
-  username?: string;
-  password?: string;
-  token?: string;
-  name?: string;
-  in?: string;
-  value?: string;
-}
-
-interface RestResource {
-  id: string;
-  label: string;
-  baseUrl: string;
-  /** Registered OpenAPI schema id; takes precedence over openapiSpec when set. */
-  schemaId?: string;
-  openapiSpec: string;
-  auth?: RestAuthConfig;
-}
-
-interface SchemaResourceEntry {
-  id: string;
-  label: string;
-  type: 'openapi' | 'asyncapi' | 'json-schema';
-  source: { path: string };
-}
-
-interface FlowsConfig {
-  path: string;
-}
-
-interface InfrastructureConfig {
-  path: string;
-}
-
-interface AgentConfig {
-  endpoint: string;
-  workingDirectory: string;
-  agent: string;
-  model: string;
-}
-
-interface WorkspaceResource {
-  id: string;
-  label: string;
-  flowpipeUrl: string;
-}
-
-interface ResourceFormState {
-  filesystem: FilesystemResource[];
-  schemas: SchemaResourceEntry[];
-  databases: DatabaseResource[];
-  rest: RestResource[];
-  workspaces: WorkspaceResource[];
-  flows: FlowsConfig;
-  infrastructure: InfrastructureConfig;
-  agent: AgentConfig;
-}
+import {
+  emptyState,
+  parseConfigToState,
+  useResourceConfig,
+  type AgentConfig,
+  type DatabaseResource,
+  type FilesystemResource,
+  type FlowsConfig,
+  type InfrastructureConfig,
+  type ResourceFormState,
+  type RestResource,
+  type SchemaResourceEntry,
+  type WorkspaceResource,
+} from '@/lib/resource-config';
 
 type PanelMode =
   | 'add-filesystem'
@@ -126,237 +68,23 @@ type ResourceConfigTab =
   | 'infrastructure'
   | 'agent';
 
-function emptyState(): ResourceFormState {
-  return {
-    filesystem: [],
-    schemas: [],
-    databases: [],
-    rest: [],
-    workspaces: [],
-    flows: { path: './flows' },
-    infrastructure: { path: './workspace/infra' },
-    agent: {
-      endpoint: 'http://localhost:3001',
-      workingDirectory: '',
-      agent: 'cursor',
-      model: '',
-    },
-  };
-}
-
-function parseConfigToState(rawConfig: string): ResourceFormState {
-  const parsed = (yaml.load(rawConfig) as {
-    resources?: {
-      schemas?: Array<{
-        id?: string;
-        label?: string;
-        type?: string;
-        source?: { path?: string };
-      }>;
-      filesystem?: Array<{ id?: string; label?: string; path?: string }>;
-      databases?: Array<{
-        id?: string;
-        label?: string;
-        url?: string;
-        enabled?: boolean;
-        default?: boolean;
-      }>;
-      rest?: Array<{
-        id?: string;
-        label?: string;
-        baseUrl?: string;
-        schemaId?: string;
-        openapiSpec?: string;
-        auth?: {
-          type?: string;
-          username?: string;
-          password?: string;
-          token?: string;
-          name?: string;
-          in?: string;
-          value?: string;
-        };
-      }>;
-    };
-    flows?: {
-      path?: string;
-      workspaces?: Array<{ id?: string; label?: string; flowpipeUrl?: string }>;
-    };
-    infrastructure?: { path?: string };
-    agent?: {
-      endpoint?: string;
-      workingDirectory?: string;
-      agent?: string;
-      model?: string;
-    };
-  }) ?? { resources: {} };
-
-  const filesystem = (parsed.resources?.filesystem ?? []).map((entry) => ({
-    id: entry.id ?? '',
-    label: entry.label ?? '',
-    path: entry.path ?? '',
-  }));
-
-  const schemas = (parsed.resources?.schemas ?? []).map((entry) => {
-    const t = (entry.type ?? 'openapi') as SchemaResourceEntry['type'];
-    const safeType: SchemaResourceEntry['type'] =
-      t === 'asyncapi' || t === 'json-schema' ? t : 'openapi';
-    return {
-      id: entry.id ?? '',
-      label: entry.label ?? '',
-      type: safeType,
-      source: { path: entry.source?.path ?? '' },
-    };
-  });
-
-  const databases = (parsed.resources?.databases ?? []).map((entry) => ({
-    id: entry.id ?? '',
-    label: entry.label ?? '',
-    url: entry.url ?? '',
-    enabled: entry.enabled ?? true,
-    default: entry.default ?? false,
-  }));
-
-  const rest = (parsed.resources?.rest ?? []).map((entry) => ({
-    id: entry.id ?? '',
-    label: entry.label ?? '',
-    baseUrl: entry.baseUrl ?? '',
-    schemaId: entry.schemaId ?? '',
-    openapiSpec: entry.openapiSpec ?? '',
-    auth: entry.auth
-      ? {
-        type: (entry.auth.type ?? 'none') as RestAuthConfig['type'],
-        username: entry.auth.username ?? '',
-        password: entry.auth.password ?? '',
-        token: entry.auth.token ?? '',
-        name: entry.auth.name ?? '',
-        in: entry.auth.in ?? 'header',
-        value: entry.auth.value ?? '',
-      }
-      : { type: 'none' as const },
-  }));
-
-  const workspaces = (parsed.flows?.workspaces ?? []).map((entry) => ({
-    id: entry.id ?? '',
-    label: entry.label ?? '',
-    flowpipeUrl: entry.flowpipeUrl ?? 'http://localhost:7103',
-  }));
-
-  const flowsRaw = parsed.flows;
-  const flows: FlowsConfig = {
-    path: flowsRaw?.path ?? './flows',
-  };
-
-  const infraRaw = parsed.infrastructure;
-  const infrastructure: InfrastructureConfig = {
-    path: infraRaw?.path ?? './workspace/infra',
-  };
-
-  const agentRaw = parsed.agent;
-  const agent: AgentConfig = {
-    endpoint: agentRaw?.endpoint ?? 'http://localhost:3001',
-    workingDirectory: agentRaw?.workingDirectory ?? '',
-    agent: agentRaw?.agent ?? 'cursor',
-    model: agentRaw?.model ?? '',
-  };
-
-  return { filesystem, schemas, databases, rest, workspaces, flows, infrastructure, agent };
-}
-
-function stateToConfig(state: ResourceFormState): string {
-  const resources = {
-    schemas: state.schemas
-      .filter((entry) => entry.id.trim() !== '' || entry.source.path.trim() !== '')
-      .map((entry) => ({
-        id: entry.id.trim(),
-        label: entry.label.trim() || undefined,
-        type: entry.type,
-        source: { path: entry.source.path.trim() },
-      })),
-    filesystem: state.filesystem
-      .filter((entry) => entry.id.trim() !== '' || entry.path.trim() !== '')
-      .map((entry) => ({
-        id: entry.id.trim(),
-        label: entry.label.trim() || undefined,
-        path: entry.path.trim(),
-      })),
-    databases: state.databases
-      .filter((entry) => entry.id.trim() !== '' || entry.url.trim() !== '')
-      .map((entry) => ({
-        id: entry.id.trim(),
-        label: entry.label.trim() || undefined,
-        url: entry.url.trim(),
-        enabled: entry.enabled,
-        default: entry.default || undefined,
-      })),
-    rest: state.rest
-      .filter((entry) => entry.id.trim() !== '' || entry.baseUrl.trim() !== '')
-      .map((entry) => {
-        const base: Record<string, unknown> = {
-          id: entry.id.trim(),
-          label: entry.label.trim() || undefined,
-          baseUrl: entry.baseUrl.trim(),
-          schemaId: entry.schemaId?.trim() || undefined,
-          openapiSpec: entry.openapiSpec.trim() || undefined,
-        };
-        const auth = entry.auth;
-        if (auth && auth.type !== 'none') {
-          base.auth = {
-            type: auth.type,
-            ...(auth.type === 'basic' && {
-              username: auth.username?.trim(),
-              password: auth.password?.trim(),
-            }),
-            ...(auth.type === 'bearer' && { token: auth.token?.trim() }),
-            ...(auth.type === 'apiKey' && {
-              name: auth.name?.trim(),
-              in: auth.in || 'header',
-              value: auth.value?.trim(),
-            }),
-          };
-        }
-        return base;
-      }),
-  };
-
-  const output: Record<string, unknown> = { resources };
-
-  const workspacesOut = state.workspaces
-    .filter((entry) => entry.id.trim() !== '')
-    .map((entry) => ({
-      id: entry.id.trim(),
-      label: entry.label.trim() || undefined,
-      flowpipeUrl: entry.flowpipeUrl.trim() || undefined,
-    }));
-
-  if (state.flows.path.trim() !== '' || workspacesOut.length > 0) {
-    output.flows = {
-      path: state.flows.path.trim() || './flows',
-      workspaces: workspacesOut.length > 0 ? workspacesOut : undefined,
-    };
-  }
-  if (state.infrastructure.path.trim() !== '') {
-    output.infrastructure = {
-      path: state.infrastructure.path.trim() || './workspace/infra',
-    };
-  }
-  if (state.agent.endpoint.trim() !== '') {
-    output.agent = {
-      endpoint: state.agent.endpoint.trim(),
-      workingDirectory: state.agent.workingDirectory.trim(),
-      agent: state.agent.agent.trim(),
-      model: state.agent.model.trim() || undefined,
-    };
-  }
-  return yaml.dump(output, { noRefs: true, lineWidth: 120 });
-}
-
-export function ResourcesConfigPage() {
-  const queryClient = useQueryClient();
-  const { refetch: refetchStatus } = useStatus();
-  const [state, setState] = useState<ResourceFormState>(emptyState);
-  const [loading, setLoading] = useState(true);
+export function ConfigurationPage() {
+  const {
+    data: rawConfig,
+    isPending,
+    error: queryError,
+    persistState: persistConfigToServer,
+  } = useResourceConfig();
+  const [draft, setDraft] = useState<ResourceFormState | null>(null);
+  const state = useMemo(() => {
+    if (draft !== null) return draft;
+    if (rawConfig !== undefined) return parseConfigToState(rawConfig);
+    return emptyState();
+  }, [draft, rawConfig]);
   const [error, setError] = useState<string | null>(null);
+  const loadErrorMessage =
+    queryError instanceof Error ? queryError.message : queryError ? String(queryError) : null;
+  const displayError = error ?? loadErrorMessage;
   const [panelMode, setPanelMode] = useState<PanelMode | null>(null);
   const [panelIndex, setPanelIndex] = useState<number | null>(null);
   const [panelError, setPanelError] = useState<string | null>(null);
@@ -408,47 +136,8 @@ export function ResourcesConfigPage() {
 
   const persistState = async (newState: ResourceFormState) => {
     setError(null);
-    const nextConfig = stateToConfig(newState);
-    await saveConfig(nextConfig);
-    await refetchStatus();
-    queryClient.invalidateQueries({ queryKey: ['flows', 'workspaces'] });
-    queryClient.invalidateQueries({ queryKey: ['infrastructure'] });
+    await persistConfigToServer(newState);
   };
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadConfig = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const [currentResult, exampleResult] = await Promise.allSettled([
-          fetchConfig(),
-          fetchConfigExample(),
-        ]);
-        if (cancelled) return;
-        const base =
-          currentResult.status === 'fulfilled'
-            ? currentResult.value
-            : exampleResult.status === 'fulfilled'
-              ? exampleResult.value
-              : '';
-        setState(parseConfigToState(base));
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Failed to load config');
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-
-    void loadConfig();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   useEffect(() => {
     const handleClosePanel = () => {
@@ -458,8 +147,8 @@ export function ResourcesConfigPage() {
         setPanelError(null);
       }
     };
-    window.addEventListener('bench:close-panel', handleClosePanel);
-    return () => window.removeEventListener('bench:close-panel', handleClosePanel);
+    window.addEventListener(BENCH_CLOSE_PANEL_EVENT, handleClosePanel);
+    return () => window.removeEventListener(BENCH_CLOSE_PANEL_EVENT, handleClosePanel);
   }, [panelMode]);
 
   const openAddFilesystem = () => {
@@ -664,13 +353,13 @@ export function ResourcesConfigPage() {
 
     if (nextState === prevState) return;
 
-    setState(nextState);
+    setDraft(nextState);
     try {
       await persistState(nextState);
       closePanel();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Save failed');
-      setState(prevState);
+      setDraft(prevState);
     }
   };
 
@@ -729,13 +418,13 @@ export function ResourcesConfigPage() {
 
     if (nextState === prevState) return;
 
-    setState(nextState);
+    setDraft(nextState);
     try {
       await persistState(nextState);
       closePanel();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Save failed');
-      setState(prevState);
+      setDraft(prevState);
     }
   };
 
@@ -777,13 +466,13 @@ export function ResourcesConfigPage() {
 
     if (nextState === prevState) return;
 
-    setState(nextState);
+    setDraft(nextState);
     try {
       await persistState(nextState);
       closePanel();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Save failed');
-      setState(prevState);
+      setDraft(prevState);
     }
   };
 
@@ -841,13 +530,13 @@ export function ResourcesConfigPage() {
 
     if (nextState === prevState) return;
 
-    setState(nextState);
+    setDraft(nextState);
     try {
       await persistState(nextState);
       closePanel();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Save failed');
-      setState(prevState);
+      setDraft(prevState);
     }
   };
 
@@ -860,13 +549,13 @@ export function ResourcesConfigPage() {
       flows: { path },
     };
 
-    setState(nextState);
+    setDraft(nextState);
     try {
       await persistState(nextState);
       closePanel();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Save failed');
-      setState(prevState);
+      setDraft(prevState);
     }
   };
 
@@ -879,13 +568,13 @@ export function ResourcesConfigPage() {
       infrastructure: { path },
     };
 
-    setState(nextState);
+    setDraft(nextState);
     try {
       await persistState(nextState);
       closePanel();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Save failed');
-      setState(prevState);
+      setDraft(prevState);
     }
   };
 
@@ -925,13 +614,13 @@ export function ResourcesConfigPage() {
 
     if (nextState === prevState) return;
 
-    setState(nextState);
+    setDraft(nextState);
     try {
       await persistState(nextState);
       closePanel();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Save failed');
-      setState(prevState);
+      setDraft(prevState);
     }
   };
 
@@ -957,13 +646,13 @@ export function ResourcesConfigPage() {
       },
     };
 
-    setState(nextState);
+    setDraft(nextState);
     try {
       await persistState(nextState);
       closePanel();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Save failed');
-      setState(prevState);
+      setDraft(prevState);
     }
   };
 
@@ -998,13 +687,13 @@ export function ResourcesConfigPage() {
       };
     }
 
-    setState(nextState);
+    setDraft(nextState);
     setDeleteTarget(null);
     try {
       await persistState(nextState);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Save failed');
-      setState(prevState);
+      setDraft(prevState);
     }
   };
 
@@ -1062,7 +751,7 @@ export function ResourcesConfigPage() {
                 : '';
 
   const panelBody = (
-    <>
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-sidebar-border px-4">
         <div>
           <p className="text-sm font-medium">{panelTitle}</p>
@@ -1075,608 +764,58 @@ export function ResourcesConfigPage() {
         </Button>
       </div>
 
-      <div className="p-4">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4">
         {(panelMode === 'add-workspace' || panelMode === 'edit-workspace') && (
-          <div className="space-y-3">
-            <div className="space-y-1">
-              <Label>ID</Label>
-              <Input
-                value={workspaceDraft.id}
-                onChange={(e) =>
-                  setWorkspaceDraft((prev) => ({ ...prev, id: e.target.value }))
-                }
-                placeholder="default"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Label</Label>
-              <Input
-                value={workspaceDraft.label}
-                onChange={(e) =>
-                  setWorkspaceDraft((prev) => ({ ...prev, label: e.target.value }))
-                }
-                placeholder="Default"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Flowpipe URL</Label>
-              <Input
-                value={workspaceDraft.flowpipeUrl}
-                onChange={(e) =>
-                  setWorkspaceDraft((prev) => ({ ...prev, flowpipeUrl: e.target.value }))
-                }
-                placeholder="http://localhost:7103"
-                className="font-mono"
-              />
-              <p className="text-xs text-muted-foreground">
-                Flowpipe server URL. Written as host in flows/workspaces.fpc when profile is initialized.
-              </p>
-            </div>
-          </div>
+          <WorkspaceResourceFields draft={workspaceDraft} onChange={setWorkspaceDraft} />
         )}
 
         {(panelMode === 'add-filesystem' || panelMode === 'edit-filesystem') && (
-          <div className="space-y-3">
-            <div className="space-y-1">
-              <Label>ID</Label>
-              <Input
-                value={filesystemDraft.id}
-                onChange={(e) =>
-                  setFilesystemDraft((prev) => ({ ...prev, id: e.target.value }))
-                }
-                placeholder="data"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Label</Label>
-              <Input
-                value={filesystemDraft.label}
-                onChange={(e) =>
-                  setFilesystemDraft((prev) => ({ ...prev, label: e.target.value }))
-                }
-                placeholder="Data"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Path</Label>
-              <Input
-                value={filesystemDraft.path}
-                onChange={(e) =>
-                  setFilesystemDraft((prev) => ({ ...prev, path: e.target.value }))
-                }
-                placeholder="/mnt/data"
-                className="font-mono"
-              />
-            </div>
-          </div>
+          <FilesystemResourceFields draft={filesystemDraft} onChange={setFilesystemDraft} />
         )}
 
         {(panelMode === 'add-schema' || panelMode === 'edit-schema') && (
-          <div className="space-y-3">
-            <div className="space-y-1">
-              <Label>ID</Label>
-              <Input
-                value={schemaDraft.id}
-                onChange={(e) =>
-                  setSchemaDraft((prev) => ({ ...prev, id: e.target.value }))
-                }
-                placeholder="petstore-api"
-                className="font-mono"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Label</Label>
-              <Input
-                value={schemaDraft.label}
-                onChange={(e) =>
-                  setSchemaDraft((prev) => ({ ...prev, label: e.target.value }))
-                }
-                placeholder="Petstore API"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Type</Label>
-              <Select
-                value={schemaDraft.type}
-                onValueChange={(v) =>
-                  setSchemaDraft((prev) => ({
-                    ...prev,
-                    type: v as SchemaResourceEntry['type'],
-                  }))
-                }
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Schema type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="openapi">openapi</SelectItem>
-                  <SelectItem value="asyncapi">asyncapi</SelectItem>
-                  <SelectItem value="json-schema">json-schema</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label>Source path</Label>
-              <Input
-                value={schemaDraft.source.path}
-                onChange={(e) =>
-                  setSchemaDraft((prev) => ({
-                    ...prev,
-                    source: { ...prev.source, path: e.target.value },
-                  }))
-                }
-                placeholder="./workspace/rest/openapi.json"
-                className="font-mono"
-              />
-              <p className="text-xs text-muted-foreground">
-                Path to the schema file, relative to the Bench config directory.
-              </p>
-            </div>
-          </div>
+          <SchemaResourceFields draft={schemaDraft} onChange={setSchemaDraft} />
         )}
 
         {panelMode === 'schema-detail' && schemaDetailEntry && (
-          <div className="space-y-4 text-sm">
-            <div className="grid grid-cols-1 gap-2 rounded-lg border border-border bg-muted/20 p-3 font-mono text-xs sm:grid-cols-2">
-              <div>
-                <span className="text-muted-foreground">ID</span>
-                <p className="break-all">{schemaDetailEntry.id}</p>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Label</span>
-                <p>{schemaDetailEntry.label?.trim() || '—'}</p>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Type</span>
-                <p>{schemaDetailEntry.type}</p>
-              </div>
-              <div className="sm:col-span-2">
-                <span className="text-muted-foreground">Source path</span>
-                <p className="break-all">{schemaDetailEntry.source.path}</p>
-              </div>
-            </div>
-
-            {schemaDetailId === '' && (
-              <p className="text-destructive text-sm">
-                This schema has no ID. Set an ID in Edit schema to load content.
-              </p>
-            )}
-            {schemaDetailLoading && (
-              <p className="text-muted-foreground">Loading schema content...</p>
-            )}
-            {schemaDetailFetchError && (
-              <p className="text-destructive">
-                {schemaDetailFetchError instanceof Error
-                  ? schemaDetailFetchError.message
-                  : 'Failed to load schema content'}
-              </p>
-            )}
-            {schemaDetailRaw != null && schemaDetailParsed && (
-              <div className="rounded-lg border border-border bg-card p-4">
-                {schemaDetailParsed.type === 'openapi' && (
-                  <div className="space-y-4">
-                    {schemaDetailParsed.data.groups.map((g) => (
-                      <div key={g.tag}>
-                        <h3 className="mb-2 font-medium">{g.tag}</h3>
-                        <ul className="space-y-1 font-mono text-xs">
-                          {g.operations.map((op, i) => (
-                            <li key={`${op.path}-${op.method}-${i}`}>
-                              <span className="text-muted-foreground">{op.method}</span> {op.path}
-                              {op.summary ? (
-                                <span className="ml-2 text-muted-foreground">— {op.summary}</span>
-                              ) : null}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {schemaDetailParsed.type === 'asyncapi' && (
-                  <div className="space-y-3">
-                    <h3 className="font-medium">Channels</h3>
-                    <ul className="space-y-2">
-                      {schemaDetailParsed.data.operations.map((op, i) => (
-                        <li key={`${op.channel}-${op.direction}-${i}`} className="font-mono text-xs">
-                          <span className="text-muted-foreground">{op.direction}</span> {op.channel}
-                          {op.summary ? (
-                            <span className="ml-2 text-muted-foreground">— {op.summary}</span>
-                          ) : null}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                {schemaDetailParsed.type === 'json-schema' && (
-                  <div className="space-y-2">
-                    {schemaDetailParsed.data.title && (
-                      <p className="font-medium">{schemaDetailParsed.data.title}</p>
-                    )}
-                    <p className="text-muted-foreground">Properties</p>
-                    <ul className="list-inside list-disc font-mono text-xs">
-                      {schemaDetailParsed.data.properties
-                        ? Object.keys(schemaDetailParsed.data.properties).map((k) => (
-                            <li key={k}>{k}</li>
-                          ))
-                        : null}
-                    </ul>
-                  </div>
-                )}
-                {schemaDetailParsed.type === 'unknown' && (
-                  <p className="text-muted-foreground">Could not parse this schema for preview.</p>
-                )}
-              </div>
-            )}
-          </div>
+          <SchemaDetailPreview
+            entry={schemaDetailEntry}
+            schemaId={schemaDetailId}
+            loading={schemaDetailLoading}
+            fetchError={schemaDetailFetchError}
+            raw={schemaDetailRaw}
+            parsed={schemaDetailParsed}
+          />
         )}
 
         {(panelMode === 'add-rest' || panelMode === 'edit-rest') && (
-          <div className="space-y-3">
-            <div className="space-y-1">
-              <Label>ID</Label>
-              <Input
-                value={restDraft.id}
-                onChange={(e) =>
-                  setRestDraft((prev) => ({ ...prev, id: e.target.value }))
-                }
-                placeholder="petstore"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Label</Label>
-              <Input
-                value={restDraft.label}
-                onChange={(e) =>
-                  setRestDraft((prev) => ({ ...prev, label: e.target.value }))
-                }
-                placeholder="Petstore API"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Base URL</Label>
-              <Input
-                value={restDraft.baseUrl}
-                onChange={(e) =>
-                  setRestDraft((prev) => ({ ...prev, baseUrl: e.target.value }))
-                }
-                placeholder="https://api.example.com"
-                className="font-mono"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>OpenAPI schema (registry)</Label>
-              <Select
-                value={restDraft.schemaId?.trim() ? restDraft.schemaId : '__none__'}
-                onValueChange={(v) =>
-                  setRestDraft((prev) => ({
-                    ...prev,
-                    schemaId: v === '__none__' ? '' : v,
-                  }))
-                }
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="None (use path below)" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">None (use path below)</SelectItem>
-                  {state.schemas
-                    .filter((s) => s.type === 'openapi')
-                    .map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.label?.trim() || s.id}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                Use a registered OpenAPI schema (recommended) or specify a file path below. Registry schema
-                takes precedence.
-              </p>
-            </div>
-            <div className="space-y-1">
-              <Label>OpenAPI spec path</Label>
-              <Input
-                value={restDraft.openapiSpec}
-                onChange={(e) =>
-                  setRestDraft((prev) => ({ ...prev, openapiSpec: e.target.value }))
-                }
-                placeholder="specs/api.json"
-                className="font-mono"
-              />
-              <p className="text-xs text-muted-foreground">
-                Path relative to config directory. Leave empty when using a registry schema above.
-              </p>
-            </div>
-            <div className="space-y-1">
-              <Label>Auth type</Label>
-              <Select
-                value={restDraft.auth?.type ?? 'none'}
-                onValueChange={(v) =>
-                  setRestDraft((prev) => ({
-                    ...prev,
-                    auth: {
-                      ...prev.auth,
-                      type: v as RestAuthConfig['type'],
-                    },
-                  }))
-                }
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">None</SelectItem>
-                  <SelectItem value="basic">Basic</SelectItem>
-                  <SelectItem value="bearer">Bearer</SelectItem>
-                  <SelectItem value="apiKey">API Key</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {restDraft.auth?.type === 'basic' && (
-              <>
-                <div className="space-y-1">
-                  <Label>Username</Label>
-                  <Input
-                    value={restDraft.auth.username ?? ''}
-                    onChange={(e) =>
-                      setRestDraft((prev) => ({
-                        ...prev,
-                        auth: { ...prev.auth!, username: e.target.value },
-                      }))
-                    }
-                    placeholder={'${BENCH_REST_USER}'}
-                    className="font-mono"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label>Password</Label>
-                  <Input
-                    type="password"
-                    value={restDraft.auth.password ?? ''}
-                    onChange={(e) =>
-                      setRestDraft((prev) => ({
-                        ...prev,
-                        auth: { ...prev.auth!, password: e.target.value },
-                      }))
-                    }
-                    placeholder={'${BENCH_REST_PASS}'}
-                    className="font-mono"
-                  />
-                </div>
-              </>
-            )}
-            {restDraft.auth?.type === 'bearer' && (
-              <div className="space-y-1">
-                <Label>Token</Label>
-                <Input
-                  type="password"
-                  value={restDraft.auth.token ?? ''}
-                  onChange={(e) =>
-                    setRestDraft((prev) => ({
-                      ...prev,
-                      auth: { ...prev.auth!, token: e.target.value },
-                    }))
-                  }
-                  placeholder={'${BENCH_REST_TOKEN}'}
-                  className="font-mono"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Use env placeholders for secrets.
-                </p>
-              </div>
-            )}
-            {restDraft.auth?.type === 'apiKey' && (
-              <>
-                <div className="space-y-1">
-                  <Label>Header/param name</Label>
-                  <Input
-                    value={restDraft.auth.name ?? ''}
-                    onChange={(e) =>
-                      setRestDraft((prev) => ({
-                        ...prev,
-                        auth: { ...prev.auth!, name: e.target.value },
-                      }))
-                    }
-                    placeholder="X-API-Key"
-                    className="font-mono"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label>Location</Label>
-                  <Select
-                    value={restDraft.auth.in ?? 'header'}
-                    onValueChange={(v) =>
-                      setRestDraft((prev) => ({
-                        ...prev,
-                        auth: { ...prev.auth!, in: v },
-                      }))
-                    }
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="header">Header</SelectItem>
-                      <SelectItem value="query">Query</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1">
-                  <Label>Value</Label>
-                  <Input
-                    type="password"
-                    value={restDraft.auth.value ?? ''}
-                    onChange={(e) =>
-                      setRestDraft((prev) => ({
-                        ...prev,
-                        auth: { ...prev.auth!, value: e.target.value },
-                      }))
-                    }
-                    placeholder={'${BENCH_REST_API_KEY}'}
-                    className="font-mono"
-                  />
-                </div>
-              </>
-            )}
-          </div>
+          <RestResourceFields
+            draft={restDraft}
+            onChange={setRestDraft}
+            openapiSchemas={state.schemas.filter((s) => s.type === 'openapi')}
+          />
         )}
 
         {panelMode === 'edit-flows' && (
-          <div className="space-y-3">
-            <div className="space-y-1">
-              <Label>Flows directory</Label>
-              <Input
-                value={flowsDraft.path}
-                onChange={(e) =>
-                  setFlowsDraft((prev) => ({ ...prev, path: e.target.value }))
-                }
-                placeholder="./flows"
-                className="font-mono"
-              />
-              <p className="text-xs text-muted-foreground">
-                Path to store flow JSON and .fp files. Relative to config directory.
-              </p>
-            </div>
-          </div>
+          <FlowsConfigFields draft={flowsDraft} onChange={setFlowsDraft} />
         )}
 
         {panelMode === 'edit-infrastructure' && (
-          <div className="space-y-3">
-            <div className="space-y-1">
-              <Label>Infrastructure directory</Label>
-              <Input
-                value={infrastructureDraft.path}
-                onChange={(e) =>
-                  setInfrastructureDraft((prev) => ({ ...prev, path: e.target.value }))
-                }
-                placeholder="./workspace/infra"
-                className="font-mono"
-              />
-              <p className="text-xs text-muted-foreground">
-                Path for Terraform .tf files. Relative to config directory.
-              </p>
-            </div>
-          </div>
+          <InfrastructurePathFields draft={infrastructureDraft} onChange={setInfrastructureDraft} />
         )}
 
         {(panelMode === 'add-database' || panelMode === 'edit-database') && (
-          <div className="space-y-3">
-            <div className="space-y-1">
-              <Label>ID</Label>
-              <Input
-                value={databaseDraft.id}
-                onChange={(e) =>
-                  setDatabaseDraft((prev) => ({ ...prev, id: e.target.value }))
-                }
-                placeholder="main"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Label</Label>
-              <Input
-                value={databaseDraft.label}
-                onChange={(e) =>
-                  setDatabaseDraft((prev) => ({ ...prev, label: e.target.value }))
-                }
-                placeholder="Main DB"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>URL</Label>
-              <Input
-                value={databaseDraft.url}
-                onChange={(e) =>
-                  setDatabaseDraft((prev) => ({ ...prev, url: e.target.value }))
-                }
-                placeholder="${BENCH_DB_MAIN_URL}"
-                className="font-mono"
-              />
-              <p className="text-xs text-muted-foreground">
-                URL supports env placeholders like{' '}
-                <code className="rounded bg-muted px-1">${'{BENCH_DB_MAIN_URL}'}</code>.
-              </p>
-            </div>
-            <label className="flex items-center gap-2 text-sm">
-              <Checkbox
-                checked={databaseDraft.enabled}
-                onCheckedChange={(v) =>
-                  setDatabaseDraft((prev) => ({ ...prev, enabled: v === true }))
-                }
-              />
-              Enabled
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <Checkbox
-                checked={databaseDraft.default}
-                onCheckedChange={(v) =>
-                  setDatabaseDraft((prev) => ({ ...prev, default: v === true }))
-                }
-              />
-              Default
-            </label>
-          </div>
+          <DatabaseResourceFields draft={databaseDraft} onChange={setDatabaseDraft} />
         )}
 
         {panelMode === 'edit-agent' && (
-          <div className="space-y-3">
-            <div className="space-y-1">
-              <Label>Endpoint</Label>
-              <Input
-                value={agentDraft.endpoint}
-                onChange={(e) =>
-                  setAgentDraft((prev) => ({ ...prev, endpoint: e.target.value }))
-                }
-                placeholder="http://localhost:3001"
-                className="font-mono"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Working directory</Label>
-              <Input
-                value={agentDraft.workingDirectory}
-                onChange={(e) =>
-                  setAgentDraft((prev) => ({ ...prev, workingDirectory: e.target.value }))
-                }
-                placeholder="/home/user/bench/workspace"
-                className="font-mono"
-              />
-              <p className="text-xs text-muted-foreground">
-                Mandatory path where the agent will perform tasks.
-              </p>
-            </div>
-            <div className="space-y-1">
-              <Label>Agent type</Label>
-              <Select
-                value={agentDraft.agent}
-                onValueChange={(v) => setAgentDraft((prev) => ({ ...prev, agent: v }))}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="cursor">Cursor</SelectItem>
-                  <SelectItem value="gemini">Gemini</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label>Model (optional)</Label>
-              <Input
-                value={agentDraft.model}
-                onChange={(e) =>
-                  setAgentDraft((prev) => ({ ...prev, model: e.target.value }))
-                }
-                placeholder="gemini-2.0-flash"
-                className="font-mono"
-              />
-            </div>
-          </div>
+          <AgentConfigFields draft={agentDraft} onChange={setAgentDraft} />
         )}
 
         {panelError && <p className="mt-3 text-sm text-destructive">{panelError}</p>}
       </div>
 
-      <div className="border-t px-4 py-3">
+      <div className="shrink-0 border-t border-sidebar-border px-4 py-3">
         <div className="flex w-full items-center justify-end gap-2">
           <Button variant="outline" onClick={closePanel}>
             Cancel
@@ -1720,10 +859,10 @@ export function ResourcesConfigPage() {
           )}
         </div>
       </div>
-    </>
+    </div>
   );
 
-  if (loading) {
+  if (isPending) {
     return <p className="text-muted-foreground">Loading resource configuration...</p>;
   }
 
@@ -1731,14 +870,14 @@ export function ResourcesConfigPage() {
     <div className="flex w-full min-h-0 flex-1 overflow-hidden">
       <div
         className={cn(
-          'min-h-0 min-w-0 flex-1 overflow-auto p-4 md:p-6'
+          'min-h-0 min-w-0 w-full flex-1 overflow-auto p-4 md:p-6'
         )}
       >
         <div className="flex w-full min-h-0 flex-1 flex-col gap-4">
           <Tabs
             value={resourceTab}
             onValueChange={(v) => setResourceTab(v as ResourceConfigTab)}
-            className="flex min-h-0 flex-1 flex-col overflow-hidden"
+            className="flex min-h-0 min-w-0 w-full flex-1 flex-col overflow-hidden"
           >
             <TabsList variant="line" className="w-full shrink-0 flex-wrap justify-start gap-x-1">
               <TabsTrigger value="filesystem">Filesystem</TabsTrigger>
@@ -1750,8 +889,8 @@ export function ResourcesConfigPage() {
               <TabsTrigger value="agent">Agent</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="filesystem" className="mt-3 min-h-0 flex-1 overflow-auto">
-          <section className="rounded-lg border border-border bg-card p-4">
+            <TabsContent value="filesystem" className="mt-3 min-h-0 min-w-0 w-full flex-1 overflow-auto">
+          <section className="flex flex-col gap-4 p-4">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-medium">Filesystem resources</h3>
               <Button variant="outline" size="sm" onClick={openAddFilesystem}>
@@ -1762,7 +901,7 @@ export function ResourcesConfigPage() {
             {state.filesystem.length === 0 ? (
               <p className="text-sm text-muted-foreground">No filesystem resources configured.</p>
             ) : (
-              <div className="overflow-x-auto rounded-lg border border-border bg-card">
+              <div className="w-full min-w-0 overflow-x-auto rounded-lg border border-border bg-card">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border bg-muted/30">
@@ -1812,8 +951,8 @@ export function ResourcesConfigPage() {
           </section>
             </TabsContent>
 
-            <TabsContent value="schemas" className="mt-3 min-h-0 flex-1 overflow-auto">
-          <section className="rounded-lg border border-border bg-card p-4">
+            <TabsContent value="schemas" className="mt-3 min-h-0 min-w-0 w-full flex-1 overflow-auto">
+          <section className="flex flex-col gap-4 p-4">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-medium">Schemas</h3>
               <Button variant="outline" size="sm" onClick={openAddSchema}>
@@ -1824,7 +963,7 @@ export function ResourcesConfigPage() {
             {state.schemas.length === 0 ? (
               <p className="text-sm text-muted-foreground">No schemas registered.</p>
             ) : (
-              <div className="overflow-x-auto rounded-lg border border-border bg-card">
+              <div className="w-full min-w-0 overflow-x-auto rounded-lg border border-border bg-card">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border bg-muted/30">
@@ -1876,8 +1015,8 @@ export function ResourcesConfigPage() {
           </section>
             </TabsContent>
 
-            <TabsContent value="databases" className="mt-3 min-h-0 flex-1 overflow-auto">
-          <section className="rounded-lg border border-border bg-card p-4">
+            <TabsContent value="databases" className="mt-3 min-h-0 min-w-0 w-full flex-1 overflow-auto">
+          <section className="flex flex-col gap-4 p-4">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-medium">Database resources</h3>
               <Button variant="outline" size="sm" onClick={openAddDatabase}>
@@ -1888,7 +1027,7 @@ export function ResourcesConfigPage() {
             {state.databases.length === 0 ? (
               <p className="text-sm text-muted-foreground">No database resources configured.</p>
             ) : (
-              <div className="overflow-x-auto rounded-lg border border-border bg-card">
+              <div className="w-full min-w-0 overflow-x-auto rounded-lg border border-border bg-card">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border bg-muted/30">
@@ -1942,8 +1081,8 @@ export function ResourcesConfigPage() {
           </section>
             </TabsContent>
 
-            <TabsContent value="rest" className="mt-3 min-h-0 flex-1 overflow-auto">
-          <section className="rounded-lg border border-border bg-card p-4">
+            <TabsContent value="rest" className="mt-3 min-h-0 min-w-0 w-full flex-1 overflow-auto">
+          <section className="flex flex-col gap-4 p-4">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-medium">REST resources</h3>
               <Button variant="outline" size="sm" onClick={openAddRest}>
@@ -1954,7 +1093,7 @@ export function ResourcesConfigPage() {
             {state.rest.length === 0 ? (
               <p className="text-sm text-muted-foreground">No REST resources configured.</p>
             ) : (
-              <div className="overflow-x-auto rounded-lg border border-border bg-card">
+              <div className="w-full min-w-0 overflow-x-auto rounded-lg border border-border bg-card">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border bg-muted/30">
@@ -2008,8 +1147,8 @@ export function ResourcesConfigPage() {
           </section>
             </TabsContent>
 
-            <TabsContent value="flows" className="mt-3 min-h-0 flex-1 overflow-auto">
-          <section className="rounded-lg border border-border bg-card p-4">
+            <TabsContent value="flows" className="mt-3 min-h-0 min-w-0 w-full flex-1 overflow-auto">
+          <section className="flex flex-col gap-4 p-4">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-medium">Flows</h3>
               <div className="flex gap-2">
@@ -2037,7 +1176,7 @@ export function ResourcesConfigPage() {
                     No profiles configured. Add Flowpipe workspace profiles for pipeline execution.
                   </p>
                 ) : (
-                  <div className="overflow-x-auto rounded-lg border border-border bg-card">
+                  <div className="w-full min-w-0 overflow-x-auto rounded-lg border border-border bg-card">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b border-border bg-muted/30">
@@ -2089,8 +1228,8 @@ export function ResourcesConfigPage() {
           </section>
             </TabsContent>
 
-            <TabsContent value="infrastructure" className="mt-3 min-h-0 flex-1 overflow-auto">
-          <section className="rounded-lg border border-border bg-card p-4">
+            <TabsContent value="infrastructure" className="mt-3 min-h-0 min-w-0 w-full flex-1 overflow-auto">
+          <section className="flex flex-col gap-4 p-4">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-medium">Infrastructure</h3>
               <Button variant="outline" size="sm" onClick={openEditInfrastructure}>
@@ -2110,8 +1249,8 @@ export function ResourcesConfigPage() {
           </section>
             </TabsContent>
 
-            <TabsContent value="agent" className="mt-3 min-h-0 flex-1 overflow-auto">
-          <section className="rounded-lg border border-border bg-card p-4">
+            <TabsContent value="agent" className="mt-3 min-h-0 min-w-0 w-full flex-1 overflow-auto">
+          <section className="flex flex-col gap-4 p-4">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-medium">AI Agent</h3>
               <Button variant="outline" size="sm" onClick={openEditAgent}>
@@ -2150,27 +1289,20 @@ export function ResourcesConfigPage() {
             </TabsContent>
           </Tabs>
 
-          {error && <p className="text-sm text-destructive">{error}</p>}
+          {displayError && <p className="text-sm text-destructive">{displayError}</p>}
         </div>
       </div>
 
-      <div
-        className={cn(
-          'bg-sidebar text-sidebar-foreground fixed inset-x-0 bottom-0 top-[var(--header-height)] z-30 min-h-0 flex-col overflow-auto border-l lg:hidden',
-          panelOpen ? 'flex' : 'hidden'
-        )}
+      <ContextPanel
+        expanded={panelOpen}
+        storageKey="bench-configuration-panel-width"
+        minWidth={320}
+        maxWidth={800}
+        defaultWidth={panelMode === 'schema-detail' ? 560 : 360}
+        mobileVariant="below-header"
       >
         {panelBody}
-      </div>
-      <div
-        className={cn(
-          'bg-sidebar text-sidebar-foreground relative z-20 hidden min-h-0 flex-col overflow-auto border-l lg:flex',
-          panelOpen ? 'lg:flex' : 'lg:hidden',
-          panelMode === 'schema-detail' ? 'lg:w-[min(560px,50vw)]' : 'lg:w-[360px]'
-        )}
-      >
-        {panelBody}
-      </div>
+      </ContextPanel>
 
       <ConfirmDeleteDialog
         open={deleteTarget != null}

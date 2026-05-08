@@ -35,7 +35,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { NotConfiguredCard } from '@/components/not-configured-card';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  InfrastructurePathFields,
+  ResourceSettingsSidePanel,
+} from '@/components/resource-config';
 import {
   InfraProviderNode,
   InfraVariableNode,
@@ -71,6 +74,13 @@ import {
   type DependencyFlow,
 } from '@/lib/terraform-diagram';
 import { useInfrastructureView } from '@/contexts/infrastructure-view-context';
+import {
+  parseConfigToState,
+  useResourceConfig,
+  type InfrastructureConfig,
+} from '@/lib/resource-config';
+import { isResourceSettingsHash, type InfrastructureView } from '@/lib/app-hash';
+import { useAppHash } from '@/hooks/use-app-hash';
 
 /** Fits the diagram view when a Terraform command finishes (isRunning goes false). */
 function FitViewOnTerraformRun() {
@@ -318,7 +328,8 @@ function InfraDiagramInner({
   );
 }
 
-export function InfrastructurePage() {
+export function InfrastructurePage({ view }: { view: InfrastructureView }) {
+  const hash = useAppHash();
   const queryClient = useQueryClient();
   const {
     setSelectedNode,
@@ -353,13 +364,23 @@ export function InfrastructurePage() {
       return 'dependencies-at-top';
     }
   });
-  const [activeTab, setActiveTab] = useState<'files' | 'diagram'>('diagram');
   const [currentPath, setCurrentPath] = useState('.');
   const [showNewFile, setShowNewFile] = useState(false);
   const [newFileName, setNewFileName] = useState('');
   const [showNewFolder, setShowNewFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<{ path: string; name: string; isDir: boolean } | null>(null);
+
+  const { data: rawConfig, mergeAndPersist, isPending: configPending, error: configError } =
+    useResourceConfig();
+  const configInfra = useMemo(
+    () => parseConfigToState(rawConfig ?? '').infrastructure,
+    [rawConfig]
+  );
+  const [infraPathPanelOpen, setInfraPathPanelOpen] = useState(false);
+  const [infraDraft, setInfraDraft] = useState<InfrastructureConfig>({ path: './workspace/infra' });
+  const [infraFormError, setInfraFormError] = useState<string | null>(null);
+  const [infraSavePending, setInfraSavePending] = useState(false);
 
   const { data: fileList } = useQuery({
     queryKey: ['resources', 'infra', currentPath],
@@ -376,7 +397,7 @@ export function InfrastructurePage() {
   const { data: graphData } = useQuery({
     queryKey: ['infrastructure', 'graph'],
     queryFn: () => fetchTerraformGraph(),
-    enabled: (status?.configured && status?.terraformAvailable && activeTab === 'diagram') ?? false,
+    enabled: (status?.configured && status?.terraformAvailable && view === 'diagram') ?? false,
   });
 
   const tfFiles = useMemo(() => {
@@ -571,16 +592,16 @@ export function InfrastructurePage() {
     }
   }, [diagramInitial, setNodes, setEdges]);
 
-  // Re-apply auto layout when switching to diagram tab (ensures layout is always fresh)
+  // Re-apply auto layout when switching to diagram view (ensures layout is always fresh)
   useEffect(() => {
-    if (activeTab === 'diagram') {
+    if (view === 'diagram') {
       const { nodes: n, edges: e } = diagramInitial;
       if (n.length > 0) {
         setNodes(n);
         setEdges(e);
       }
     }
-  }, [activeTab, diagramInitial, setNodes, setEdges]);
+  }, [view, diagramInitial, setNodes, setEdges]);
 
   const onLayoutDirectionChange = useCallback(() => {
     const next = layoutDirection === 'TB' ? 'LR' : 'TB';
@@ -687,8 +708,30 @@ export function InfrastructurePage() {
   });
   const pathParts = currentPath === '.' ? [] : currentPath.split('/').filter(Boolean);
 
+  async function applyInfraPath() {
+    const path = infraDraft.path.trim() || './workspace/infra';
+    setInfraFormError(null);
+    setInfraSavePending(true);
+    try {
+      await mergeAndPersist((prev) => ({ ...prev, infrastructure: { path } }));
+      setInfraPathPanelOpen(false);
+    } catch (e) {
+      setInfraFormError(e instanceof Error ? e.message : 'Save failed');
+    } finally {
+      setInfraSavePending(false);
+    }
+  }
+
+  const configErr =
+    configError instanceof Error ? configError.message : configError ? String(configError) : null;
+
   return (
-    <div className="flex w-full min-h-0 flex-1 flex-col gap-4">
+    <div
+      className={cn(
+        'flex w-full min-h-0 flex-1 flex-col gap-4',
+        isResourceSettingsHash(hash) && 'px-4 md:px-6 pt-4 md:pt-6 pb-4 md:pb-6'
+      )}
+    >
       {/* Breadcrumbs */}
       <nav className="flex flex-wrap items-center gap-1 text-sm">
         <span className="rounded px-2 py-1 font-medium">Infrastructure</span>
@@ -702,13 +745,7 @@ export function InfrastructurePage() {
 
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 shadow-sm">
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'files' | 'diagram')}>
-          <TabsList>
-            <TabsTrigger value="diagram">Diagram</TabsTrigger>
-            <TabsTrigger value="files">Files</TabsTrigger>
-          </TabsList>
-        </Tabs>
-        {activeTab === 'diagram' && (
+        {view === 'diagram' && (
           <>
             <Button
               variant="outline"
@@ -744,7 +781,12 @@ export function InfrastructurePage() {
             </Button>
           </>
         )}
-        <div className="ml-auto flex flex-shrink-0 items-center gap-2">
+        <div
+          className={cn(
+            'ml-auto flex flex-shrink-0 items-center gap-2',
+            view === 'settings' && 'hidden'
+          )}
+        >
           <Button
             variant="outline"
             size="sm"
@@ -805,8 +847,9 @@ export function InfrastructurePage() {
       </div>
 
       {/* Main content */}
-      <div className="flex flex-1 min-h-0 min-w-0 overflow-hidden">
-        {activeTab === 'diagram' ? (
+      <div className="flex h-full min-h-0 min-w-0 w-full flex-1 flex-row items-stretch overflow-hidden">
+        {view === 'diagram' ? (
+          <div className="flex min-h-0 min-w-0 w-full flex-1 flex-col overflow-hidden">
           <ReactFlowProvider>
             <InfraDiagramInner
               nodes={nodes}
@@ -824,8 +867,9 @@ export function InfrastructurePage() {
               nodeTypes={nodeTypes}
             />
           </ReactFlowProvider>
-        ) : (
-          <div className="flex-1 min-w-0 rounded-lg border border-border bg-card overflow-hidden flex flex-col">
+          </div>
+        ) : view === 'files' ? (
+          <div className="flex min-h-0 min-w-0 w-full flex-1 flex-col overflow-hidden rounded-lg border border-border bg-card">
             <div className="flex flex-wrap items-center gap-2 p-3 border-b border-border bg-muted/20">
               <nav className="flex items-center gap-1 text-sm">
                 <button
@@ -988,7 +1032,71 @@ export function InfrastructurePage() {
               </div>
             )}
           </div>
+        ) : (
+          <div className="flex min-h-0 min-w-0 w-full flex-1 flex-col overflow-auto">
+            {configPending && (
+              <p className="text-muted-foreground">Loading configuration...</p>
+            )}
+            {configErr && <p className="text-sm text-destructive">{configErr}</p>}
+            {!configPending && (
+              <section className="flex flex-col gap-4">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <h3 className="text-base font-medium">Infrastructure directory</h3>
+                    <p className="mt-1 font-mono text-sm text-muted-foreground">{configInfra.path}</p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setInfraDraft(configInfra);
+                      setInfraFormError(null);
+                      setInfraPathPanelOpen(true);
+                    }}
+                  >
+                    Edit
+                  </Button>
+                </div>
+              </section>
+            )}
+          </div>
         )}
+
+        <ResourceSettingsSidePanel
+          open={infraPathPanelOpen}
+          onOpenChange={(open) => {
+            if (!open) {
+              setInfraPathPanelOpen(false);
+              setInfraFormError(null);
+            }
+          }}
+          title="Infrastructure directory"
+          footer={
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setInfraPathPanelOpen(false);
+                  setInfraFormError(null);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={() => void applyInfraPath()}
+                disabled={infraSavePending}
+              >
+                Save changes
+              </Button>
+            </div>
+          }
+        >
+          <InfrastructurePathFields draft={infraDraft} onChange={setInfraDraft} />
+          {infraFormError && <p className="mt-2 text-sm text-destructive">{infraFormError}</p>}
+        </ResourceSettingsSidePanel>
 
         <ConfirmDeleteDialog
           open={!!deleteTarget}

@@ -28,7 +28,6 @@ function ModuleForm({
       updateFlowModule(modulePath, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['flows', 'entries', modulePath] });
-      onClose();
     },
   });
 

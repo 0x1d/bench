@@ -395,7 +395,11 @@ func emitPipelineStep(sb *hclwrite.Body, step StepIR, _ *model.Flow, _ map[strin
 	if pipelineRef == "" {
 		return fmt.Errorf("pipeline reference is required")
 	}
-	sb.SetAttributeRaw("pipeline", tokensFromExpression("pipeline."+pipelineRef))
+	pipelineExpr := pipelineRef
+	if !strings.HasPrefix(pipelineRef, "pipeline.") {
+		pipelineExpr = "pipeline." + pipelineRef
+	}
+	sb.SetAttributeRaw("pipeline", tokensFromExpression(pipelineExpr))
 
 	mergedArgs := map[string]any{}
 	if args, ok := argsRaw.(map[string]any); ok {

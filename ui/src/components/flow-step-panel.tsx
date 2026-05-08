@@ -1,6 +1,8 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { BENCH_CLOSE_PANEL_EVENT } from '@/lib/bench-close-panel';
 import { Trash2, X, Terminal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { ContextPanel } from '@/components/context-panel';
 import { useFlowView } from '@/contexts/flow-view-context';
 import { FlowStepPanelContent } from '@/components/flow-step-panel-content';
 import { FlowModulePanelContent } from '@/components/flow-module-panel-content';
@@ -12,16 +14,6 @@ import { cn, normalizeStepName } from '@/lib/utils';
 const STORAGE_KEY = 'bench-flow-step-panel-width';
 const MIN_WIDTH = 280;
 const MAX_WIDTH = 500;
-
-function getInitialWidth(): number {
-  if (typeof window === 'undefined') return 360;
-  const stored = localStorage.getItem(STORAGE_KEY);
-  if (stored) {
-    const n = parseInt(stored, 10);
-    if (Number.isFinite(n)) return Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, n));
-  }
-  return 360;
-}
 
 type PanelTab = 'config' | 'execution';
 
@@ -39,12 +31,8 @@ export function FlowStepPanel() {
     moduleEditPath,
     setModuleEditPath,
   } = useFlowView();
-  const [width, setWidth] = useState(getInitialWidth);
   const [activeTab, setActiveTab] = useState<PanelTab>('config');
-  const startXRef = useRef(0);
-  const startWidthRef = useRef(0);
 
-  // Show panel when we have a selected step, execution, or module edit
   const isExpanded =
     selectedStep != null || executionId != null || moduleEditPath != null;
 
@@ -64,37 +52,18 @@ export function FlowStepPanel() {
     })) ?? [];
   const restResources = restData?.resources ?? [];
 
-  const handleResizeStart = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    startXRef.current = e.clientX;
-    startWidthRef.current = width;
-    const onMove = (moveEvent: MouseEvent) => {
-      const delta = startXRef.current - moveEvent.clientX;
-      const next = Math.min(
-        MAX_WIDTH,
-        Math.max(MIN_WIDTH, startWidthRef.current + delta)
-      );
-      setWidth(next);
-      localStorage.setItem(STORAGE_KEY, String(next));
-    };
-    const onUp = () => {
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    };
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-  }, [width]);
-
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     setSelectedStep(null);
     setExecutionId(null);
     setModuleEditPath(null);
     setActiveTab('config');
-  };
+  }, [setSelectedStep, setExecutionId, setModuleEditPath]);
+
+  useEffect(() => {
+    const onBenchClose = () => handleClose();
+    window.addEventListener(BENCH_CLOSE_PANEL_EVENT, onBenchClose);
+    return () => window.removeEventListener(BENCH_CLOSE_PANEL_EVENT, onBenchClose);
+  }, [handleClose]);
 
   const panelTitle = moduleEditPath
     ? `Edit module — ${moduleEditPath}`
@@ -112,17 +81,6 @@ export function FlowStepPanel() {
 
   const panelContent = () => (
     <>
-      {isExpanded && (
-        <div
-          role="separator"
-          aria-orientation="vertical"
-          aria-valuenow={width}
-          tabIndex={0}
-          onMouseDown={handleResizeStart}
-          className="absolute left-0 top-0 z-10 hidden h-full w-2 cursor-col-resize lg:block hover:bg-sidebar-accent/50"
-          title="Drag to resize"
-        />
-      )}
       <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-sidebar-border px-4">
         <span
           className="truncate text-sm font-medium flex items-center gap-2"
@@ -162,10 +120,10 @@ export function FlowStepPanel() {
         </div>
       </div>
 
-      {/* Tabs */}
       {showTabs && (
         <div className="flex border-b border-border shrink-0">
           <button
+            type="button"
             onClick={() => setActiveTab('config')}
             className={cn(
               'flex-1 px-3 py-2 text-xs font-medium transition-colors',
@@ -177,6 +135,7 @@ export function FlowStepPanel() {
             Configure
           </button>
           <button
+            type="button"
             onClick={() => setActiveTab('execution')}
             className={cn(
               'flex-1 px-3 py-2 text-xs font-medium transition-colors flex items-center justify-center gap-1.5',
@@ -209,15 +168,23 @@ export function FlowStepPanel() {
             restResources={restResources}
             onSave={(updatedStep) => {
               onStepSave?.(updatedStep);
-              setSelectedStep(null);
+              setSelectedStep(updatedStep);
             }}
             onClose={handleClose}
           />
         )}
-          {!moduleEditPath && executionId && (activeTab === 'execution' || !selectedStep) && (
-          <FlowExecutionLog executionId={executionId} workspace={flowWorkspace ?? undefined} selectedStepId={selectedStep ? normalizeStepName(selectedStep.label, selectedStep.id) : undefined} />
+        {!moduleEditPath && executionId && (activeTab === 'execution' || !selectedStep) && (
+          <FlowExecutionLog
+            executionId={executionId}
+            workspace={flowWorkspace ?? undefined}
+            selectedStepId={
+              selectedStep
+                ? normalizeStepName(selectedStep.label, selectedStep.id)
+                : undefined
+            }
+          />
         )}
-          {!moduleEditPath && !executionId && activeTab === 'execution' && (
+        {!moduleEditPath && !executionId && activeTab === 'execution' && (
           <div className="text-sm text-muted-foreground py-8 text-center">
             No execution running. Click <strong>Run</strong> to start a flow.
           </div>
@@ -227,28 +194,14 @@ export function FlowStepPanel() {
   );
 
   return (
-    <>
-      <div
-        className={cn(
-          'bg-sidebar text-sidebar-foreground fixed inset-0 z-30 flex min-h-0 flex-col overflow-hidden border-l lg:hidden',
-          isExpanded ? 'translate-x-0' : 'hidden'
-        )}
-      >
-        {panelContent()}
-      </div>
-      <div
-        className={cn(
-          'bg-sidebar text-sidebar-foreground relative hidden min-h-0 flex-col overflow-hidden border-l lg:flex',
-          isExpanded ? 'shrink-0' : 'w-0 min-w-0 shrink-0'
-        )}
-        style={
-          isExpanded
-            ? ({ width: `${width}px`, minWidth: `${width}px` } as React.CSSProperties)
-            : undefined
-        }
-      >
-        {panelContent()}
-      </div>
-    </>
+    <ContextPanel
+      expanded={isExpanded}
+      storageKey={STORAGE_KEY}
+      minWidth={MIN_WIDTH}
+      maxWidth={MAX_WIDTH}
+      defaultWidth={360}
+    >
+      {panelContent()}
+    </ContextPanel>
   );
 }

@@ -24,7 +24,7 @@ isProject: false
 
 ## Current State and Constraints
 
-- Bench currently stores flows as JSON and generates `.fp` by string concatenation in [`api/internal/service/flow/service.go`](api/internal/service/flow/service.go).
+- Bench currently stores flows as JSON and generates `.fp` by string concatenation in `[api/internal/service/flow/service.go](api/internal/service/flow/service.go)`.
 - Flowpipe mod discovery is `.fp`-based (not generic `.json` mod files), per Flowpipe app config and docs.
 - Conclusion: **JSON can absolutely be converted to valid Flowpipe HCL** (you already do this), but for runtime compatibility we should continue emitting `.fp` files rather than treating JSON as first-class Flowpipe mod resources.
 
@@ -66,7 +66,7 @@ flowchart LR
 
 ### Phase 1: Stabilize contracts before emitter rewrite
 
-- Introduce a typed validation/normalization layer for `FlowStep.Config` in [`api/internal/model/flow.go`](api/internal/model/flow.go) and flow service boundary in [`api/internal/service/flow/service.go`](api/internal/service/flow/service.go).
+- Introduce a typed validation/normalization layer for `FlowStep.Config` in `[api/internal/model/flow.go](api/internal/model/flow.go)` and flow service boundary in `[api/internal/service/flow/service.go](api/internal/service/flow/service.go)`.
 - Explicitly model expression-vs-literal fields (e.g., `if`, `for_each`, `value`, step refs) so quoting rules are deterministic.
 - Add deterministic ordering for map-based outputs (`env`, pipeline args, common attributes) to avoid noisy diffs.
 
@@ -99,7 +99,7 @@ flowchart LR
 
 ## Test Strategy
 
-- Convert current containment checks in [`api/internal/service/flow/flow_test.go`](api/internal/service/flow/flow_test.go) into golden tests for fixtures in [`workspace/flows/tests`](workspace/flows/tests).
+- Convert current containment checks in `[api/internal/service/flow/flow_test.go](api/internal/service/flow/flow_test.go)` into golden tests for fixtures in `[workspace/flows/tests](workspace/flows/tests)`.
 - Add table-driven cases for expression handling and escaping edge cases (quotes, backslashes, interpolation, heredoc-like multiline).
 - Add round-trip structural tests:
   - Bench JSON -> generated HCL -> parse AST -> assert required blocks/attrs exist.

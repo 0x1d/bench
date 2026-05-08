@@ -13,17 +13,21 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// ListTables returns all tables in the public schema with approximate row counts.
+// ListTables returns all tables in all non-system schemas with approximate row counts.
 func ListTables(ctx context.Context) ([]model.TableInfo, error) {
 	if !db.Configured() {
 		return nil, fmt.Errorf("database not configured")
 	}
+	// Query all non-system schemas. Use reltuples for a fast (though possibly approximate) row count.
 	rows, err := db.Pool.Query(ctx, `
-		SELECT t.tablename
-		FROM pg_tables t
-		WHERE t.schemaname = 'public'
-		  AND t.tablename NOT LIKE '__bench_m2m_%'
-		ORDER BY t.tablename
+		SELECT c.relname, n.nspname, c.reltuples
+		FROM pg_catalog.pg_class c
+		JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+		WHERE n.nspname NOT LIKE 'pg_%'
+		  AND n.nspname <> 'information_schema'
+		  AND c.relkind IN ('r', 'v', 'm', 'f', 'p')
+		  AND c.relname NOT LIKE '__bench_m2m_%'
+		ORDER BY n.nspname = 'public' DESC, n.nspname, c.relname
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("list tables: %w", err)
@@ -32,16 +36,23 @@ func ListTables(ctx context.Context) ([]model.TableInfo, error) {
 
 	var tables []model.TableInfo
 	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
+		var name, schema string
+		var reltuples float64
+		if err := rows.Scan(&name, &schema, &reltuples); err != nil {
 			return nil, fmt.Errorf("scan table: %w", err)
 		}
-		// Use exact COUNT(*) so row numbers reflect writes immediately.
-		var rowCount int
-		if err := db.Pool.QueryRow(ctx, fmt.Sprintf("SELECT COUNT(*) FROM %q", name)).Scan(&rowCount); err != nil {
-			return nil, fmt.Errorf("count rows for %s: %w", name, err)
+
+		fullName := name
+		if schema != "public" {
+			fullName = fmt.Sprintf("%s.%s", schema, name)
 		}
-		tables = append(tables, model.TableInfo{Name: name, Rows: rowCount})
+
+		rowCount := int(reltuples)
+		if rowCount < 0 {
+			rowCount = 0
+		}
+
+		tables = append(tables, model.TableInfo{Name: fullName, Rows: rowCount})
 	}
 	return tables, rows.Err()
 }
@@ -59,6 +70,14 @@ func escapeLike(s string) string {
 	return b.String()
 }
 
+func quoteTableName(name string) string {
+	parts := strings.Split(name, ".")
+	for i, p := range parts {
+		parts[i] = fmt.Sprintf("%q", p)
+	}
+	return strings.Join(parts, ".")
+}
+
 // GetTableData returns paginated rows from a table. If search is non-empty, filters rows
 // where any column (as text) contains the search term (case-insensitive).
 func GetTableData(ctx context.Context, tableName string, limit, offset int, search string) (*model.TableDataResponse, error) {
@@ -69,11 +88,14 @@ func GetTableData(ctx context.Context, tableName string, limit, offset int, sear
 		return nil, fmt.Errorf("invalid table name")
 	}
 
-	// Get column names
+	// Get column names using to_regclass which handles schema-qualified names and search_path.
 	colRows, err := db.Pool.Query(ctx, `
-		SELECT column_name FROM information_schema.columns
-		WHERE table_schema = 'public' AND table_name = $1
-		ORDER BY ordinal_position
+		SELECT a.attname
+		FROM pg_catalog.pg_attribute a
+		WHERE a.attrelid = to_regclass($1)
+		  AND a.attnum > 0
+		  AND NOT a.attisdropped
+		ORDER BY a.attnum
 	`, tableName)
 	if err != nil {
 		return nil, fmt.Errorf("get columns: %w", err)
@@ -95,6 +117,7 @@ func GetTableData(ctx context.Context, tableName string, limit, offset int, sear
 		return nil, fmt.Errorf("table not found: %s", tableName)
 	}
 
+	quotedTable := quoteTableName(tableName)
 	// Build WHERE clause for search (ILIKE across all columns)
 	quotedCols := make([]string, len(columns))
 	for i, c := range columns {
@@ -115,13 +138,14 @@ func GetTableData(ctx context.Context, tableName string, limit, offset int, sear
 	// Get total count
 	var total int
 	if whereClause == "" {
-		err = db.Pool.QueryRow(ctx, fmt.Sprintf("SELECT COUNT(*) FROM %q", tableName)).Scan(&total)
+		err = db.Pool.QueryRow(ctx, fmt.Sprintf("SELECT COUNT(*) FROM %s", quotedTable)).Scan(&total)
 	} else {
 		args := []any{pattern}
-		err = db.Pool.QueryRow(ctx, fmt.Sprintf("SELECT COUNT(*) FROM %q%s", tableName, whereClause), args...).Scan(&total)
+		err = db.Pool.QueryRow(ctx, fmt.Sprintf("SELECT COUNT(*) FROM %s%s", quotedTable, whereClause), args...).Scan(&total)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("count rows: %w", err)
+		// Ignore count error for foreign tables which might be slow or unsupported
+		total = 0
 	}
 
 	// Build SELECT query (with search: $1=pattern, $2=limit, $3=offset)
@@ -130,9 +154,9 @@ func GetTableData(ctx context.Context, tableName string, limit, offset int, sear
 		limitArg, offsetArg = 2, 3
 	}
 	query := fmt.Sprintf(
-		"SELECT %s FROM %q%s ORDER BY 1 LIMIT $%d OFFSET $%d",
+		"SELECT %s FROM %s%s ORDER BY 1 LIMIT $%d OFFSET $%d",
 		strings.Join(quotedCols, ", "),
-		tableName,
+		quotedTable,
 		whereClause,
 		limitArg, offsetArg,
 	)
@@ -178,10 +202,14 @@ func GetTableLookup(ctx context.Context, tableName, valueColumn, search string, 
 		limit = 50
 	}
 
+	// Get column names using to_regclass which handles schema-qualified names and search_path.
 	colRows, err := db.Pool.Query(ctx, `
-		SELECT column_name FROM information_schema.columns
-		WHERE table_schema = 'public' AND table_name = $1
-		ORDER BY ordinal_position
+		SELECT a.attname
+		FROM pg_catalog.pg_attribute a
+		WHERE a.attrelid = to_regclass($1)
+		  AND a.attnum > 0
+		  AND NOT a.attisdropped
+		ORDER BY a.attnum
 	`, tableName)
 	if err != nil {
 		return nil, fmt.Errorf("get columns: %w", err)
@@ -196,11 +224,11 @@ func GetTableLookup(ctx context.Context, tableName, valueColumn, search string, 
 		}
 		columns = append(columns, col)
 	}
-	colRows.Close()
 	if len(columns) == 0 {
 		return nil, fmt.Errorf("table not found: %s", tableName)
 	}
 
+	quotedTable := quoteTableName(tableName)
 	quotedCols := make([]string, len(columns))
 	for i, c := range columns {
 		quotedCols[i] = fmt.Sprintf("%q", c)
@@ -215,18 +243,18 @@ func GetTableLookup(ctx context.Context, tableName, valueColumn, search string, 
 			likeClauses[i] = fmt.Sprintf("%q::text ILIKE $1", c)
 		}
 		query = fmt.Sprintf(
-			"SELECT %s FROM %q WHERE %s ORDER BY %q LIMIT $2",
+			"SELECT %s FROM %s WHERE %s ORDER BY %q LIMIT $2",
 			strings.Join(quotedCols, ", "),
-			tableName,
+			quotedTable,
 			strings.Join(likeClauses, " OR "),
 			valueColumn,
 		)
 		args = []any{searchPattern, limit}
 	} else {
 		query = fmt.Sprintf(
-			"SELECT %s FROM %q ORDER BY %q LIMIT $1",
+			"SELECT %s FROM %s ORDER BY %q LIMIT $1",
 			strings.Join(quotedCols, ", "),
-			tableName,
+			quotedTable,
 			valueColumn,
 		)
 		args = []any{limit}
@@ -267,17 +295,17 @@ func GetTableSchema(ctx context.Context, tableName string) (*model.TableSchemaRe
 	}
 
 	rows, err := db.Pool.Query(ctx, `
-		SELECT c.column_name,
-		COALESCE(format_type(a.atttypid, a.atttypmod), c.data_type),
-		c.is_nullable,
-		COALESCE(c.column_default, '') LIKE 'nextval%',
-		COALESCE(col_description(c2.oid, a.attnum), '')
-		FROM information_schema.columns c
-		JOIN pg_catalog.pg_class c2 ON c2.relname = c.table_name
-		JOIN pg_catalog.pg_namespace n ON c2.relnamespace = n.oid AND n.nspname = c.table_schema
-		JOIN pg_catalog.pg_attribute a ON a.attrelid = c2.oid AND a.attname = c.column_name AND a.attnum > 0 AND NOT a.attisdropped
-		WHERE c.table_schema = 'public' AND c.table_name = $1
-		ORDER BY c.ordinal_position
+		SELECT a.attname,
+		format_type(a.atttypid, a.atttypmod),
+		a.attnotnull,
+		COALESCE(pg_get_expr(d.adbin, d.adrelid), '') LIKE 'nextval%',
+		COALESCE(col_description(a.attrelid, a.attnum), '')
+		FROM pg_catalog.pg_attribute a
+		LEFT JOIN pg_catalog.pg_attrdef d ON (a.attrelid = d.adrelid AND a.attnum = d.adnum)
+		WHERE a.attrelid = to_regclass($1)
+		  AND a.attnum > 0
+		  AND NOT a.attisdropped
+		ORDER BY a.attnum
 	`, tableName)
 	if err != nil {
 		return nil, fmt.Errorf("get schema: %w", err)
@@ -286,15 +314,15 @@ func GetTableSchema(ctx context.Context, tableName string) (*model.TableSchemaRe
 
 	var cols []model.ColumnInfo
 	for rows.Next() {
-		var name, dataType, isNullable, comment string
-		var isAuto bool
-		if err := rows.Scan(&name, &dataType, &isNullable, &isAuto, &comment); err != nil {
+		var name, dataType, comment string
+		var notNull, isAuto bool
+		if err := rows.Scan(&name, &dataType, &notNull, &isAuto, &comment); err != nil {
 			return nil, fmt.Errorf("scan column: %w", err)
 		}
 		col := model.ColumnInfo{
 			Name:          name,
 			DataType:      dataType,
-			Required:      isNullable == "NO",
+			Required:      notNull,
 			AutoIncrement: isAuto,
 		}
 		// Parse ref:table:column or ref:table:column:multiple from column comment
@@ -316,11 +344,11 @@ func GetTableSchema(ctx context.Context, tableName string) (*model.TableSchemaRe
 
 	// Primary keys
 	pkRows, err := db.Pool.Query(ctx, `
-		SELECT kcu.column_name
-		FROM information_schema.table_constraints tc
-		JOIN information_schema.key_column_usage kcu
-			ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
-		WHERE tc.table_schema = 'public' AND tc.table_name = $1 AND tc.constraint_type = 'PRIMARY KEY'
+		SELECT a.attname
+		FROM pg_index i
+		JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
+		WHERE i.indrelid = to_regclass($1)
+		AND i.indisprimary
 	`, tableName)
 	if err != nil {
 		return nil, fmt.Errorf("get primary keys: %w", err)
@@ -328,23 +356,26 @@ func GetTableSchema(ctx context.Context, tableName string) (*model.TableSchemaRe
 	pkCols := make(map[string]bool)
 	for pkRows.Next() {
 		var col string
-		if err := pkRows.Scan(&col); err != nil {
-			pkRows.Close()
-			return nil, fmt.Errorf("scan pk: %w", err)
+		if err := pkRows.Scan(&col); err == nil {
+			pkCols[col] = true
 		}
-		pkCols[col] = true
 	}
 	pkRows.Close()
 
-	// Foreign keys: column -> (ref_table, ref_column)
+	// Foreign keys
 	fkRows, err := db.Pool.Query(ctx, `
-		SELECT kcu.column_name, ccu.table_name, ccu.column_name
+		SELECT
+			kcu.column_name,
+			ccu.table_name AS foreign_table_name,
+			ccu.column_name AS foreign_column_name
 		FROM information_schema.table_constraints tc
 		JOIN information_schema.key_column_usage kcu
 			ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
 		JOIN information_schema.constraint_column_usage ccu
 			ON tc.constraint_name = ccu.constraint_name AND tc.table_schema = ccu.table_schema
-		WHERE tc.table_schema = 'public' AND tc.table_name = $1 AND tc.constraint_type = 'FOREIGN KEY'
+		WHERE tc.table_name = (SELECT relname FROM pg_class WHERE oid = to_regclass($1))
+		  AND tc.table_schema = (SELECT nspname FROM pg_namespace n JOIN pg_class c ON n.oid = c.relnamespace WHERE c.oid = to_regclass($1))
+		  AND tc.constraint_type = 'FOREIGN KEY'
 	`, tableName)
 	if err != nil {
 		return nil, fmt.Errorf("get foreign keys: %w", err)
@@ -352,11 +383,9 @@ func GetTableSchema(ctx context.Context, tableName string) (*model.TableSchemaRe
 	fkMap := make(map[string]model.ForeignKeyRef)
 	for fkRows.Next() {
 		var col, refTable, refCol string
-		if err := fkRows.Scan(&col, &refTable, &refCol); err != nil {
-			fkRows.Close()
-			return nil, fmt.Errorf("scan fk: %w", err)
+		if err := fkRows.Scan(&col, &refTable, &refCol); err == nil {
+			fkMap[col] = model.ForeignKeyRef{Table: refTable, Column: refCol}
 		}
-		fkMap[col] = model.ForeignKeyRef{Table: refTable, Column: refCol}
 	}
 	fkRows.Close()
 
@@ -779,7 +808,7 @@ func AlterTable(ctx context.Context, tableName string, req *model.AlterTableRequ
 			err := db.Pool.QueryRow(ctx, `
 				SELECT tc.constraint_name FROM information_schema.table_constraints tc
 				JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
-				WHERE tc.table_schema = 'public' AND tc.table_name = $1 AND tc.constraint_type = 'FOREIGN KEY' AND kcu.column_name = $2
+				WHERE tc.table_schema = current_schema() AND tc.table_name = $1 AND tc.constraint_type = 'FOREIGN KEY' AND kcu.column_name = $2
 			`, tableName, col.Name).Scan(&fkName)
 			if err == nil {
 				if _, err := db.Pool.Exec(ctx, fmt.Sprintf("ALTER TABLE %s DROP CONSTRAINT %q", quotedTable, fkName)); err != nil {
@@ -812,7 +841,7 @@ func AlterTable(ctx context.Context, tableName string, req *model.AlterTableRequ
 			err := db.Pool.QueryRow(ctx, `
 				SELECT tc.constraint_name FROM information_schema.table_constraints tc
 				JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
-				WHERE tc.table_schema = 'public' AND tc.table_name = $1 AND tc.constraint_type = 'FOREIGN KEY' AND kcu.column_name = $2
+				WHERE tc.table_schema = current_schema() AND tc.table_name = $1 AND tc.constraint_type = 'FOREIGN KEY' AND kcu.column_name = $2
 			`, tableName, col.Name).Scan(&fkName)
 			if err == nil {
 				query := fmt.Sprintf("ALTER TABLE %s DROP CONSTRAINT %q", quotedTable, fkName)
@@ -1063,7 +1092,7 @@ func getReferencedColumnDataType(ctx context.Context, tableName, columnName stri
 		FROM pg_attribute a
 		JOIN pg_class c ON a.attrelid = c.oid
 		JOIN pg_namespace n ON c.relnamespace = n.oid
-		WHERE n.nspname = 'public' AND c.relname = $1 AND a.attname = $2 AND a.attnum > 0 AND NOT a.attisdropped
+		WHERE n.nspname = current_schema() AND c.relname = $1 AND a.attname = $2 AND a.attnum > 0 AND NOT a.attisdropped
 	`, tableName, columnName).Scan(&typeName)
 	if err != nil {
 		return "integer", nil // default to integer
@@ -1112,11 +1141,11 @@ func parseRefComment(comment string) *model.ForeignKeyRef {
 }
 
 func isValidIdentifier(s string) bool {
-	if s == "" || len(s) > 63 {
+	if s == "" || len(s) > 128 { // increased from 63 to allow schema.table
 		return false
 	}
 	for _, r := range s {
-		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_') {
+		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '.') {
 			return false
 		}
 	}
@@ -1131,7 +1160,7 @@ func checkReferencedColumnIsUnique(ctx context.Context, tableName, columnName st
 		SELECT 1 FROM information_schema.table_constraints tc
 		JOIN information_schema.key_column_usage kcu
 			ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
-		WHERE tc.table_schema = 'public' AND tc.table_name = $1 AND kcu.column_name = $2
+		WHERE tc.table_schema = current_schema() AND tc.table_name = $1 AND kcu.column_name = $2
 			AND tc.constraint_type IN ('PRIMARY KEY', 'UNIQUE')
 		LIMIT 1
 	`, tableName, columnName).Scan(&exists)
@@ -1199,7 +1228,7 @@ func getSinglePrimaryKeyColumn(ctx context.Context, tableName string) (string, e
 		FROM information_schema.table_constraints tc
 		JOIN information_schema.key_column_usage kcu
 			ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
-		WHERE tc.table_schema = 'public' AND tc.table_name = $1 AND tc.constraint_type = 'PRIMARY KEY'
+		WHERE tc.table_schema = current_schema() AND tc.table_name = $1 AND tc.constraint_type = 'PRIMARY KEY'
 		ORDER BY kcu.ordinal_position
 	`, tableName)
 	if err != nil {
@@ -1267,7 +1296,7 @@ func ensureManyRefJoinTablePrimaryKey(ctx context.Context, joinTable string) err
 			FROM pg_constraint c
 			JOIN pg_class t ON t.oid = c.conrelid
 			JOIN pg_namespace n ON n.oid = t.relnamespace
-			WHERE n.nspname = 'public'
+			WHERE n.nspname = current_schema()
 				AND t.relname = $1
 				AND c.contype = 'p'
 				AND (
@@ -1291,7 +1320,7 @@ func ensureManyRefJoinTablePrimaryKey(ctx context.Context, joinTable string) err
 			FROM pg_constraint c
 			JOIN pg_class t ON t.oid = c.conrelid
 			JOIN pg_namespace n ON n.oid = t.relnamespace
-			WHERE n.nspname = 'public'
+			WHERE n.nspname = current_schema()
 				AND t.relname = $1
 				AND c.contype = 'p'
 		)

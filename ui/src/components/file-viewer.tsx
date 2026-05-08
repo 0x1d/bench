@@ -32,6 +32,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
+import { ContextPanel } from '@/components/context-panel';
 
 const STORAGE_KEY = 'bench-file-viewer-width';
 
@@ -83,20 +84,6 @@ function MediaMetadata({
   );
 }
 
-const MIN_WIDTH = 240;
-const MAX_WIDTH = 800;
-
-function getInitialWidth(): number {
-  if (typeof window === 'undefined') return 320;
-  const stored = localStorage.getItem(STORAGE_KEY);
-  if (stored) {
-    const n = parseInt(stored, 10);
-    if (Number.isFinite(n)) return Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, n));
-  }
-  const quarterWidth = Math.round(window.innerWidth / 4);
-  return Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, quarterWidth));
-}
-
 type TextMode = 'content' | 'data';
 
 function getEmptyStructuredDefault(text: string, supportsStructuredForm: boolean): unknown | null {
@@ -118,9 +105,6 @@ export function FileViewer() {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [width, setWidth] = useState(getInitialWidth);
-  const startXRef = useRef(0);
-  const startWidthRef = useRef(0);
 
   const saveMutation = useSaveFile(viewedFile?.root ?? null);
   const parentPath =
@@ -251,28 +235,6 @@ export function FileViewer() {
       : textMode === 'data' &&
         formData != null &&
         content !== serializeStructured(formData, format));
-
-  const handleResizeStart = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    startXRef.current = e.clientX;
-    startWidthRef.current = width;
-    const onMove = (moveEvent: MouseEvent) => {
-      const delta = startXRef.current - moveEvent.clientX;
-      const next = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, startWidthRef.current + delta));
-      setWidth(next);
-      localStorage.setItem(STORAGE_KEY, String(next));
-    };
-    const onUp = () => {
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    };
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-  }, [width]);
 
   useEffect(() => {
     if (!viewedFile) return;
@@ -487,19 +449,8 @@ export function FileViewer() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [viewedFile, showDeleteConfirm, imageLightboxOpen, handleClose]);
 
-  const viewerPanel = (showResizeHandle: boolean, renderMedia: boolean) => (
+  const viewerPanel = (renderMedia: boolean) => (
     <>
-      {showResizeHandle && isExpanded && (
-        <div
-          role="separator"
-          aria-orientation="vertical"
-          aria-valuenow={width}
-          tabIndex={0}
-          onMouseDown={handleResizeStart}
-          className="absolute left-0 top-0 z-10 hidden h-full w-2 cursor-col-resize lg:block hover:bg-sidebar-accent/50"
-          title="Drag to resize"
-        />
-      )}
       <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-sidebar-border px-4">
         <span className="truncate text-sm font-medium" title={viewedFile?.name ?? ''}>
           {viewedFile?.name ?? 'Preview'}
@@ -747,27 +698,14 @@ export function FileViewer() {
 
   return (
     <>
-      <div
-        className={cn(
-          'bg-sidebar text-sidebar-foreground fixed inset-0 z-30 flex min-h-0 flex-col overflow-hidden border-l lg:hidden',
-          isExpanded ? 'translate-x-0' : 'hidden'
-        )}
+      <ContextPanel
+        expanded={isExpanded}
+        storageKey={STORAGE_KEY}
+        minWidth={240}
+        maxWidth={800}
       >
-        {viewerPanel(false, !isLgScreen)}
-      </div>
-      <div
-        className={cn(
-          'bg-sidebar text-sidebar-foreground relative hidden min-h-0 flex-col overflow-hidden border-l lg:flex',
-          isExpanded ? 'shrink-0' : 'w-0 min-w-0 shrink-0'
-        )}
-        style={
-          isExpanded
-            ? ({ width: `${width}px`, minWidth: `${width}px` } as React.CSSProperties)
-            : undefined
-        }
-      >
-        {viewerPanel(true, isLgScreen)}
-      </div>
+        {({ layout }) => viewerPanel(layout === 'desktop' ? isLgScreen : !isLgScreen)}
+      </ContextPanel>
       <AlertDialog open={!!formParseError} onOpenChange={(open) => !open && setFormParseError(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>

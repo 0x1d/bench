@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import {
   Plus,
   Play,
@@ -6,6 +6,8 @@ import {
   FolderPlus,
   Search,
   Eye,
+  Pencil,
+  Trash2,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -43,9 +45,21 @@ import {
 import { toast } from 'sonner';
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { FlowsTreeView } from '@/components/flows-tree-view';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { isResourceSettingsHash, type FlowsListView } from '@/lib/app-hash';
+import { useAppHash } from '@/hooks/use-app-hash';
+import {
+  FlowsConfigFields,
+  ResourceSettingsSidePanel,
+  WorkspaceResourceFields,
+} from '@/components/resource-config';
 import { useFlowView } from '@/contexts/flow-view-context';
 import { cn } from '@/lib/utils';
+import {
+  parseConfigToState,
+  useResourceConfig,
+  type FlowsConfig,
+  type WorkspaceResource,
+} from '@/lib/resource-config';
 
 function filterTreeByFlowName(
   entries: FlowWorkspaceTreeEntry[],
@@ -66,7 +80,8 @@ function filterTreeByFlowName(
     .filter((e): e is FlowWorkspaceTreeEntry => e !== null);
 }
 
-export function FlowsPage() {
+export function FlowsPage({ view }: { view: FlowsListView }) {
+  const hash = useAppHash();
   const [selectedWorkspace, setSelectedWorkspace] = useState<string | null>(null);
   const [currentPath, setCurrentPath] = useState<string>('.');
   const [deleteTarget, setDeleteTarget] = useState<Flow | FlowWorkspaceEntry | null>(null);
@@ -81,8 +96,24 @@ export function FlowsPage() {
   const [runTargetFlow, setRunTargetFlow] = useState<Flow | null>(null);
   const [runTargetModule, setRunTargetModule] = useState<string | null>(null);
   const [flowFilter, setFlowFilter] = useState('');
-  const [activeTab, setActiveTab] = useState<'modules' | 'executions'>('modules');
   const { setExecutionId, setSelectedStep, setFlowContext, setModuleEditPath } = useFlowView();
+
+  const { data: rawConfig, mergeAndPersist, isPending: configPending, error: configError } =
+    useResourceConfig();
+  const configState = useMemo(() => parseConfigToState(rawConfig ?? ''), [rawConfig]);
+
+  const [settingsPanel, setSettingsPanel] = useState<
+    null | 'flows' | { type: 'workspace'; mode: 'add' | 'edit'; index?: number }
+  >(null);
+  const [flowsDraft, setFlowsDraft] = useState<FlowsConfig>({ path: './flows' });
+  const [workspaceDraft, setWorkspaceDraft] = useState<WorkspaceResource>({
+    id: '',
+    label: '',
+    flowpipeUrl: 'http://localhost:7103',
+  });
+  const [settingsFormError, setSettingsFormError] = useState<string | null>(null);
+  const [settingsSavePending, setSettingsSavePending] = useState(false);
+  const [deleteWorkspaceIndex, setDeleteWorkspaceIndex] = useState<number | null>(null);
 
   const queryClient = useQueryClient();
 
@@ -110,7 +141,7 @@ export function FlowsPage() {
   const { data: processesData, isLoading: processesLoading, error: processesError } = useQuery({
     queryKey: ['flows', 'processes', displayWorkspace ?? 'default'],
     queryFn: () => fetchFlowProcesses(displayWorkspace ?? undefined),
-    enabled: workspaces.length > 0 && activeTab === 'executions',
+    enabled: workspaces.length > 0 && view === 'executions',
   });
 
   const processItems: Record<string, unknown>[] = (() => {
@@ -310,29 +341,123 @@ export function FlowsPage() {
       ? (deleteTarget as Flow)
       : null;
 
+  const openFlowsSettingsPanel = useCallback(() => {
+    setFlowsDraft(configState.flows);
+    setSettingsFormError(null);
+    setSettingsPanel('flows');
+  }, [configState.flows]);
+
+  const applyFlowsSettings = useCallback(async () => {
+    const path = flowsDraft.path.trim() || './flows';
+    setSettingsFormError(null);
+    setSettingsSavePending(true);
+    try {
+      await mergeAndPersist((prev) => ({ ...prev, flows: { path } }));
+      setSettingsPanel(null);
+    } catch (err) {
+      setSettingsFormError(err instanceof Error ? err.message : 'Save failed');
+    } finally {
+      setSettingsSavePending(false);
+    }
+  }, [flowsDraft.path, mergeAndPersist]);
+
+  const openAddWorkspacePanel = useCallback(() => {
+    setWorkspaceDraft({ id: '', label: '', flowpipeUrl: 'http://localhost:7103' });
+    setSettingsFormError(null);
+    setSettingsPanel({ type: 'workspace', mode: 'add' });
+  }, []);
+
+  const openEditWorkspacePanel = useCallback(
+    (index: number) => {
+      setWorkspaceDraft(configState.workspaces[index]);
+      setSettingsFormError(null);
+      setSettingsPanel({ type: 'workspace', mode: 'edit', index });
+    },
+    [configState.workspaces]
+  );
+
+  const applyWorkspaceSettings = useCallback(async () => {
+    const id = workspaceDraft.id.trim();
+    if (id === '') {
+      setSettingsFormError('Workspace ID is required.');
+      return;
+    }
+
+    const panel = settingsPanel;
+    if (!panel || typeof panel !== 'object' || panel.type !== 'workspace') return;
+
+    const duplicate = configState.workspaces.some(
+      (entry, idx) =>
+        idx !== (panel.mode === 'add' ? -1 : panel.index) && entry.id.trim() === id
+    );
+    if (duplicate) {
+      setSettingsFormError(`Workspace ID "${id}" already exists.`);
+      return;
+    }
+
+    const nextEntry: WorkspaceResource = {
+      id,
+      label: workspaceDraft.label.trim(),
+      flowpipeUrl: workspaceDraft.flowpipeUrl.trim() || 'http://localhost:7103',
+    };
+
+    setSettingsFormError(null);
+    setSettingsSavePending(true);
+    try {
+      await mergeAndPersist((prev) => {
+        if (panel.mode === 'add') {
+          return { ...prev, workspaces: [...prev.workspaces, nextEntry] };
+        }
+        if (panel.mode === 'edit' && panel.index != null) {
+          return {
+            ...prev,
+            workspaces: prev.workspaces.map((e, idx) =>
+              idx === panel.index ? nextEntry : e
+            ),
+          };
+        }
+        return prev;
+      });
+      setSettingsPanel(null);
+    } catch (err) {
+      setSettingsFormError(err instanceof Error ? err.message : 'Save failed');
+    } finally {
+      setSettingsSavePending(false);
+    }
+  }, [configState.workspaces, mergeAndPersist, settingsPanel, workspaceDraft]);
+
+  const confirmDeleteWorkspace = useCallback(async () => {
+    if (deleteWorkspaceIndex == null) return;
+    const idx = deleteWorkspaceIndex;
+    setSettingsSavePending(true);
+    try {
+      await mergeAndPersist((prev) => ({
+        ...prev,
+        workspaces: prev.workspaces.filter((_, i) => i !== idx),
+      }));
+      setDeleteWorkspaceIndex(null);
+    } catch (err) {
+      setSettingsFormError(err instanceof Error ? err.message : 'Delete failed');
+    } finally {
+      setSettingsSavePending(false);
+    }
+  }, [deleteWorkspaceIndex, mergeAndPersist]);
+
+  const configErr =
+    configError instanceof Error ? configError.message : configError ? String(configError) : null;
+
   if (workspacesLoading) {
     return <p className="text-muted-foreground">Loading workspaces...</p>;
   }
 
-  if (workspaces.length === 0) {
-    return (
-      <div className="flex w-full min-h-0 flex-1 flex-col gap-4">
-        <nav className="flex flex-wrap items-center gap-1 text-sm">
-          <span className="rounded px-2 py-1 font-medium">Flows</span>
-        </nav>
-        <div className="rounded-lg border border-dashed border-border p-8 text-center">
-          <Workflow className="mx-auto size-10 text-muted-foreground" />
-          <p className="mt-2 text-sm text-muted-foreground">No flow workspaces configured</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Add workspaces on the Configuration page to get started.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="flex w-full min-h-0 flex-1 flex-col gap-4">
+    <div className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-row items-stretch overflow-hidden">
+      <div
+        className={cn(
+          'flex min-h-0 min-w-0 w-full flex-1 flex-col gap-4 overflow-hidden',
+          isResourceSettingsHash(hash) && 'px-4 md:px-6 pt-4 md:pt-6 pb-4 md:pb-6'
+        )}
+      >
       {/* Breadcrumbs */}
       <nav className="flex flex-wrap items-center gap-1 text-sm">
         <span className="rounded px-2 py-1 font-medium">Flows</span>
@@ -394,17 +519,21 @@ export function FlowsPage() {
         </div>
       </div>
 
-      <Tabs
-        value={activeTab}
-        onValueChange={(v) => setActiveTab(v as 'modules' | 'executions')}
-        className="flex-1 min-w-0 flex flex-col overflow-hidden"
-      >
-        <TabsList variant="line" className="w-fit">
-          <TabsTrigger value="modules">Modules</TabsTrigger>
-          <TabsTrigger value="executions">Executions</TabsTrigger>
-        </TabsList>
-        <TabsContent value="modules" className="flex-1 min-w-0 overflow-auto mt-3">
-          {entriesLoading ? (
+      <div className="flex min-h-0 min-w-0 w-full flex-1 flex-col overflow-hidden">
+        {view === 'modules' && (
+          <div className="mt-0 flex min-h-0 min-w-0 w-full flex-1 overflow-auto">
+          {workspaces.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-border p-8 text-center">
+              <Workflow className="mx-auto size-10 text-muted-foreground" />
+              <p className="mt-2 text-sm text-muted-foreground">No flow workspaces configured</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Add a Flowpipe workspace in Settings to run flows from this page.
+              </p>
+              <Button type="button" className="mt-4" variant="secondary" asChild>
+                <a href="#flows/settings">Open Settings</a>
+              </Button>
+            </div>
+          ) : entriesLoading ? (
             <p className="text-muted-foreground">Loading...</p>
           ) : filteredTreeEntries.length === 0 ? (
             <div className="rounded-lg border border-dashed border-border p-8 text-center">
@@ -441,7 +570,7 @@ export function FlowsPage() {
               )}
             </div>
           ) : (
-            <div className="rounded-lg border border-border bg-card overflow-hidden">
+            <div className="w-full min-w-0 rounded-lg border border-border bg-card overflow-hidden">
               <div className="grid grid-cols-[1fr_auto_5rem_7rem_auto] gap-2 border-b border-border bg-muted/30 px-4 py-3 text-sm font-medium">
                 <span>Name</span>
                 <span className="hidden sm:block"></span>
@@ -467,9 +596,22 @@ export function FlowsPage() {
               </div>
             </div>
           )}
-        </TabsContent>
-        <TabsContent value="executions" className="flex-1 min-w-0 overflow-auto mt-3">
-          {processesLoading ? (
+          </div>
+        )}
+        {view === 'executions' && (
+          <div className="mt-0 flex min-h-0 min-w-0 w-full flex-1 overflow-auto">
+          {workspaces.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-border p-8 text-center">
+              <Workflow className="mx-auto size-10 text-muted-foreground" />
+              <p className="mt-2 text-sm text-muted-foreground">No workspaces to run against</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Configure workspaces in Settings first.
+              </p>
+              <Button type="button" className="mt-4" variant="secondary" asChild>
+                <a href="#flows/settings">Open Settings</a>
+              </Button>
+            </div>
+          ) : processesLoading ? (
             <p className="text-muted-foreground">Loading executions...</p>
           ) : processesError ? (
             <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
@@ -488,7 +630,7 @@ export function FlowsPage() {
               </p>
             </div>
           ) : (
-            <div className="rounded-lg border border-border bg-card overflow-hidden">
+            <div className="w-full min-w-0 rounded-lg border border-border bg-card overflow-hidden">
               <div className="grid grid-cols-[1fr_auto_6rem_auto] gap-2 border-b border-border bg-muted/30 px-4 py-3 text-sm font-medium">
                 <span>Flow</span>
                 <span>Status</span>
@@ -555,8 +697,205 @@ export function FlowsPage() {
               })}
             </div>
           )}
-        </TabsContent>
-      </Tabs>
+          </div>
+        )}
+        {view === 'settings' && (
+          <div className="mt-0 flex min-h-0 min-w-0 w-full flex-1 overflow-auto">
+          {configPending && (
+            <p className="text-muted-foreground">Loading configuration...</p>
+          )}
+          {configErr && <p className="text-sm text-destructive">{configErr}</p>}
+          {!configPending && (
+            <div className="flex w-full min-w-0 flex-col gap-6">
+              <section className="flex w-full min-w-0 flex-col gap-4">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <h3 className="text-base font-medium">Flows directory</h3>
+                    <p className="mt-1 font-mono text-sm text-muted-foreground">{configState.flows.path}</p>
+                  </div>
+                  <Button type="button" variant="outline" size="sm" onClick={openFlowsSettingsPanel}>
+                    Edit
+                  </Button>
+                </div>
+              </section>
+              <section className="flex w-full min-w-0 flex-col gap-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <h3 className="text-base font-medium">Flowpipe workspaces</h3>
+                  <Button type="button" variant="outline" size="sm" onClick={openAddWorkspacePanel}>
+                    <Plus className="size-4" />
+                    Add workspace
+                  </Button>
+                </div>
+                {configState.workspaces.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No workspaces configured.</p>
+                ) : (
+                  <div className="w-full min-w-0 overflow-x-auto rounded-lg border border-border bg-card">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-border bg-muted/30">
+                          <th className="px-4 py-3 text-left font-medium">ID</th>
+                          <th className="px-4 py-3 text-left font-medium">Label</th>
+                          <th className="px-4 py-3 text-left font-medium">Flowpipe URL</th>
+                          <th className="w-28 px-2 py-3" />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {configState.workspaces.map((w, index) => (
+                          <tr
+                            key={`ws-${index}`}
+                            className="cursor-pointer border-b border-border/50 last:border-b-0 hover:bg-accent/30"
+                            onClick={() => openEditWorkspacePanel(index)}
+                          >
+                            <td className="px-4 py-2 font-mono">{w.id}</td>
+                            <td className="px-4 py-2">{w.label || '—'}</td>
+                            <td className="max-w-[200px] truncate px-4 py-2 font-mono" title={w.flowpipeUrl}>
+                              {w.flowpipeUrl}
+                            </td>
+                            <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
+                              <div className="flex items-center justify-end gap-1">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon-xs"
+                                  onClick={() => openEditWorkspacePanel(index)}
+                                  aria-label={`Edit workspace ${w.id}`}
+                                >
+                                  <Pencil className="size-3" />
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon-xs"
+                                  onClick={() => setDeleteWorkspaceIndex(index)}
+                                  aria-label={`Remove workspace ${w.id}`}
+                                  className="text-destructive hover:text-destructive"
+                                >
+                                  <Trash2 className="size-3" />
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </section>
+            </div>
+          )}
+          </div>
+        )}
+      </div>
+      </div>
+
+      <ResourceSettingsSidePanel
+        open={settingsPanel === 'flows'}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSettingsPanel(null);
+            setSettingsFormError(null);
+          }
+        }}
+        title="Flows directory"
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setSettingsPanel(null);
+                setSettingsFormError(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={() => void applyFlowsSettings()}
+              disabled={settingsSavePending}
+            >
+              Save changes
+            </Button>
+          </div>
+        }
+      >
+        <FlowsConfigFields draft={flowsDraft} onChange={setFlowsDraft} />
+        {settingsFormError && settingsPanel === 'flows' && (
+          <p className="mt-2 text-sm text-destructive">{settingsFormError}</p>
+        )}
+      </ResourceSettingsSidePanel>
+
+      <ResourceSettingsSidePanel
+        open={
+          settingsPanel !== null &&
+          typeof settingsPanel === 'object' &&
+          settingsPanel.type === 'workspace'
+        }
+        onOpenChange={(open) => {
+          if (!open) {
+            setSettingsPanel(null);
+            setSettingsFormError(null);
+          }
+        }}
+        title={
+          settingsPanel !== null &&
+          typeof settingsPanel === 'object' &&
+          settingsPanel.type === 'workspace'
+            ? settingsPanel.mode === 'add'
+              ? 'Add workspace'
+              : 'Edit workspace'
+            : 'Workspace'
+        }
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setSettingsPanel(null);
+                setSettingsFormError(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={() => void applyWorkspaceSettings()}
+              disabled={settingsSavePending}
+            >
+              {settingsPanel !== null &&
+              typeof settingsPanel === 'object' &&
+              settingsPanel.type === 'workspace' &&
+              settingsPanel.mode === 'add'
+                ? 'Add'
+                : 'Save changes'}
+            </Button>
+          </div>
+        }
+      >
+        <WorkspaceResourceFields draft={workspaceDraft} onChange={setWorkspaceDraft} />
+        {settingsFormError &&
+          settingsPanel !== null &&
+          typeof settingsPanel === 'object' &&
+          settingsPanel.type === 'workspace' && (
+            <p className="mt-2 text-sm text-destructive">{settingsFormError}</p>
+          )}
+      </ResourceSettingsSidePanel>
+
+      <ConfirmDeleteDialog
+        open={deleteWorkspaceIndex != null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteWorkspaceIndex(null);
+        }}
+        title="Remove workspace?"
+        description={
+          deleteWorkspaceIndex != null && configState.workspaces[deleteWorkspaceIndex]
+            ? `Remove "${configState.workspaces[deleteWorkspaceIndex].id}" from configuration?`
+            : 'Remove this workspace?'
+        }
+        onConfirm={() => void confirmDeleteWorkspace()}
+        isLoading={settingsSavePending}
+      />
 
       <ConfirmDeleteDialog
         open={!!deleteTargetFlow}

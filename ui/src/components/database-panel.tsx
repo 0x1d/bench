@@ -102,9 +102,6 @@ export function DatabasePanel() {
           {panelMode === 'query' && (
             <DatabaseQueryPanelContent
               key={selectedTable ?? 'none'}
-              initialSql={
-                selectedTable ? `SELECT * FROM ${selectedTable} LIMIT 20` : 'SELECT 1'
-              }
             />
           )}
           {panelMode === 'add-row' && selectedTable && (

@@ -27,9 +27,10 @@ export function DatabaseQueryResult() {
     );
   }
 
-  const { columns = [], rows = [] } = queryResult;
+  const { columns = [], rows } = queryResult;
+  const rowsArray = Array.isArray(rows) ? rows : [];
 
-  if (rows.length === 0) {
+  if (rowsArray.length === 0) {
     return (
       <div className="rounded-lg border border-border bg-card p-12 text-center text-muted-foreground">
         No records returned.
@@ -51,7 +52,7 @@ export function DatabaseQueryResult() {
             </tr>
           </thead>
           <tbody>
-            {rows.map((row, i) => (
+            {rowsArray.map((row, i) => (
               <tr
                 key={i}
                 className={cn(
@@ -76,7 +77,7 @@ export function DatabaseQueryResult() {
         </table>
       </div>
       <p className="text-sm text-muted-foreground">
-        {rows.length} record(s) returned
+        {rowsArray.length} record(s) returned
       </p>
     </div>
   );

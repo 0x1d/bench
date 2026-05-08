@@ -14,7 +14,7 @@ updated: 2026-05-08
 
 ## Phase 1: Trigger Config Model & Parsing
 
-**Phase status**: TODO
+**Phase status**: DONE
 **Deliverable**: Config can parse `flowpipe_triggers[]` from config.yaml; model types defined.
 
 ### Config
@@ -31,12 +31,12 @@ updated: 2026-05-08
 
 ## Phase 2: Trigger Service (CRUD + File I/O)
 
-**Phase status**: TODO
+**Phase status**: IN_PROGRESS
 **Deliverable**: Service can read, write, list, create, update, delete triggers in Flowpipe mod files.
 
 ### Service
 
-- [ ] **2.1** Add ListTriggers() and GetTrigger() — [specs/2.1-list-get.md](specs/2.1-list-get.md)
+- [x] **2.1** Add ListTriggers() and GetTrigger() — [specs/2.1-list-get.md](specs/2.1-list-get.md)
 - [ ] **2.2** Add CreateTrigger() — [specs/2.2-create.md](specs/2.2-create.md)
 - [ ] **2.3** Add UpdateTrigger() — [specs/2.3-update.md](specs/2.3-update.md)
 - [ ] **2.4** Add DeleteTrigger() — [specs/2.4-delete.md](specs/2.4-delete.md)
@@ -111,8 +111,8 @@ updated: 2026-05-08
 
 | Phase | Tasks | Done | Status |
 |-------|-------|------|--------|
-| 1 | 4 | 0 | TODO |
-| 2 | 6 | 0 | TODO |
+| 1 | 4 | 4 | DONE |
+| 2 | 6 | 1 | IN_PROGRESS |
 | 3 | 4 | 0 | TODO |
 | 4 | 4 | 0 | TODO |
 | 5 | 3 | 0 | TODO |

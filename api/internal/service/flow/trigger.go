@@ -1,11 +1,16 @@
 package flow
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/0x1d/bench/api/internal/config"
 	"github.com/0x1d/bench/api/internal/model"
@@ -258,4 +263,110 @@ func (s *Service) DeleteTrigger(flowID, triggerID string) error {
 
 	s.touchRootMod()
 	return nil
+}
+
+// TestTrigger simulates trigger execution by calling Flowpipe API to run the pipeline.
+func (s *Service) TestTrigger(flowID, triggerID string, payload map[string]any) (*model.TriggerTestResponse, error) {
+	// Get the trigger to find the pipeline reference
+	trigger, err := s.GetTrigger(flowID, triggerID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get trigger: %w", err)
+	}
+
+	// Get the pipeline reference from trigger config
+	pipelineRef := trigger.Config.Pipeline
+	if pipelineRef == "" {
+		return nil, fmt.Errorf("trigger has no pipeline reference")
+	}
+
+	// Ensure pipeline reference has "pipeline." prefix
+	if !strings.HasPrefix(pipelineRef, "pipeline.") {
+		pipelineRef = "pipeline." + strings.TrimPrefix(pipelineRef, "pipeline.")
+	}
+
+	// Get the workspace to determine Flowpipe URL
+	defaultWorkspace := "default"
+	if trigger.Workspace != "" {
+		defaultWorkspace = trigger.Workspace
+	}
+	ws := config.WorkspaceByID(defaultWorkspace)
+	if ws == nil && defaultWorkspace != "default" {
+		return nil, fmt.Errorf("workspace not found: %s", defaultWorkspace)
+	}
+
+	flowpipeURL := "http://localhost:7103"
+	if ws != nil && ws.FlowpipeURL != "" {
+		flowpipeURL = ws.FlowpipeURL
+	}
+
+	// Build the run request
+	runRequest := map[string]any{}
+	if payload != nil {
+		runRequest["args"] = payload
+	}
+
+	// For webhook triggers, generate a test payload
+	triggerType := trigger.Type
+	if triggerType == model.TriggerTypeWebhook && payload == nil {
+		runRequest["args"] = map[string]any{
+			"event": map[string]any{
+				"timestamp": time.Now().Unix(),
+				"trigger":   triggerID,
+				"flow":      flowID,
+			},
+		}
+	}
+
+	// Serialize request body
+	bodyBytes, err := json.Marshal(runRequest)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	// Create HTTP client
+	client := &http.Client{Timeout: 30 * time.Second}
+
+	// Call Flowpipe API
+	url := fmt.Sprintf("%s/api/v0/pipeline/%s/run", flowpipeURL, pipelineRef)
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(bodyBytes))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to Flowpipe: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Read response
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("Flowpipe API error: status %d, body: %s", resp.StatusCode, string(respBody))
+	}
+
+	// Parse response for execution ID
+	var execResp map[string]any
+	if err := json.Unmarshal(respBody, &execResp); err != nil {
+		// Return successful response even if we can't parse
+		return &model.TriggerTestResponse{
+			ExecutedAt: time.Now(),
+			Status:     "pending",
+		}, nil
+	}
+
+	execStatus := "pending"
+	if status, ok := execResp["status"].(string); ok {
+		execStatus = status
+	}
+
+	return &model.TriggerTestResponse{
+		ExecutedAt: time.Now(),
+		Status:     execStatus,
+	}, nil
 }

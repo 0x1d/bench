@@ -97,6 +97,78 @@ type WorkspaceEntry struct {
 	FlowpipeURL string `yaml:"flowpipeUrl,omitempty" json:"flowpipeUrl,omitempty"` // Flowpipe server URL (host in workspaces.fpc)
 }
 
+// TriggerType defines Flowpipe trigger types.
+type TriggerType string
+
+const (
+	TriggerTypeWebhook        TriggerType = "webhook"
+	TriggerTypeSchedule       TriggerType = "schedule"
+	TriggerTypeAlert          TriggerType = "alert"
+	TriggerTypeHTTP           TriggerType = "http"
+	TriggerTypeNotification   TriggerType = "notification"
+)
+
+// WebhookConfig holds configuration for webhook triggers.
+type WebhookConfig struct {
+	Description string `yaml:"description,omitempty" json:"description,omitempty"`
+	Pipeline    string `yaml:"pipeline" json:"pipeline"`
+}
+
+// ScheduleConfig holds configuration for schedule triggers.
+type ScheduleConfig struct {
+	Description string `yaml:"description,omitempty" json:"description,omitempty"`
+	Pipeline    string `yaml:"pipeline" json:"pipeline"`
+	Cron        string `yaml:"cron,omitempty" json:"cron,omitempty"`
+	Timezone    string `yaml:"timezone,omitempty" json:"timezone,omitempty"`
+}
+
+// AlertConfig holds configuration for alert triggers.
+type AlertConfig struct {
+	Description string `yaml:"description,omitempty" json:"description,omitempty"`
+	Pipeline    string `yaml:"pipeline" json:"pipeline"`
+	Source      string `yaml:"source,omitempty" json:"source,omitempty"`
+	Condition   string `yaml:"condition,omitempty" json:"condition,omitempty"`
+}
+
+// HTTPConfig holds configuration for HTTP triggers.
+type HTTPConfig struct {
+	Description string `yaml:"description,omitempty" json:"description,omitempty"`
+	Pipeline    string `yaml:"pipeline" json:"pipeline"`
+	URL         string `yaml:"url,omitempty" json:"url,omitempty"`
+	Method      string `yaml:"method,omitempty" json:"method,omitempty"`
+	Body        string `yaml:"body,omitempty" json:"body,omitempty"`
+}
+
+// NotificationConfig holds configuration for notification triggers.
+type NotificationConfig struct {
+	Description string `yaml:"description,omitempty" json:"description,omitempty"`
+	Pipeline    string `yaml:"pipeline" json:"pipeline"`
+	Source      string `yaml:"source,omitempty" json:"source,omitempty"`
+	Channel     string `yaml:"channel,omitempty" json:"channel,omitempty"`
+	Conditions  string `yaml:"conditions,omitempty" json:"conditions,omitempty"`
+}
+
+// TriggerConfig holds type-specific configuration for a trigger.
+type TriggerConfig struct {
+	Description  string            `yaml:"description,omitempty" json:"description,omitempty"`
+	Pipeline     string            `yaml:"pipeline,omitempty" json:"pipeline,omitempty"`
+	Webhook      *WebhookConfig    `yaml:"webhook,omitempty" json:"webhook,omitempty"`
+	Schedule     *ScheduleConfig   `yaml:"schedule,omitempty" json:"schedule,omitempty"`
+	Alert        *AlertConfig      `yaml:"alert,omitempty" json:"alert,omitempty"`
+	HTTP         *HTTPConfig       `yaml:"http,omitempty" json:"http,omitempty"`
+	Notification *NotificationConfig `yaml:"notification,omitempty" json:"notification,omitempty"`
+}
+
+// TriggerEntry represents a configured trigger in config.yaml (flowpipe_triggers[]).
+type TriggerEntry struct {
+	ID        string       `yaml:"id" json:"id"`
+	Label     string       `yaml:"label,omitempty" json:"label,omitempty"`
+	Workspace string       `yaml:"workspace,omitempty" json:"workspace,omitempty"`
+	Flow      string       `yaml:"flow" json:"flow"`
+	Type      TriggerType  `yaml:"type" json:"type"`
+	Config    TriggerConfig `yaml:"config" json:"config"`
+}
+
 // ResourcesConfig is the `resources` section of config.yaml (filesystem, databases, REST, schemas).
 // It is edited in the UI on the Configuration page.
 type ResourcesConfig struct {
@@ -127,10 +199,11 @@ type AgentConfig struct {
 
 // Config is the top-level config structure.
 type Config struct {
-	Resources      ResourcesConfig       `yaml:"resources"`
-	Flows          *FlowsConfig          `yaml:"flows,omitempty"`
-	Infrastructure *InfrastructureConfig `yaml:"infrastructure,omitempty"`
-	Agent          *AgentConfig          `yaml:"agent,omitempty"`
+	Resources       ResourcesConfig       `yaml:"resources"`
+	Flows           *FlowsConfig          `yaml:"flows,omitempty"`
+	Infrastructure  *InfrastructureConfig `yaml:"infrastructure,omitempty"`
+	Agent           *AgentConfig          `yaml:"agent,omitempty"`
+	FlowpipeTriggers []TriggerEntry        `yaml:"flowpipe_triggers,omitempty"`
 }
 
 // FindConfigPath returns the path to config.yaml, or empty if none exists.
@@ -341,6 +414,34 @@ func validateConfig(cfg Config) error {
 		agentType := strings.ToLower(cfg.Agent.Agent)
 		if agentType != "cursor" && agentType != "gemini" {
 			return fmt.Errorf("agent.agent must be 'cursor' or 'gemini'")
+		}
+	}
+
+	seenTrigger := map[string]struct{}{}
+	for i, t := range cfg.FlowpipeTriggers {
+		if t.ID == "" {
+			return fmt.Errorf("flowpipe_triggers[%d].id is required", i)
+		}
+		if _, ok := seenTrigger[t.ID]; ok {
+			return fmt.Errorf("flowpipe_triggers contains duplicate id %q", t.ID)
+		}
+		seenTrigger[t.ID] = struct{}{}
+		if t.Flow == "" {
+			return fmt.Errorf("flowpipe_triggers[%d].flow is required", i)
+		}
+		if t.Type == "" {
+			return fmt.Errorf("flowpipe_triggers[%d].type is required", i)
+		}
+		// Validate trigger type
+		validTriggerTypes := map[TriggerType]bool{
+			TriggerTypeWebhook:        true,
+			TriggerTypeSchedule:       true,
+			TriggerTypeAlert:          true,
+			TriggerTypeHTTP:           true,
+			TriggerTypeNotification:   true,
+		}
+		if !validTriggerTypes[t.Type] {
+			return fmt.Errorf("flowpipe_triggers[%d].type must be one of: webhook, schedule, alert, http, notification", i)
 		}
 	}
 	return nil
@@ -556,6 +657,38 @@ func WorkspaceByID(id string) *WorkspaceEntry {
 	for _, w := range Workspaces() {
 		if w.ID == id {
 			return &w
+		}
+	}
+	return nil
+}
+
+// TriggerEntries returns configured trigger entries from config.yaml.
+// Entries with empty id or flow are skipped. Empty label defaults to id.
+// Returns nil when config cannot be read.
+func TriggerEntries() []TriggerEntry {
+	cfg, _, err := ReadConfig()
+	if err != nil {
+		return nil
+	}
+	out := make([]TriggerEntry, 0, len(cfg.FlowpipeTriggers))
+	for _, e := range cfg.FlowpipeTriggers {
+		if e.ID == "" || e.Flow == "" {
+			continue
+		}
+		if e.Label == "" {
+			e.Label = e.ID
+		}
+		out = append(out, e)
+	}
+	return out
+}
+
+// TriggerByID returns the trigger entry for the given id, or nil if not found.
+func TriggerByID(id string) *TriggerEntry {
+	for _, e := range TriggerEntries() {
+		if e.ID == id {
+			c := e
+			return &c
 		}
 	}
 	return nil

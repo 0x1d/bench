@@ -19,7 +19,7 @@ updated: 2026-05-08
 
 ### Config
 
-- [ ] **1.1** Define trigger type constants and config structs — [specs/1.1-config.md](specs/1.1-config.md)
+- [x] **1.1** Define trigger type constants and config structs — [specs/1.1-config.md](specs/1.1-config.md)
 - [ ] **1.2** Add Triggers() helpers to config service — [specs/1.2-config-helpers.md](specs/1.2-config-helpers.md)
 - [ ] **1.3** Add validation for trigger entries — [specs/1.3-validation.md](specs/1.3-validation.md)
 

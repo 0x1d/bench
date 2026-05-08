@@ -52,3 +52,23 @@ agent:
   endpoint: http://localhost:3001
   workingDirectory: /workspace
   agent: cursor
+
+# Flowpipe triggers for automatic pipeline execution
+flowpipe_triggers:
+  - id: daily-report-webhook
+    label: Daily Report Webhook
+    flow: daily_report
+    type: webhook
+    config:
+      description: "Trigger daily report via webhook"
+      pipeline: pipeline.daily_report
+  - id: hourly-check-schedule
+    label: Hourly Check
+    flow: hourly_check
+    type: schedule
+    config:
+      description: "Run hourly checks"
+      pipeline: pipeline.hourly_check
+      schedule:
+        cron: "0 * * * *"
+        timezone: "UTC"

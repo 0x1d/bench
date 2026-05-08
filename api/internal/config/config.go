@@ -197,13 +197,18 @@ type AgentConfig struct {
 	Model            string `yaml:"model,omitempty"`
 }
 
+// FlowpipeTriggersConfig holds Flowpipe trigger configurations.
+type FlowpipeTriggersConfig struct {
+	Triggers []TriggerEntry `yaml:"triggers,omitempty"`
+}
+
 // Config is the top-level config structure.
 type Config struct {
-	Resources       ResourcesConfig       `yaml:"resources"`
-	Flows           *FlowsConfig          `yaml:"flows,omitempty"`
-	Infrastructure  *InfrastructureConfig `yaml:"infrastructure,omitempty"`
-	Agent           *AgentConfig          `yaml:"agent,omitempty"`
-	FlowpipeTriggers []TriggerEntry        `yaml:"flowpipe_triggers,omitempty"`
+	Resources        ResourcesConfig       `yaml:"resources"`
+	Flows            *FlowsConfig          `yaml:"flows,omitempty"`
+	Infrastructure   *InfrastructureConfig `yaml:"infrastructure,omitempty"`
+	Agent            *AgentConfig          `yaml:"agent,omitempty"`
+	FlowpipeTriggers *FlowpipeTriggersConfig `yaml:"flowpipe_triggers,omitempty"`
 }
 
 // FindConfigPath returns the path to config.yaml, or empty if none exists.
@@ -417,31 +422,34 @@ func validateConfig(cfg Config) error {
 		}
 	}
 
-	seenTrigger := map[string]struct{}{}
-	for i, t := range cfg.FlowpipeTriggers {
-		if t.ID == "" {
-			return fmt.Errorf("flowpipe_triggers[%d].id is required", i)
-		}
-		if _, ok := seenTrigger[t.ID]; ok {
-			return fmt.Errorf("flowpipe_triggers contains duplicate id %q", t.ID)
-		}
-		seenTrigger[t.ID] = struct{}{}
-		if t.Flow == "" {
-			return fmt.Errorf("flowpipe_triggers[%d].flow is required", i)
-		}
-		if t.Type == "" {
-			return fmt.Errorf("flowpipe_triggers[%d].type is required", i)
-		}
-		// Validate trigger type
-		validTriggerTypes := map[TriggerType]bool{
-			TriggerTypeWebhook:        true,
-			TriggerTypeSchedule:       true,
-			TriggerTypeAlert:          true,
-			TriggerTypeHTTP:           true,
-			TriggerTypeNotification:   true,
-		}
-		if !validTriggerTypes[t.Type] {
-			return fmt.Errorf("flowpipe_triggers[%d].type must be one of: webhook, schedule, alert, http, notification", i)
+	// Validate flowpipe triggers if configured
+	if cfg.FlowpipeTriggers != nil {
+		seenTrigger := map[string]struct{}{}
+		for i, t := range cfg.FlowpipeTriggers.Triggers {
+			if t.ID == "" {
+				return fmt.Errorf("flowpipe_triggers.triggers[%d].id is required", i)
+			}
+			if _, ok := seenTrigger[t.ID]; ok {
+				return fmt.Errorf("flowpipe_triggers.triggers contains duplicate id %q", t.ID)
+			}
+			seenTrigger[t.ID] = struct{}{}
+			if t.Flow == "" {
+				return fmt.Errorf("flowpipe_triggers.triggers[%d].flow is required", i)
+			}
+			if t.Type == "" {
+				return fmt.Errorf("flowpipe_triggers.triggers[%d].type is required", i)
+			}
+			// Validate trigger type
+			validTriggerTypes := map[TriggerType]bool{
+				TriggerTypeWebhook:        true,
+				TriggerTypeSchedule:       true,
+				TriggerTypeAlert:          true,
+				TriggerTypeHTTP:           true,
+				TriggerTypeNotification:   true,
+			}
+			if !validTriggerTypes[t.Type] {
+				return fmt.Errorf("flowpipe_triggers.triggers[%d].type must be one of: webhook, schedule, alert, http, notification", i)
+			}
 		}
 	}
 	return nil
@@ -664,14 +672,23 @@ func WorkspaceByID(id string) *WorkspaceEntry {
 
 // TriggerEntries returns configured trigger entries from config.yaml.
 // Entries with empty id or flow are skipped. Empty label defaults to id.
-// Returns nil when config cannot be read.
+// Returns empty slice when config cannot be read.
 func TriggerEntries() []TriggerEntry {
+	out, _ := TriggerEntriesWithError()
+	return out
+}
+
+// TriggerEntriesWithError returns configured trigger entries and preserves load errors.
+func TriggerEntriesWithError() ([]TriggerEntry, error) {
 	cfg, _, err := ReadConfig()
 	if err != nil {
-		return nil
+		return nil, err
 	}
-	out := make([]TriggerEntry, 0, len(cfg.FlowpipeTriggers))
-	for _, e := range cfg.FlowpipeTriggers {
+	if cfg.FlowpipeTriggers == nil {
+		return []TriggerEntry{}, nil
+	}
+	out := make([]TriggerEntry, 0, len(cfg.FlowpipeTriggers.Triggers))
+	for _, e := range cfg.FlowpipeTriggers.Triggers {
 		if e.ID == "" || e.Flow == "" {
 			continue
 		}
@@ -680,7 +697,7 @@ func TriggerEntries() []TriggerEntry {
 		}
 		out = append(out, e)
 	}
-	return out
+	return out, nil
 }
 
 // TriggerByID returns the trigger entry for the given id, or nil if not found.
@@ -692,6 +709,31 @@ func TriggerByID(id string) *TriggerEntry {
 		}
 	}
 	return nil
+}
+
+// WorkspaceTriggers returns triggers for a specific workspace.
+// Filters by Workspace field, defaulting to "default" when unset.
+func WorkspaceTriggers(workspace string) []TriggerEntry {
+	out, _ := WorkspaceTriggersWithError(workspace)
+	return out
+}
+
+// WorkspaceTriggersWithError returns triggers for a specific workspace and preserves load errors.
+func WorkspaceTriggersWithError(workspace string) ([]TriggerEntry, error) {
+	triggers, err := TriggerEntriesWithError()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]TriggerEntry, 0, len(triggers))
+	for _, t := range triggers {
+		if t.Workspace == "" {
+			t.Workspace = "default"
+		}
+		if t.Workspace == workspace {
+			out = append(out, t)
+		}
+	}
+	return out, nil
 }
 
 // RootStatus represents a filesystem root for status display (includes path).

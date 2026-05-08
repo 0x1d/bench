@@ -4,13 +4,7 @@ import { CodeEditor } from '@/components/code-editor';
 import { useExecuteQuery } from '@/hooks/use-database';
 import { useDatabaseView } from '@/contexts/database-view-context';
 
-export interface DatabaseQueryPanelContentProps {
-  initialSql?: string;
-}
-
-export function DatabaseQueryPanelContent({
-  initialSql = 'SELECT 1',
-}: DatabaseQueryPanelContentProps) {
+export function DatabaseQueryPanelContent() {
   const { selectedDatabaseId, querySql, setQuerySql, setQueryResult } = useDatabaseView();
 
   const executeMutation = useExecuteQuery(selectedDatabaseId);

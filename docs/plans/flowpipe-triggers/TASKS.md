@@ -46,7 +46,13 @@ updated: 2026-05-09
 
 ### Tests
 
-- [ ] **2.6** Service unit tests — [specs/2.6-tests.md](specs/2.6-tests.md)
+- [x] **2.6** Service unit tests — [specs/2.6-tests.md](specs/2.6-tests.md)
+  - Added comprehensive unit tests for `BuildTriggerHCLBlock` covering all trigger types
+  - Tests for `ParseTriggerBlock` to verify HCL parsing
+  - Validations tests for required fields
+  - Edge case tests for different trigger types
+  - 95.5% coverage on `BuildTriggerHCLBlock`
+- [x] **2.5** Add TestTrigger() — [specs/2.5-test.md](specs/2.5-test.md)
 
 ---
 
@@ -114,7 +120,7 @@ updated: 2026-05-09
 | Phase | Tasks | Done | Status |
 |-------|-------|------|--------|
 | 1 | 4 | 4 | DONE |
-| 2 | 6 | 5 | IN_PROGRESS |
+| 2 | 6 | 6 | DONE |
 | 3 | 4 | 4 | DONE |
 | 4 | 4 | 0 | TODO |
 | 5 | 3 | 0 | TODO |

@@ -105,7 +105,14 @@ func (s *Service) CreateTrigger(trigger *model.TriggerEntry) error {
 }
 
 // buildTriggerHCLBlock generates HCL for a trigger block.
+// This is exported for testing purposes.
 func buildTriggerHCLBlock(trigger *model.TriggerEntry) (string, error) {
+	return BuildTriggerHCLBlock(trigger)
+}
+
+// BuildTriggerHCLBlock generates HCL for a trigger block.
+// This is exported for testing purposes.
+func BuildTriggerHCLBlock(trigger *model.TriggerEntry) (string, error) {
 	var b strings.Builder
 
 	b.WriteString(fmt.Sprintf("trigger %q %q {\n", trigger.Type, trigger.ID))

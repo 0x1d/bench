@@ -377,7 +377,7 @@ ui/
 
 ### Phase 1-3 (API)
 - [ ] Config accepts `flowpipe_triggers[]` with all types
-- [ ]新征程 service can list, get, create, update, delete triggers
+- [ ] Config service can list, get, create, update, delete triggers
 - [ ] Triggers are written to `.fp` files as trigger blocks
 - [ ] API endpoints work: GET/POST/PUT/DELETE `/api/flows/triggers*`
 - [ ] Validation rejects invalid trigger configs

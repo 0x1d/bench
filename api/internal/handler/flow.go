@@ -3,6 +3,7 @@ package handler
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -602,4 +603,300 @@ func HandleFlowExecution(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(resp.StatusCode)
 	_, _ = io.Copy(w, resp.Body)
+}
+
+// triggerService is the global trigger service instance.
+var triggerService = flow.NewService()
+
+// HandleTriggersList returns all triggers from all flows.
+// Query params:
+//   - workspace: filter triggers by workspace
+//   - flow: filter triggers by flow ID
+func HandleTriggersList(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	workspace := strings.TrimSpace(r.URL.Query().Get("workspace"))
+	flowID := strings.TrimSpace(r.URL.Query().Get("flow"))
+
+	triggers, err := triggerService.ListTriggers()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Filter by workspace if specified
+	if workspace != "" {
+		filtered := []model.TriggerState{}
+		for _, t := range triggers {
+			if t.Workspace == workspace || (workspace == "default" && t.Workspace == "") {
+				filtered = append(filtered, t)
+			}
+		}
+		triggers = filtered
+	}
+
+	// Filter by flow if specified
+	if flowID != "" {
+		filtered := []model.TriggerState{}
+		for _, t := range triggers {
+			if t.Flow == flowID {
+				filtered = append(filtered, t)
+			}
+		}
+		triggers = filtered
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(struct {
+		Triggers []model.TriggerState `json:"triggers"`
+	}{Triggers: triggers})
+}
+
+// HandleTriggerGet returns a specific trigger from a flow.
+func HandleTriggerGet(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	triggerID := strings.TrimSpace(r.PathValue("triggerId"))
+	if triggerID == "" {
+		http.Error(w, "trigger id required", http.StatusBadRequest)
+		return
+	}
+
+	flowID := strings.TrimSpace(r.PathValue("flowId"))
+	if flowID == "" {
+		// For backward compatibility, look up trigger across all flows
+		triggers, err := triggerService.ListTriggers()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		for _, t := range triggers {
+			if t.ID == triggerID {
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(t)
+				return
+			}
+		}
+		http.Error(w, "trigger not found", http.StatusNotFound)
+		return
+	}
+
+	trigger, err := triggerService.GetTrigger(flowID, triggerID)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(trigger)
+}
+
+// HandleTriggerCreate creates a new trigger.
+func HandleTriggerCreate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var trigger model.TriggerEntry
+	if err := json.NewDecoder(r.Body).Decode(&trigger); err != nil {
+		http.Error(w, "invalid request body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Extract flow ID from URL if not in body
+	if trigger.Flow == "" {
+		flowID := strings.TrimSpace(r.PathValue("flowId"))
+		if flowID == "" {
+			http.Error(w, "flow id required", http.StatusBadRequest)
+			return
+		}
+		trigger.Flow = flowID
+	}
+
+	if err := triggerService.CreateTrigger(&trigger); err != nil {
+		if strings.Contains(err.Error(), "already exists") {
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
+		if strings.Contains(err.Error(), "not found") {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	_ = json.NewEncoder(w).Encode(trigger)
+}
+
+// HandleTriggerUpdate updates an existing trigger.
+func HandleTriggerUpdate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	triggerID := strings.TrimSpace(r.PathValue("triggerId"))
+	if triggerID == "" {
+		http.Error(w, "trigger id required", http.StatusBadRequest)
+		return
+	}
+
+	var trigger model.TriggerEntry
+	if err := json.NewDecoder(r.Body).Decode(&trigger); err != nil {
+		http.Error(w, "invalid request body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	trigger.ID = triggerID
+
+	// Extract flow ID from URL if not in body
+	if trigger.Flow == "" {
+		flowID := strings.TrimSpace(r.PathValue("flowId"))
+		if flowID == "" {
+			http.Error(w, "flow id required", http.StatusBadRequest)
+			return
+		}
+		trigger.Flow = flowID
+	}
+
+	if err := triggerService.UpdateTrigger(&trigger); err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(trigger)
+}
+
+// HandleTriggerDelete deletes a trigger.
+func HandleTriggerDelete(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	triggerID := strings.TrimSpace(r.PathValue("triggerId"))
+	if triggerID == "" {
+		http.Error(w, "trigger id required", http.StatusBadRequest)
+		return
+	}
+
+	flowID := strings.TrimSpace(r.PathValue("flowId"))
+	if flowID == "" {
+		http.Error(w, "flow id required", http.StatusBadRequest)
+		return
+	}
+
+	if err := triggerService.DeleteTrigger(flowID, triggerID); err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// HandleTriggerTest tests a trigger by executing its pipeline.
+func HandleTriggerTest(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	triggerID := strings.TrimSpace(r.PathValue("triggerId"))
+	if triggerID == "" {
+		http.Error(w, "trigger id required", http.StatusBadRequest)
+		return
+	}
+
+	flowID := strings.TrimSpace(r.PathValue("flowId"))
+	if flowID == "" {
+		http.Error(w, "flow id required", http.StatusBadRequest)
+		return
+	}
+
+	var testReq struct {
+		Payload map[string]any `json:"payload,omitempty"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&testReq); err != nil {
+		http.Error(w, "invalid request body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	result, err := triggerService.TestTrigger(flowID, triggerID, testReq.Payload)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(result)
+}
+
+// HandleTriggerWebhookURL returns the webhook URL for a trigger.
+func HandleTriggerWebhookURL(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	triggerID := strings.TrimSpace(r.PathValue("triggerId"))
+	if triggerID == "" {
+		http.Error(w, "trigger id required", http.StatusBadRequest)
+		return
+	}
+
+	flowID := strings.TrimSpace(r.PathValue("flowId"))
+	if flowID == "" {
+		http.Error(w, "flow id required", http.StatusBadRequest)
+		return
+	}
+
+	// Get the trigger to find its workspace
+	trigger, err := triggerService.GetTrigger(flowID, triggerID)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	workspace := trigger.Workspace
+	if workspace == "" {
+		workspace = "default"
+	}
+
+	flowpipeURL := strings.TrimSuffix(config.FlowpipeURLForWorkspace(workspace), "/")
+	webhookURL := fmt.Sprintf("%s/api/v0/webhook/%s", flowpipeURL, triggerID)
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(struct {
+		URL string `json:"url"`
+	}{URL: webhookURL})
 }

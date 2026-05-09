@@ -1,7 +1,7 @@
 ---
 state: DRAFT
 created: 2026-05-08
-updated: 2026-05-08
+updated: 2026-05-09
 ---
 
 # Flowpipe Triggers — Task Tracker
@@ -9,6 +9,8 @@ updated: 2026-05-08
 **Status legend**: `[ ]` Not started · `[x]` Done · Phase: `TODO` | `IN_PROGRESS` | `DONE`
 
 **Task specs**: Each task has an execution plan in [specs/](specs/). Read the spec before starting. Task metadata (state, dependsOn) is in spec frontmatter.
+
+**Execution**: Use plan-task-execution and agent-coordination skills when working on the plan.
 
 ---
 
@@ -50,18 +52,18 @@ updated: 2026-05-08
 
 ## Phase 3: Trigger API Handlers & Routes
 
-**Phase status**: TODO
+**Phase status**: DONE
 **Deliverable**: HTTP endpoints for all trigger operations.
 
 ### Handler
 
-- [ ] **3.1** Create trigger handlers (list, get, create, update, delete) — [specs/3.1-handlers.md](specs/3.1-handlers.md)
-- [ ] **3.2** Test trigger handler — [specs/3.2-test-handler.md](specs/3.2-test-handler.md)
-- [ ] **3.3** Register routes in routes.go — [specs/3.3-routes.md](specs/3.3-routes.md)
+- [x] **3.1** Create trigger handlers (list, get, create, update, delete) — [specs/3.1-handlers.md](specs/3.1-handlers.md)
+- [x] **3.2** Test trigger handler — [specs/3.2-test-handler.md](specs/3.2-test-handler.md)
+- [x] **3.3** Register routes in routes.go — [specs/3.3-routes.md](specs/3.3-routes.md)
 
 ### Tests
 
-- [ ] **3.4** API integration tests — [specs/3.4-tests.md](specs/3.4-tests.md)
+- [x] **3.4** API integration tests — [specs/3.4-tests.md](specs/3.4-tests.md)
 
 ---
 
@@ -113,7 +115,7 @@ updated: 2026-05-08
 |-------|-------|------|--------|
 | 1 | 4 | 4 | DONE |
 | 2 | 6 | 5 | IN_PROGRESS |
-| 3 | 4 | 0 | TODO |
+| 3 | 4 | 4 | DONE |
 | 4 | 4 | 0 | TODO |
 | 5 | 3 | 0 | TODO |
 | 6 | 2 | 0 | TODO |

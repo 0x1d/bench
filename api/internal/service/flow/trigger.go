@@ -41,14 +41,21 @@ func (s *Service) CreateTrigger(trigger *model.TriggerEntry) error {
 	}
 
 	// Check for duplicate trigger ID in same flow
+	// When updating, the trigger being updated is in the list, so we need to skip it
 	flowTriggers, err := s.ListTriggers()
 	if err != nil {
 		return err
 	}
+	foundCount := 0
 	for _, t := range flowTriggers {
 		if t.Flow == trigger.Flow && t.ID == trigger.ID {
-			return fmt.Errorf("trigger %q already exists in flow %q", trigger.ID, trigger.Flow)
+			foundCount++
 		}
+	}
+	// If we found exactly one (the one we're updating), that's OK
+	// If we found more than one, that's a duplicate conflict
+	if foundCount > 1 {
+		return fmt.Errorf("trigger %q already exists in flow %q", trigger.ID, trigger.Flow)
 	}
 
 	// Generate HCL trigger block

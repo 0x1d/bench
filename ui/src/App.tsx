@@ -22,6 +22,7 @@ import { DatabasePage } from '@/pages/database-page';
 import { FlowsPage } from '@/pages/flows-page';
 import FlowEditorPage from '@/pages/flow-editor-page';
 import { InfrastructurePage } from '@/pages/infrastructure-page';
+import { TriggersPage } from '@/pages/triggers-page';
 import { AgentChatProvider } from '@/contexts/agent-chat-context';
 import { AgentChat } from '@/components/agent-chat';
 import { cn } from '@/lib/utils';
@@ -33,6 +34,7 @@ import {
   isFlowsListRoute,
   isFlowsSection,
   isResourceSettingsHash,
+  isTriggersRoute,
 } from '@/lib/app-hash';
 import { BENCH_CLOSE_PANEL_EVENT } from '@/lib/bench-close-panel';
 
@@ -136,6 +138,9 @@ function MainRoutes({ hash }: { hash: string }) {
   if (hash === 'schemas') {
     return <SchemaBrowserPage />;
   }
+  if (isTriggersRoute(hash)) {
+    return <TriggersPage />;
+  }
   if (isFlowsListRoute(hash)) {
     return <FlowsPage view={getFlowsListView(hash)} />;
   }
@@ -179,6 +184,7 @@ export function App() {
     hash === 'configuration' ||
     hash === 'schemas' ||
     hash === 'rest' ||
+    hash === 'flows/triggers' ||
     isResourceSettingsHash(hash);
 
   const mainStretch =
@@ -192,7 +198,8 @@ export function App() {
     hash.startsWith('rest/') ||
     hash === 'infrastructure' ||
     hash.startsWith('infrastructure/') ||
-    isFlowsSection(hash);
+    isFlowsSection(hash) ||
+    hash === 'flows/triggers';
 
   return (
     <ThemeProvider>

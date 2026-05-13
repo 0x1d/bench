@@ -1,10 +1,10 @@
 ---
 name: plan-task-execution
-description: Execute tasks from implementation plans. Use when working on schema registry, or any plan in docs/plans/ that has task specs.
+description: Execute tasks from implementation plans. Use when working on any plan in docs/plans/ that has task specs.
 ---
 # Plan Task Execution
 
-Use this skill when implementing features from Bench implementation plans (e.g. schema registry). Plans use markdown-based project management: tasks, specs, and status tracking.
+Use this skill when implementing features from Bench implementation plans. Plans use markdown-based project management: tasks, specs, and status tracking.
 
 ## Structure
 

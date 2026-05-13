@@ -9,6 +9,23 @@
 | API | `api/` | Go 1.22+ | 8080 |
 | UI | `ui/` | React 19 + TypeScript + Vite | 5173 |
 
+## Development Workflow
+
+Use these skills when working on the project:
+- Planning: Create implementation plans with tasks and specs. Use when starting a new feature, large refactor, or multi-step initiative that needs structured tracking.
+  - .skills/plan-creation
+- Implementation: Execute tasks from implementation plans. Use when working on any plan in docs/plans/ that has task specs.
+  - .skills/plan-task-execution
+- Multi-Agent Coordination: Coordinate with other agents to complete tasks. Use when multiple agents may work on the same plan; prevents duplicate work via state-based locking.
+  - .skills/agent-coordination
+
+## Development Guidelines
+
+Follow these guidelines when working on the project:
+- General: .skills/bench-development
+- UI: .skills/bench-ui
+- API: .skills/bench-api
+
 ## Cursor Cloud specific instructions
 
 ### Running the services

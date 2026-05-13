@@ -21,7 +21,7 @@ export type NavItem =
       kind: 'group';
       title: string;
       icon: LucideIcon;
-      items: { title: string; url: string }[];
+      items: { title: string; url: string; icon?: LucideIcon }[];
     };
 
 function linkIsActive(item: { url: string }, currentHash: string): boolean {
@@ -103,6 +103,7 @@ export function NavMain({ items, currentHash }: { items: NavItem[]; currentHash:
                       <SidebarMenuSubItem key={subItem.title}>
                         <SidebarMenuSubButton asChild isActive={subActive}>
                           <a href={subItem.url} onClick={closeMobile}>
+                            {subItem.icon && <subItem.icon className="size-4" />}
                             <span>{subItem.title}</span>
                           </a>
                         </SidebarMenuSubButton>

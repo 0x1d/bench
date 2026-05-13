@@ -8,3 +8,5 @@ export { RestResourceFields } from './rest-resource-fields';
 export { SchemaDetailPreview } from './schema-detail-preview';
 export { SchemaResourceFields } from './schema-resource-fields';
 export { WorkspaceResourceFields } from './workspace-resource-fields';
+export { TriggerForm } from './trigger-form';
+export { TriggerList } from './trigger-list';

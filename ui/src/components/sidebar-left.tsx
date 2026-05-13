@@ -8,6 +8,7 @@ import {
   Server,
   Settings,
   Workflow,
+  Zap,
 } from 'lucide-react';
 import { type NavItem, NavMain } from '@/components/nav-main';
 import { cn } from '@/lib/utils';
@@ -45,6 +46,7 @@ const navItems: NavItem[] = [
     items: [
       { title: 'Modules', url: '#flows' },
       { title: 'Executions', url: '#flows/executions' },
+      { title: 'Triggers', url: '#flows/triggers', icon: Zap },
       { title: 'Settings', url: '#flows/settings' },
     ],
   },

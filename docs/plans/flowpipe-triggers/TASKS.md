@@ -1,7 +1,7 @@
 ---
 state: DRAFT
 created: 2026-05-08
-updated: 2026-05-09
+updated: 2026-05-13
 ---
 
 # Flowpipe Triggers — Task Tracker
@@ -75,18 +75,18 @@ updated: 2026-05-09
 
 ## Phase 4: UI - Triggers Management Page
 
-**Phase status**: TODO
+**Phase status**: DONE
 **Deliverable**: Full CRUD UI for triggers at `/flows/triggers`.
 
 ### Resources Config Page
 
-- [ ] **4.1** Add triggers section (list, add, edit, remove) — [specs/4.1-resources-config.md](specs/4.1-resources-config.md)
+- [x] **4.1** Add triggers section (list, add, edit, remove) — [specs/4.1-resources-config.md](specs/4.1-resources-config.md)
 
 ### Triggers Page
 
-- [ ] **4.2** Triggers page (new page) — [specs/4.2-triggers-page.md](specs/4.2-triggers-page.md)
-- [ ] **4.3** Trigger form dialog (create/edit) — [specs/4.3-trigger-form.md](specs/4.3-trigger-form.md)
-- [ ] **4.4** Trigger list with filters (by type, flow) — [specs/4.4-trigger-list.md](specs/4.4-trigger-list.md)
+- [x] **4.2** Triggers page (new page) — [specs/4.2-triggers-page.md](specs/4.2-triggers-page.md)
+- [x] **4.3** Trigger form dialog (create/edit) — [specs/4.3-trigger-form.md](specs/4.3-trigger-form.md)
+- [x] **4.4** Trigger list with filters (by type, flow) — [specs/4.4-trigger-list.md](specs/4.4-trigger-list.md)
 
 ---
 
@@ -122,7 +122,7 @@ updated: 2026-05-09
 | 1 | 4 | 4 | DONE |
 | 2 | 6 | 6 | DONE |
 | 3 | 4 | 4 | DONE |
-| 4 | 4 | 0 | TODO |
+| 4 | 4 | 4 | DONE |
 | 5 | 3 | 0 | TODO |
 | 6 | 2 | 0 | TODO |
 

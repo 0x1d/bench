@@ -1,0 +1,91 @@
+---
+name: bench-api
+description: Go coding guidelines for the api/ project
+---
+
+# Go API Guidelines
+
+## General
+
+- Follow [Effective Go](https://go.dev/doc/effective_go) and the Go [Code Review Comments](https://github.com/golang/go/wiki/CodeReviewComments).
+- Use `gofmt` / `goimports` — code must be formatted before commit.
+- Run `go vet` and `golangci-lint` as part of the development workflow.
+- Target the latest stable Go version.
+
+## Best Practices
+- **Concurrency:** When using goroutines, ensure proper synchronization to avoid race conditions. Use channels for communication between goroutines.
+- **Interfaces:** Use interfaces to define behavior and decouple components.
+- **Packages:** Structure your code into logical packages. Avoid circular dependencies.
+- **Security:** Be mindful of security best practices. Sanitize inputs, avoid SQL injection, and handle credentials securely.
+
+## Code Quality and Style
+- **Formatting:** All Go code MUST be formatted with `gofmt` before committing.
+- **Linting:** Use `golangci-lint` to enforce code quality and style.
+- **Simplicity:** Write simple, clear, and concise code. Avoid unnecessary complexity.
+- **Error Handling:** Handle all errors explicitly. Never ignore an error. Check for errors and return them from functions.
+- **Naming:** Use meaningful and descriptive names for variables, functions, and packages. Follow Go's naming conventions (e.g., `camelCase` for private, `PascalCase` for public).
+- **Comments:** Write comments to explain the *why* behind complex or non-obvious code, not the *what*. Document all public functions and packages.
+- **Testing:**
+    - Write unit tests for all new code. Aim for high test coverage.
+    - Use table-driven tests for testing multiple scenarios.
+    - Mocks and interfaces should be used to isolate dependencies for testing.
+- **Dependencies:** Use Go modules (`go mod`) to manage project dependencies. Keep the `go.mod` and `go.sum` files up-to-date.
+
+## Naming
+
+- **Packages**: short, lowercase, single-word when possible (e.g. `handler`, `model`, `service`).
+- **Exported identifiers**: `PascalCase` — use clear, descriptive names.
+- **Unexported identifiers**: `camelCase`.
+- **Interfaces**: name by behavior, not by prefixing with `I` (e.g. `Reader`, `WorkflowRunner`).
+- **Acronyms**: all caps in identifiers (`HTTPHandler`, `APIURL`), lowercase in package names.
+
+## Error Handling
+
+- Always check and handle errors — never ignore returned errors with `_`.
+- Wrap errors with `fmt.Errorf("context: %w", err)` for stack context.
+- Return errors to callers; only log at the top-level boundary (handlers, main).
+- Use sentinel errors or custom error types for domain-specific errors.
+
+## Project Structure
+
+```
+api/
+├── cmd/
+│   └── server/
+│       └── main.go         # Entry point
+├── internal/
+│   ├── handler/            # HTTP handlers
+│   ├── service/            # Business logic
+│   ├── model/              # Data structures
+│   └── config/             # Configuration
+├── go.mod
+└── go.sum
+```
+
+## HTTP API
+
+- Use a lightweight router (e.g. `net/http`, Chi, or Echo).
+- Prefix all API routes with `/api/`.
+- Return JSON responses with proper `Content-Type` headers.
+- Use appropriate HTTP status codes.
+- Use middleware for cross-cutting concerns (logging, CORS, recovery).
+
+## Testing
+
+- Write table-driven tests using the standard `testing` package.
+- Name test files `*_test.go` alongside the code they test.
+- Use `t.Helper()` in test helper functions.
+- Use `httptest` for handler tests.
+- Aim for high coverage on business logic; handlers need integration tests.
+
+## Concurrency
+
+- Prefer channels for communication, mutexes for state protection.
+- Always clean up goroutines — use `context.Context` for cancellation.
+- Never start goroutines in init functions.
+
+## Dependencies
+
+- Prefer the standard library when it suffices.
+- Minimize third-party dependencies — vet each addition.
+- Use Go modules for dependency management.

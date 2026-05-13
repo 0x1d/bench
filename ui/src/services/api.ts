@@ -1066,3 +1066,182 @@ export async function runTerraformCommand(
   }
   return fullText;
 }
+
+// Trigger types and API
+export type TriggerType = 'webhook' | 'schedule' | 'alert' | 'http' | 'notification';
+
+export interface TriggerConfig {
+  cron?: string;
+  timezone?: string;
+  url?: string;
+  method?: string;
+  body?: string;
+  source?: string;
+  condition?: string;
+  channel?: string;
+  conditions?: string[];
+  pipeline?: string;
+  [key: string]: unknown;
+}
+
+export interface TriggerEntry {
+  id: string;
+  label?: string;
+  workspace?: string;
+  flow: string;
+  type: TriggerType;
+  config: TriggerConfig;
+}
+
+export interface TriggerState {
+  id: string;
+  label?: string;
+  flow: string;
+  type: TriggerType;
+  workspace?: string;
+  enabled: boolean;
+  config?: TriggerConfig;
+  lastRun?: string;
+  nextRun?: string;
+  status?: string;
+}
+
+export interface TriggerListResponse {
+  triggers: TriggerState[];
+}
+
+export interface TriggerResponse {
+  trigger: TriggerState;
+}
+
+export interface TriggerTestRequest {
+  payload?: Record<string, unknown>;
+}
+
+export interface TriggerTestResponse {
+  success: boolean;
+  message: string;
+  output?: Record<string, unknown>;
+}
+
+export interface WebhookUrlResponse {
+  url: string;
+}
+
+export async function fetchTriggerList(
+  workspace?: string,
+  flow?: string
+): Promise<TriggerListResponse> {
+  const params = new URLSearchParams();
+  if (workspace) params.set('workspace', workspace);
+  if (flow) params.set('flow', flow);
+  const qs = params.toString();
+  const url = qs ? `${API_BASE}/flows/triggers?${qs}` : `${API_BASE}/flows/triggers`;
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch triggers: ${response.status} ${response.statusText}`);
+  }
+  return response.json();
+}
+
+export async function fetchTrigger(
+  flowId: string,
+  triggerId: string
+): Promise<TriggerResponse> {
+  const response = await fetch(
+    `${API_BASE}/flows/${encodeURIComponent(flowId)}/triggers/${encodeURIComponent(triggerId)}`
+  );
+  if (!response.ok) {
+    throw new Error(`Failed to fetch trigger: ${response.status} ${response.statusText}`);
+  }
+  return response.json();
+}
+
+export async function createTrigger(
+  flowId: string,
+  entry: TriggerEntry
+): Promise<TriggerResponse> {
+  const response = await fetch(
+    `${API_BASE}/flows/${encodeURIComponent(flowId)}/triggers`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(entry),
+    }
+  );
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Failed to create trigger: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function updateTrigger(
+  flowId: string,
+  triggerId: string,
+  entry: TriggerEntry
+): Promise<TriggerResponse> {
+  const response = await fetch(
+    `${API_BASE}/flows/${encodeURIComponent(flowId)}/triggers/${encodeURIComponent(triggerId)}`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(entry),
+    }
+  );
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Failed to update trigger: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function deleteTrigger(
+  flowId: string,
+  triggerId: string
+): Promise<void> {
+  const response = await fetch(
+    `${API_BASE}/flows/${encodeURIComponent(flowId)}/triggers/${encodeURIComponent(triggerId)}`,
+    {
+      method: 'DELETE',
+    }
+  );
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Failed to delete trigger: ${response.status}`);
+  }
+}
+
+export async function testTrigger(
+  flowId: string,
+  triggerId: string,
+  req: TriggerTestRequest = {}
+): Promise<TriggerTestResponse> {
+  const response = await fetch(
+    `${API_BASE}/flows/${encodeURIComponent(flowId)}/triggers/${encodeURIComponent(triggerId)}/test`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req),
+    }
+  );
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Failed to test trigger: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function getTriggerWebhookUrl(
+  flowId: string,
+  triggerId: string
+): Promise<WebhookUrlResponse> {
+  const response = await fetch(
+    `${API_BASE}/flows/${encodeURIComponent(flowId)}/triggers/${encodeURIComponent(triggerId)}/webhook`
+  );
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Failed to get webhook URL: ${response.status}`);
+  }
+  return response.json();
+}

@@ -67,3 +67,8 @@ export function isResourceSettingsHash(hash: string): boolean {
     hash === 'infrastructure/settings'
   );
 }
+
+/** True when hash opens the triggers management page. */
+export function isTriggersRoute(hash: string): boolean {
+  return hash === 'flows/triggers';
+}

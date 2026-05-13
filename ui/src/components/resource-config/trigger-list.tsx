@@ -1,4 +1,4 @@
-import { Pencil, Play, Trash2 } from 'lucide-react';
+import { Pencil, Play, Trash2, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -15,6 +15,7 @@ interface TriggerListProps {
   onEdit: (trigger: TriggerState) => void;
   onDelete: (trigger: TriggerState) => void;
   onTest?: (trigger: TriggerState) => void;
+  onWebhook?: (trigger: TriggerState) => void;
   filters?: {
     type?: TriggerType | 'all';
     workspace?: string | 'all';
@@ -42,6 +43,7 @@ export function TriggerList({
   onEdit,
   onDelete,
   onTest,
+  onWebhook,
   filters,
   onFilterChange,
   loading = false,
@@ -178,6 +180,17 @@ export function TriggerList({
                   </td>
                   <td className="px-2 py-2">
                     <div className="flex items-center justify-end gap-1">
+                      {onWebhook && trigger.type === 'webhook' && (
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          onClick={() => onWebhook(trigger)}
+                          aria-label={`Copy webhook URL for ${trigger.id}`}
+                          title="Copy webhook URL"
+                        >
+                          <Copy className="size-3" />
+                        </Button>
+                      )}
                       {onTest && (
                         <Button
                           variant="ghost"

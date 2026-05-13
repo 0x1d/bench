@@ -105,13 +105,13 @@ updated: 2026-05-13
 
 ## Phase 6: Webhook URL + Testing
 
-**Phase status**: TODO
+**Phase status**: DONE
 **Deliverable**: Webhook URL exposure and trigger testing functionality.
 
 ### Webhook
 
-- [ ] **6.1** Webhook URL generation — [specs/6.1-webhook-url.md](specs/6.1-webhook-url.md)
-- [ ] **6.2** Test webhook endpoint — [specs/6.2-test-webhook.md](specs/6.2-test-webhook.md)
+- [x] **6.1** Webhook URL generation — [specs/6.1-webhook-url.md](specs/6.1-webhook-url.md)
+- [x] **6.2** Test webhook endpoint — [specs/6.2-test-webhook.md](specs/6.2-test-webhook.md)
 
 ---
 
@@ -124,7 +124,7 @@ updated: 2026-05-13
 | 3 | 4 | 4 | DONE |
 | 4 | 4 | 4 | DONE |
 | 5 | 3 | 3 | DONE |
-| 6 | 2 | 0 | TODO |
+| 6 | 2 | 2 | DONE |
 
 ---
 

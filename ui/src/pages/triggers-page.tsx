@@ -14,6 +14,7 @@ import {
   updateTrigger,
   deleteTrigger,
   testTrigger,
+  getTriggerWebhookUrl,
   type TriggerState,
   type TriggerEntry,
   type TriggerType,
@@ -106,6 +107,26 @@ export function TriggersPage() {
       toast.error(err instanceof Error ? err.message : 'Failed to test trigger');
     },
   });
+
+  // Webhook URL mutation
+  const webhookMutation = useMutation({
+    mutationFn: async (trigger: TriggerState) =>
+      getTriggerWebhookUrl(trigger.flow, trigger.id),
+    onSuccess: (result) => {
+      navigator.clipboard.writeText(result.url).then(() => {
+        toast.success('Webhook URL copied to clipboard');
+      }).catch(() => {
+        toast.success(result.url);
+      });
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to get webhook URL');
+    },
+  });
+
+  const handleCopyWebhook = (trigger: TriggerState) => {
+    webhookMutation.mutate(trigger);
+  };
 
   useEffect(() => {
     const handleClosePanel = () => {
@@ -237,6 +258,7 @@ export function TriggersPage() {
             onEdit={openEdit}
             onDelete={handleDelete}
             onTest={handleTest}
+            onWebhook={handleCopyWebhook}
             filters={filters}
             onFilterChange={setFilters}
             loading={isLoading}

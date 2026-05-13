@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Pencil, Play, Plus, Trash2, Zap } from 'lucide-react';
+import { Copy, Pencil, Play, Plus, Trash2, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -19,6 +19,7 @@ import {
   updateTrigger,
   deleteTrigger,
   testTrigger,
+  getTriggerWebhookUrl,
   type TriggerState,
   type TriggerEntry,
   type TriggerType,
@@ -117,6 +118,25 @@ export function FlowTriggersList({ flowId, workspace }: FlowTriggersListProps) {
       toast.error(err instanceof Error ? err.message : 'Failed to test trigger');
     },
   });
+
+  const webhookMutation = useMutation({
+    mutationFn: async (trigger: TriggerState) =>
+      getTriggerWebhookUrl(trigger.flow, trigger.id),
+    onSuccess: (result) => {
+      navigator.clipboard.writeText(result.url).then(() => {
+        toast.success('Webhook URL copied to clipboard');
+      }).catch(() => {
+        toast.success(result.url);
+      });
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to get webhook URL');
+    },
+  });
+
+  const handleCopyWebhook = (trigger: TriggerState) => {
+    webhookMutation.mutate(trigger);
+  };
 
   const resetDraft = () => {
     setTriggerDraft({
@@ -331,6 +351,18 @@ export function FlowTriggersList({ flowId, workspace }: FlowTriggersListProps) {
 
                     {/* Actions */}
                     <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                      {trigger.type === 'webhook' && (
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          onClick={() => handleCopyWebhook(trigger)}
+                          disabled={webhookMutation.isPending}
+                          title="Copy webhook URL"
+                          className="size-6"
+                        >
+                          <Copy className="size-2.5" />
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="icon-xs"

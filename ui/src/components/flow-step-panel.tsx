@@ -7,6 +7,7 @@ import { useFlowView } from '@/contexts/flow-view-context';
 import { FlowStepPanelContent } from '@/components/flow-step-panel-content';
 import { FlowModulePanelContent } from '@/components/flow-module-panel-content';
 import { FlowExecutionLog } from '@/components/flow-execution-log';
+import { FlowTriggersList } from '@/components/Flows/FlowTriggersList';
 import { useQuery } from '@tanstack/react-query';
 import { fetchStatus, fetchRestList } from '@/services/api';
 import { cn, normalizeStepName } from '@/lib/utils';
@@ -30,11 +31,13 @@ export function FlowStepPanel() {
     flowModule,
     moduleEditPath,
     setModuleEditPath,
+    flowPanelMode,
+    setFlowPanelMode,
   } = useFlowView();
   const [activeTab, setActiveTab] = useState<PanelTab>('config');
 
   const isExpanded =
-    selectedStep != null || executionId != null || moduleEditPath != null;
+    selectedStep != null || executionId != null || moduleEditPath != null || flowPanelMode === 'triggers';
 
   const { data: statusData } = useQuery({
     queryKey: ['status'],
@@ -56,8 +59,9 @@ export function FlowStepPanel() {
     setSelectedStep(null);
     setExecutionId(null);
     setModuleEditPath(null);
+    setFlowPanelMode(null);
     setActiveTab('config');
-  }, [setSelectedStep, setExecutionId, setModuleEditPath]);
+  }, [setSelectedStep, setExecutionId, setModuleEditPath, setFlowPanelMode]);
 
   useEffect(() => {
     const onBenchClose = () => handleClose();
@@ -67,15 +71,17 @@ export function FlowStepPanel() {
 
   const panelTitle = moduleEditPath
     ? `Edit module — ${moduleEditPath}`
-    : executionId && !selectedStep
-      ? 'Execution Log'
-      : activeTab === 'execution'
-        ? selectedStep
-          ? `Execution — ${selectedStep.label || selectedStep.id}`
-          : 'Execution Log'
-        : selectedStep
-          ? `Configure — ${selectedStep.label || selectedStep.id}`
-          : 'Step';
+    : flowPanelMode === 'triggers'
+      ? 'Flow Triggers'
+      : executionId && !selectedStep
+        ? 'Execution Log'
+        : activeTab === 'execution'
+          ? selectedStep
+            ? `Execution — ${selectedStep.label || selectedStep.id}`
+            : 'Execution Log'
+          : selectedStep
+            ? `Configure — ${selectedStep.label || selectedStep.id}`
+            : 'Step';
 
   const showTabs = executionId != null && selectedStep != null && !moduleEditPath;
 
@@ -157,6 +163,12 @@ export function FlowStepPanel() {
             onClose={handleClose}
           />
         )}
+        {!moduleEditPath && flowPanelMode === 'triggers' && flow && (
+          <FlowTriggersList
+            flowId={flow.id}
+            workspace={flowWorkspace ?? undefined}
+          />
+        )}
         {!moduleEditPath && selectedStep && (activeTab === 'config' || !executionId) && (
           <FlowStepPanelContent
             key={selectedStep.id}
@@ -198,8 +210,8 @@ export function FlowStepPanel() {
       expanded={isExpanded}
       storageKey={STORAGE_KEY}
       minWidth={MIN_WIDTH}
-      maxWidth={MAX_WIDTH}
-      defaultWidth={360}
+      maxWidth={flowPanelMode === 'triggers' ? 600 : MAX_WIDTH}
+      defaultWidth={flowPanelMode === 'triggers' ? 460 : 360}
     >
       {panelContent()}
     </ContextPanel>

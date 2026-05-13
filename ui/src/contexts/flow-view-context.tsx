@@ -4,6 +4,7 @@ import type { Flow, FlowStep } from '@/services/api';
 
 export type OnStepSave = (step: FlowStep) => void;
 export type OnDeleteStep = (stepId: string) => void;
+export type FlowPanelMode = 'step' | 'triggers' | null;
 
 interface FlowViewContextValue {
   selectedStep: FlowStep | null;
@@ -21,6 +22,8 @@ interface FlowViewContextValue {
   setFlow: (flow: Flow | null) => void;
   moduleEditPath: string | null;
   setModuleEditPath: (path: string | null) => void;
+  flowPanelMode: FlowPanelMode;
+  setFlowPanelMode: (mode: FlowPanelMode) => void;
 }
 
 const FlowViewContext = createContext<FlowViewContextValue | null>(null);
@@ -34,6 +37,7 @@ export function FlowViewProvider({ children }: { children: React.ReactNode }) {
   const [flowModule, setFlowModule] = useState<string | null>(null);
   const [flow, setFlow] = useState<Flow | null>(null);
   const [moduleEditPath, setModuleEditPath] = useState<string | null>(null);
+  const [flowPanelMode, setFlowPanelMode] = useState<FlowPanelMode>(null);
 
   const setFlowContext = useCallback((workspace: string | null, module: string | null) => {
     setFlowWorkspace(workspace);
@@ -58,6 +62,8 @@ export function FlowViewProvider({ children }: { children: React.ReactNode }) {
         setFlow,
         moduleEditPath,
         setModuleEditPath,
+        flowPanelMode,
+        setFlowPanelMode,
       }}
     >
       {children}

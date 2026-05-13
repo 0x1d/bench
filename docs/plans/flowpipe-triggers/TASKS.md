@@ -92,14 +92,14 @@ updated: 2026-05-13
 
 ## Phase 5: UI - Flow Editor Expansion
 
-**Phase status**: TODO
+**Phase status**: DONE
 **Deliverable**: Trigger editor panel in flow editor for each flow.
 
 ### Flow Editor
 
-- [ ] **5.1** Trigger tab in flow editor panel — [specs/5.1-flow-editor.md](specs/5.1-flow-editor.md)
-- [ ] **5.2** Trigger list in flow panel — [specs/5.2-flow-triggers.md](specs/5.2-flow-triggers.md)
-- [ ] **5.3** Inline trigger CRUD in editor — [specs/5.3-inline-editor.md](specs/5.3-inline-editor.md)
+- [x] **5.1** Trigger tab in flow editor panel — [specs/5.1-flow-editor.md](specs/5.1-flow-editor.md)
+- [x] **5.2** Trigger list in flow panel — [specs/5.2-flow-triggers.md](specs/5.2-flow-triggers.md)
+- [x] **5.3** Inline trigger CRUD in editor — [specs/5.3-inline-editor.md](specs/5.3-inline-editor.md)
 
 ---
 
@@ -123,7 +123,7 @@ updated: 2026-05-13
 | 2 | 6 | 6 | DONE |
 | 3 | 4 | 4 | DONE |
 | 4 | 4 | 4 | DONE |
-| 5 | 3 | 0 | TODO |
+| 5 | 3 | 3 | DONE |
 | 6 | 2 | 0 | TODO |
 
 ---

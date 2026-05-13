@@ -30,7 +30,7 @@ import {
 } from '@xyflow/react';
 import dagre from 'dagre';
 import '@xyflow/react/dist/style.css';
-import { ArrowLeft, Pencil, LayoutGrid, Rows, Play } from 'lucide-react';
+import { ArrowLeft, Pencil, LayoutGrid, Rows, Play, Zap } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchFlow, updateFlow, runFlow, type Flow, type FlowStep, type FlowEdge } from '@/services/api';
 import { toast } from 'sonner';
@@ -285,6 +285,8 @@ export default function FlowEditorPage() {
     setFlow,
     setFlowContext,
     flowWorkspace,
+    flowPanelMode,
+    setFlowPanelMode,
   } = useFlowView();
   const flowModule = flowModuleFromHash;
 
@@ -747,6 +749,27 @@ export default function FlowEditorPage() {
                 : 'Save failed'}
             </span>
           )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              if (flowPanelMode === 'triggers') {
+                setFlowPanelMode(null);
+              } else {
+                setSelectedStep(null);
+                setExecutionId(null);
+                setFlowPanelMode('triggers');
+              }
+            }}
+            className={cn(
+              'gap-1.5',
+              flowPanelMode === 'triggers' && 'border-primary text-primary'
+            )}
+            title="Manage flow triggers"
+          >
+            <Zap className="size-3" />
+            Triggers
+          </Button>
           <Button
             variant={isDirty ? 'default' : 'outline'}
             size="sm"

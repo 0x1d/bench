@@ -1,5 +1,5 @@
 ---
-state: READY
+state: DONE
 created: 2026-05-14
 updated: 2026-05-14
 ---
@@ -20,7 +20,7 @@ updated: 2026-05-14
 
 | Phase | Status | Description |
 |-------|--------|-------------|
-| 1 | TODO | Remove webhook type, correct HTTP trigger model, HCL, API, UI, tests |
+| 1 | DONE | Remove webhook type, correct HTTP trigger model, HCL, API, UI, tests |
 
 **Next up**: Phase 1 — Remove webhook type, correct HTTP model
 

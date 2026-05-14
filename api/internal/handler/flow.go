@@ -723,6 +723,59 @@ func normalizeTriggerConfig(t *model.TriggerEntry, rawBody []byte) error {
 
 	c := &t.Config
 
+	// Also promote nested type-specific objects into flat keys, in case the
+	// UI sends back the full nested structure from the API response.
+	if sched, ok := flat["schedule"].(map[string]any); ok && sched != nil {
+		if v, ok := sched["cron"].(string); ok && v != "" {
+			flat["cron"] = v
+		}
+		if v, ok := sched["timezone"].(string); ok && v != "" {
+			flat["timezone"] = v
+		}
+		if v, ok := sched["pipeline"].(string); ok && v != "" {
+			flat["pipeline"] = v
+		}
+		if v, ok := sched["args"].(map[string]any); ok && len(v) > 0 {
+			flat["args"] = v
+		}
+	}
+	if alert, ok := flat["alert"].(map[string]any); ok && alert != nil {
+		if v, ok := alert["source"].(string); ok && v != "" {
+			flat["source"] = v
+		}
+		if v, ok := alert["condition"].(string); ok && v != "" {
+			flat["condition"] = v
+		}
+		if v, ok := alert["pipeline"].(string); ok && v != "" {
+			flat["pipeline"] = v
+		}
+	}
+	if httpCfg, ok := flat["http"].(map[string]any); ok && httpCfg != nil {
+		if v, ok := httpCfg["args"].(map[string]any); ok && len(v) > 0 {
+			flat["args"] = v
+		}
+		if v, ok := httpCfg["executionMode"].(string); ok && v != "" {
+			flat["executionMode"] = v
+		}
+		if v, ok := httpCfg["pipeline"].(string); ok && v != "" {
+			flat["pipeline"] = v
+		}
+	}
+	if notif, ok := flat["notification"].(map[string]any); ok && notif != nil {
+		if v, ok := notif["source"].(string); ok && v != "" {
+			flat["source"] = v
+		}
+		if v, ok := notif["channel"].(string); ok && v != "" {
+			flat["channel"] = v
+		}
+		if v, ok := notif["conditions"].([]any); ok {
+			flat["conditions"] = v
+		}
+		if v, ok := notif["pipeline"].(string); ok && v != "" {
+			flat["pipeline"] = v
+		}
+	}
+
 	// Schedule fields
 	if v, ok := flat["cron"].(string); ok && v != "" {
 		if c.Schedule == nil {
@@ -772,23 +825,23 @@ func normalizeTriggerConfig(t *model.TriggerEntry, rawBody []byte) error {
 	}
 
 	// HTTP fields
-	if v, ok := flat["url"].(string); ok && v != "" {
+	if v, ok := flat["args"].(map[string]any); ok && len(v) > 0 {
 		if c.HTTP == nil {
 			c.HTTP = &model.HTTPConfig{}
 		}
-		c.HTTP.URL = v
+		args := make(map[string]string)
+		for k, val := range v {
+			if s, ok := val.(string); ok {
+				args[k] = s
+			}
+		}
+		c.HTTP.Args = args
 	}
-	if v, ok := flat["method"].(string); ok && v != "" {
+	if v, ok := flat["executionMode"].(string); ok && v != "" {
 		if c.HTTP == nil {
 			c.HTTP = &model.HTTPConfig{}
 		}
-		c.HTTP.Method = v
-	}
-	if v, ok := flat["body"].(string); ok && v != "" {
-		if c.HTTP == nil {
-			c.HTTP = &model.HTTPConfig{}
-		}
-		c.HTTP.Body = v
+		c.HTTP.ExecutionMode = v
 	}
 
 	// Notification fields

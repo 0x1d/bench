@@ -38,7 +38,7 @@ export function TriggersPage() {
     id: '',
     label: '',
     module: '',
-    type: 'webhook',
+    type: 'http',
     config: {},
   });
 
@@ -163,7 +163,7 @@ export function TriggersPage() {
       id: '',
       label: '',
       module: '',
-      type: 'webhook',
+      type: 'http',
       config: {},
     });
     setPanelError(null);

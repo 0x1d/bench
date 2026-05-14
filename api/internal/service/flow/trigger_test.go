@@ -111,9 +111,9 @@ func createTestTriggerFile(t *testing.T, dir string, triggers []string) {
 	}
 }
 
-// buildWebhookTrigger returns a trigger HCL block as a string
-func buildWebhookTrigger(id, description, pipeline string) string {
-	return `trigger "webhook" "` + id + `" {
+// buildHTTPTrigger returns a trigger HCL block as a string
+func buildHTTPTrigger(id, description, pipeline string) string {
+	return `trigger "http" "` + id + `" {
   description = "` + description + `"
   pipeline    = pipeline.` + pipeline + `
 }`
@@ -145,26 +145,30 @@ func TestBuildTriggerHCLBlock(t *testing.T) {
 		expected []string // strings that should be in the output
 	}{
 		{
-			name: "webhook trigger",
+			name: "http trigger with args and execution mode",
 			trigger: &model.TriggerEntry{
-				ID:        "test_webhook",
-				Label:     "Test Webhook",
-				Module:      "test_flow",
-				Type:      model.TriggerTypeWebhook,
+				ID:        "my_webhook",
+				Label:     "My HTTP Trigger",
+				Module:    "test_flow",
+				Type:      model.TriggerTypeHTTP,
 				Workspace: "default",
 				Config: model.TriggerConfig{
-					Description: "Test webhook description",
+					Description: "HTTP webhook trigger",
 					Pipeline:    "test_pipeline",
-					Webhook: &model.WebhookConfig{
-						Description: "Test webhook description",
-						Pipeline:    "test_pipeline",
+					HTTP: &model.HTTPConfig{
+						Description:   "HTTP webhook trigger",
+						Pipeline:      "test_pipeline",
+						Args:          map[string]string{"body": "self.request_body", "headers": "self.request_headers"},
+						ExecutionMode: "asynchronous",
 					},
 				},
 			},
 			expected: []string{
-				`trigger "webhook" "test_webhook"`,
-				`description = "Test webhook description"`,
+				`trigger "http" "my_webhook"`,
+				`description = "HTTP webhook trigger"`,
 				`pipeline    = pipeline.test_pipeline`,
+				`args = {`,
+				`execution_mode = "asynchronous"`,
 			},
 		},
 		{
@@ -245,30 +249,25 @@ func TestBuildTriggerHCLBlock(t *testing.T) {
 			},
 		},
 		{
-			name: "http trigger with URL and method",
+			name: "http trigger minimal",
 			trigger: &model.TriggerEntry{
-				ID:        "http_callback",
-				Label:     "HTTP Callback",
-				Module:      "test_flow",
+				ID:        "http_min",
+				Label:     "HTTP Minimal",
+				Module:    "test_flow",
 				Type:      model.TriggerTypeHTTP,
 				Workspace: "default",
 				Config: model.TriggerConfig{
-					Description: "HTTP callback trigger",
+					Description: "Minimal HTTP trigger",
 					Pipeline:    "callback_pipeline",
 					HTTP: &model.HTTPConfig{
-						Description: "HTTP callback trigger",
+						Description: "Minimal HTTP trigger",
 						Pipeline:    "callback_pipeline",
-						URL:         "https://example.com/callback",
-						Method:      "POST",
-						Body:        `{"status": "{{event.status}}"}`,
 					},
 				},
 			},
 			expected: []string{
-				`trigger "http" "http_callback"`,
-				`url         = "https://example.com/callback"`,
-				`method      = "POST"`,
-				`body        = "{\"status\": \"{{event.status}}\"}"`,
+				`trigger "http" "http_min"`,
+				`pipeline    = pipeline.callback_pipeline`,
 			},
 		},
 		{
@@ -343,12 +342,12 @@ func TestCreateTrigger(t *testing.T) {
 		ID:        "test_trigger",
 		Label:     "Test Trigger",
 		Module:      testFlowID,
-		Type:      model.TriggerTypeWebhook,
+		Type:      model.TriggerTypeHTTP,
 		Workspace: "default",
 		Config: model.TriggerConfig{
 			Description: "Test trigger description",
 			Pipeline:    "test_flow_for_triggers",
-			Webhook: &model.WebhookConfig{
+			HTTP: &model.HTTPConfig{
 				Description: "Test trigger description",
 				Pipeline:    "test_flow_for_triggers",
 			},
@@ -408,8 +407,8 @@ func TestUpdateTrigger(t *testing.T) {
 	createTestFlow(t, dir)
 
 	// Create initial trigger
-	webhookTrigger := buildWebhookTrigger("update_test", "Initial description", "test_flow_for_triggers")
-	createTestTriggerFile(t, dir, []string{webhookTrigger})
+	httpTrigger := buildHTTPTrigger("update_test", "Initial description", "test_flow_for_triggers")
+	createTestTriggerFile(t, dir, []string{httpTrigger})
 
 	// Temporarily override FlowsPath
 	origConfig := os.Getenv("BENCH_CONFIG")
@@ -431,12 +430,12 @@ func TestUpdateTrigger(t *testing.T) {
 		ID:        "update_test",
 		Label:     "Updated Trigger",
 		Module:      testFlowID,
-		Type:      model.TriggerTypeWebhook,
+		Type:      model.TriggerTypeHTTP,
 		Workspace: "default",
 		Config: model.TriggerConfig{
 			Description: "Updated description",
 			Pipeline:    "test_flow_for_triggers",
-			Webhook: &model.WebhookConfig{
+			HTTP: &model.HTTPConfig{
 				Description: "Updated description",
 				Pipeline:    "test_flow_for_triggers",
 			},
@@ -478,8 +477,8 @@ func TestDeleteTrigger(t *testing.T) {
 	createTestFlow(t, dir)
 
 	// Create triggers
-	webhookTrigger := buildWebhookTrigger("delete_test", "To be deleted", "test_flow_for_triggers")
-	createTestTriggerFile(t, dir, []string{webhookTrigger})
+	httpTrigger := buildHTTPTrigger("delete_test", "To be deleted", "test_flow_for_triggers")
+	createTestTriggerFile(t, dir, []string{httpTrigger})
 
 	// Temporarily override FlowsPath
 	origConfig := os.Getenv("BENCH_CONFIG")
@@ -536,16 +535,16 @@ func TestParseTriggerBlock(t *testing.T) {
 		checks   func(t *testing.T, state model.TriggerState)
 	}{
 		{
-			name:    "webhook trigger",
-			typeStr: "webhook",
-			id:      "test_webhook",
-			block:   `description = "Test webhook" pipeline = pipeline.test_pipeline`,
+			name:    "http trigger",
+			typeStr: "http",
+			id:      "test_http",
+			block:   `description = "Test http" pipeline = pipeline.test_pipeline`,
 			checks: func(t *testing.T, state model.TriggerState) {
-				if state.Type != model.TriggerTypeWebhook {
-					t.Errorf("Expected webhook type, got %s", state.Type)
+				if state.Type != model.TriggerTypeHTTP {
+					t.Errorf("Expected http type, got %s", state.Type)
 				}
-				if state.ID != "test_webhook" {
-					t.Errorf("Expected ID test_webhook, got %s", state.ID)
+				if state.ID != "test_http" {
+					t.Errorf("Expected ID test_http, got %s", state.ID)
 				}
 			},
 		},
@@ -601,10 +600,10 @@ func TestParseTriggerBlock(t *testing.T) {
 			},
 		},
 		{
-			name:    "http trigger",
+			name:    "http trigger with args",
 			typeStr: "http",
-			id:      "http_callback",
-			block:   `pipeline = pipeline.http_callback url = "https://example.com/webhook" method = "POST"`,
+			id:      "http_with_args",
+			block:   `pipeline = pipeline.http_callback args = { body = "self.request_body" } execution_mode = "asynchronous"`,
 			checks: func(t *testing.T, state model.TriggerState) {
 				if state.Type != model.TriggerTypeHTTP {
 					t.Errorf("Expected http type, got %s", state.Type)
@@ -637,10 +636,9 @@ pipeline "test" {
   }
 }
 
-trigger "webhook" "my_webhook" {
-  description = "A webhook trigger"
+trigger "http" "my_http" {
+  description = "An HTTP trigger"
   pipeline    = pipeline.test_pipeline
-  url         = "https://example.com/webhook"
 }
 
 trigger "schedule" "daily" {
@@ -656,12 +654,12 @@ trigger "schedule" "daily" {
 		t.Errorf("Expected 2 matches, got %d", len(matches))
 	}
 
-	// Check first match (webhook)
-	if matches[0][1] != "webhook" {
-		t.Errorf("Expected 'webhook', got '%s'", matches[0][1])
+	// Check first match (http)
+	if matches[0][1] != "http" {
+		t.Errorf("Expected 'http', got '%s'", matches[0][1])
 	}
-	if matches[0][2] != "my_webhook" {
-		t.Errorf("Expected 'my_webhook', got '%s'", matches[0][2])
+	if matches[0][2] != "my_http" {
+		t.Errorf("Expected 'my_http', got '%s'", matches[0][2])
 	}
 	if !strings.Contains(matches[0][3], "description") {
 		t.Errorf("Block content should contain 'description'")
@@ -682,10 +680,9 @@ func TestTriggerTypeConstants(t *testing.T) {
 		constant model.TriggerType
 		value    string
 	}{
-		{model.TriggerTypeWebhook, "webhook"},
+		{model.TriggerTypeHTTP, "http"},
 		{model.TriggerTypeSchedule, "schedule"},
 		{model.TriggerTypeAlert, "alert"},
-		{model.TriggerTypeHTTP, "http"},
 		{model.TriggerTypeNotification, "notification"},
 	}
 
@@ -744,12 +741,12 @@ func TestBuildTriggerHCLBlock_PipelineRefHandling(t *testing.T) {
 				ID:        "test",
 				Label:     "Test",
 				Module:      "test_flow",
-				Type:      model.TriggerTypeWebhook,
+				Type:      model.TriggerTypeHTTP,
 				Workspace: "default",
 				Config: model.TriggerConfig{
 					Description: "Test",
 					Pipeline:    tt.pipeline,
-					Webhook: &model.WebhookConfig{
+					HTTP: &model.HTTPConfig{
 						Description: "Test",
 						Pipeline:    tt.pipeline,
 					},
@@ -774,12 +771,12 @@ func TestBuildTriggerHCLBlock_NoExtraWhitespace(t *testing.T) {
 		ID:        "test",
 		Label:     "Test",
 		Module:      "test_flow",
-		Type:      model.TriggerTypeWebhook,
+		Type:      model.TriggerTypeHTTP,
 		Workspace: "default",
 		Config: model.TriggerConfig{
 			Description: "Test",
 			Pipeline:    "test_pipeline",
-			Webhook: &model.WebhookConfig{
+			HTTP: &model.HTTPConfig{
 				Description: "Test",
 				Pipeline:    "test_pipeline",
 			},
@@ -812,11 +809,11 @@ func TestTriggerConfig_Validation(t *testing.T) {
 		valid   bool
 	}{
 		{
-			name: "valid webhook",
+			name: "valid http",
 			trigger: &model.TriggerEntry{
 				ID:        "valid",
 				Module:      "test_flow",
-				Type:      model.TriggerTypeWebhook,
+				Type:      model.TriggerTypeHTTP,
 				Config:    model.TriggerConfig{Pipeline: "test_pipeline"},
 			},
 			valid: true,
@@ -826,7 +823,7 @@ func TestTriggerConfig_Validation(t *testing.T) {
 			trigger: &model.TriggerEntry{
 				ID:        "",
 				Module:      "test_flow",
-				Type:      model.TriggerTypeWebhook,
+				Type:      model.TriggerTypeHTTP,
 				Config:    model.TriggerConfig{Pipeline: "test_pipeline"},
 			},
 			valid: false,
@@ -836,7 +833,7 @@ func TestTriggerConfig_Validation(t *testing.T) {
 			trigger: &model.TriggerEntry{
 				ID:        "valid",
 				Module:      "",
-				Type:      model.TriggerTypeWebhook,
+				Type:      model.TriggerTypeHTTP,
 				Config:    model.TriggerConfig{Pipeline: "test_pipeline"},
 			},
 			valid: false,
@@ -856,7 +853,7 @@ func TestTriggerConfig_Validation(t *testing.T) {
 			trigger: &model.TriggerEntry{
 				ID:        "valid",
 				Module:      "test_flow",
-				Type:      model.TriggerTypeWebhook,
+				Type:      model.TriggerTypeHTTP,
 				Config:    model.TriggerConfig{Pipeline: ""},
 			},
 			valid: false,

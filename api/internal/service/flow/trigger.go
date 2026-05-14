@@ -151,14 +151,15 @@ func BuildTriggerHCLBlock(trigger *model.TriggerEntry) (string, error) {
 		}
 	case model.TriggerTypeHTTP:
 		if trigger.Config.HTTP != nil {
-			if trigger.Config.HTTP.URL != "" {
-				b.WriteString(fmt.Sprintf("  url         = %q\n", trigger.Config.HTTP.URL))
+			if len(trigger.Config.HTTP.Args) > 0 {
+				b.WriteString("  args = {\n")
+				for k, v := range trigger.Config.HTTP.Args {
+					b.WriteString(fmt.Sprintf("    %-20s = %s\n", k, v))
+				}
+				b.WriteString("  }\n")
 			}
-			if trigger.Config.HTTP.Method != "" {
-				b.WriteString(fmt.Sprintf("  method      = %q\n", trigger.Config.HTTP.Method))
-			}
-			if trigger.Config.HTTP.Body != "" {
-				b.WriteString(fmt.Sprintf("  body        = %q\n", trigger.Config.HTTP.Body))
+			if trigger.Config.HTTP.ExecutionMode != "" {
+				b.WriteString(fmt.Sprintf("  execution_mode = %q\n", trigger.Config.HTTP.ExecutionMode))
 			}
 		}
 	case model.TriggerTypeNotification:
@@ -181,8 +182,6 @@ func BuildTriggerHCLBlock(trigger *model.TriggerEntry) (string, error) {
 				b.WriteString(fmt.Sprintf("  conditions  = [%s]\n", strings.Join(conditions, ", ")))
 			}
 		}
-	case model.TriggerTypeWebhook:
-		// Webhook has no additional fields beyond the base
 	}
 
 	b.WriteString("}\n")
@@ -365,9 +364,9 @@ func (s *Service) TestTrigger(moduleID, triggerID string, payload map[string]any
 		runRequest["args"] = payload
 	}
 
-	// For webhook triggers, generate a test payload
+	// For HTTP triggers, generate a test payload
 	triggerType := trigger.Type
-	if triggerType == model.TriggerTypeWebhook && payload == nil {
+	if triggerType == model.TriggerTypeHTTP && payload == nil {
 		runRequest["args"] = map[string]any{
 			"event": map[string]any{
 				"timestamp": time.Now().Unix(),
@@ -601,9 +600,6 @@ func parseTriggerBlockContent(triggerType, triggerID, blockContent, moduleName s
 	timezoneRe := regexp.MustCompile(`timezone\s*=\s*"((?:[^"\\]|\\.)*)"`)
 	sourceRe := regexp.MustCompile(`source\s*=\s*([^\s,}\n]+)`)
 	conditionRe := regexp.MustCompile(`condition\s*=\s*"((?:[^"\\]|\\.)*)"`)
-	urlRe := regexp.MustCompile(`url\s*=\s*"((?:[^"\\]|\\.)*)"`)
-	methodRe := regexp.MustCompile(`method\s*=\s*"((?:[^"\\]|\\.)*)"`)
-	bodyRe := regexp.MustCompile(`body\s*=\s*"((?:[^"\\]|\\.)*)"`)
 	channelRe := regexp.MustCompile(`channel\s*=\s*"((?:[^"\\]|\\.)*)"`)
 
 	if pipelineMatch := pipelineRe.FindStringSubmatch(blockContent); len(pipelineMatch) > 1 {
@@ -615,11 +611,6 @@ func parseTriggerBlockContent(triggerType, triggerID, blockContent, moduleName s
 
 	// Parse type-specific fields
 	switch triggerType {
-	case "webhook":
-		state.Config.Webhook = &model.WebhookConfig{
-			Description: state.Config.Description,
-			Pipeline:    state.Config.Pipeline,
-		}
 	case "schedule":
 		sched := &model.ScheduleConfig{Pipeline: state.Config.Pipeline}
 		if cronMatch := cronRe.FindStringSubmatch(blockContent); len(cronMatch) > 1 {
@@ -643,14 +634,13 @@ func parseTriggerBlockContent(triggerType, triggerID, blockContent, moduleName s
 		state.Config.Alert = alert
 	case "http":
 		http := &model.HTTPConfig{Pipeline: state.Config.Pipeline}
-		if urlMatch := urlRe.FindStringSubmatch(blockContent); len(urlMatch) > 1 {
-			http.URL = unescapeHCLString(urlMatch[1])
+		if args := parseHCLArgs(blockContent); len(args) > 0 {
+			http.Args = args
 		}
-		if methodMatch := methodRe.FindStringSubmatch(blockContent); len(methodMatch) > 1 {
-			http.Method = unescapeHCLString(methodMatch[1])
-		}
-		if bodyMatch := bodyRe.FindStringSubmatch(blockContent); len(bodyMatch) > 1 {
-			http.Body = unescapeHCLString(bodyMatch[1])
+		// Parse execution_mode
+		execModeRe := regexp.MustCompile(`execution_mode\s*=\s*"((?:[^"\\]|\\.)*)"`)
+		if emMatch := execModeRe.FindStringSubmatch(blockContent); len(emMatch) > 1 {
+			http.ExecutionMode = unescapeHCLString(emMatch[1])
 		}
 		state.Config.HTTP = http
 	case "notification":
@@ -728,12 +718,6 @@ func triggerEntryToModelConfig(cfg *config.TriggerConfig) model.TriggerConfig {
 		Description: cfg.Description,
 		Pipeline:    cfg.Pipeline,
 	}
-	if cfg.Webhook != nil {
-		mcfg.Webhook = &model.WebhookConfig{
-			Description: cfg.Webhook.Description,
-			Pipeline:    cfg.Webhook.Pipeline,
-		}
-	}
 	if cfg.Schedule != nil {
 		mcfg.Schedule = &model.ScheduleConfig{
 			Description: cfg.Schedule.Description,
@@ -753,11 +737,10 @@ func triggerEntryToModelConfig(cfg *config.TriggerConfig) model.TriggerConfig {
 	}
 	if cfg.HTTP != nil {
 		mcfg.HTTP = &model.HTTPConfig{
-			Description: cfg.HTTP.Description,
-			Pipeline:    cfg.HTTP.Pipeline,
-			URL:         cfg.HTTP.URL,
-			Method:      cfg.HTTP.Method,
-			Body:        cfg.HTTP.Body,
+			Description:   cfg.HTTP.Description,
+			Pipeline:      cfg.HTTP.Pipeline,
+			Args:          cfg.HTTP.Args,
+			ExecutionMode: cfg.HTTP.ExecutionMode,
 		}
 	}
 	if cfg.Notification != nil {
@@ -837,13 +820,6 @@ func configTriggerEntryFromModel(trigger *model.TriggerEntry) config.TriggerConf
 	}
 
 	switch trigger.Type {
-	case model.TriggerTypeWebhook:
-		if trigger.Config.Webhook != nil {
-			tc.Webhook = &config.WebhookConfig{
-				Description: trigger.Config.Webhook.Description,
-				Pipeline:    trigger.Config.Webhook.Pipeline,
-			}
-		}
 	case model.TriggerTypeSchedule:
 		if trigger.Config.Schedule != nil {
 			tc.Schedule = &config.ScheduleConfig{
@@ -866,11 +842,10 @@ func configTriggerEntryFromModel(trigger *model.TriggerEntry) config.TriggerConf
 	case model.TriggerTypeHTTP:
 		if trigger.Config.HTTP != nil {
 			tc.HTTP = &config.HTTPConfig{
-				Description: trigger.Config.HTTP.Description,
-				Pipeline:    trigger.Config.HTTP.Pipeline,
-				URL:         trigger.Config.HTTP.URL,
-				Method:      trigger.Config.HTTP.Method,
-				Body:        trigger.Config.HTTP.Body,
+				Description:   trigger.Config.HTTP.Description,
+				Pipeline:      trigger.Config.HTTP.Pipeline,
+				Args:          trigger.Config.HTTP.Args,
+				ExecutionMode: trigger.Config.HTTP.ExecutionMode,
 			}
 		}
 	case model.TriggerTypeNotification:

@@ -224,12 +224,12 @@ flowpipe_triggers:
   triggers:
     - id: dup
       module: pipeline1
-      type: webhook
+      type: http
       config:
         description: A
     - id: dup
       module: pipeline2
-      type: webhook
+      type: http
       config:
         description: B
 `)
@@ -277,7 +277,7 @@ flowpipe_triggers:
   triggers:
     - id: t1
       module: ""
-      type: webhook
+      type: http
       config:
         description: Test
 `)
@@ -293,7 +293,7 @@ flowpipe_triggers:
   triggers:
     - id: ""
       module: pipeline1
-      type: webhook
+      type: http
       config:
         description: Test
 `)
@@ -307,11 +307,11 @@ func TestValidateConfig_Triggers_Complete(t *testing.T) {
 	cfg := mustUnmarshal(t, `
 flowpipe_triggers:
   triggers:
-    - id: webhook-trigger
+    - id: http-trigger
       module: daily_report
-      type: webhook
+      type: http
       config:
-        description: "Webhook trigger"
+        description: "HTTP trigger"
         pipeline: pipeline.daily_report
     - id: schedule-trigger
       module: hourly_check

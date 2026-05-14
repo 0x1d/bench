@@ -1068,19 +1068,18 @@ export async function runTerraformCommand(
 }
 
 // Trigger types and API
-export type TriggerType = 'webhook' | 'schedule' | 'alert' | 'http' | 'notification';
+export type TriggerType = 'schedule' | 'alert' | 'http' | 'notification';
 
 export interface TriggerConfig {
   cron?: string;
   timezone?: string;
-  url?: string;
-  method?: string;
-  body?: string;
   source?: string;
   condition?: string;
   channel?: string;
   conditions?: string[];
   pipeline?: string;
+  args?: Record<string, string>;
+  executionMode?: string;
   [key: string]: unknown;
 }
 

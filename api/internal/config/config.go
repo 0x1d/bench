@@ -101,17 +101,18 @@ type WorkspaceEntry struct {
 type TriggerType string
 
 const (
-	TriggerTypeWebhook        TriggerType = "webhook"
 	TriggerTypeSchedule       TriggerType = "schedule"
 	TriggerTypeAlert          TriggerType = "alert"
 	TriggerTypeHTTP           TriggerType = "http"
 	TriggerTypeNotification   TriggerType = "notification"
 )
 
-// WebhookConfig holds configuration for webhook triggers.
-type WebhookConfig struct {
-	Description string `yaml:"description,omitempty" json:"description,omitempty"`
-	Pipeline    string `yaml:"pipeline" json:"pipeline"`
+// HTTPConfig holds configuration for HTTP triggers (Flowpipe's inbound webhook receiver).
+type HTTPConfig struct {
+	Description   string            `yaml:"description,omitempty" json:"description,omitempty"`
+	Pipeline      string            `yaml:"pipeline" json:"pipeline"`
+	Args          map[string]string `yaml:"args,omitempty" json:"args,omitempty"`
+	ExecutionMode string            `yaml:"executionMode,omitempty" json:"executionMode,omitempty"`
 }
 
 // ScheduleConfig holds configuration for schedule triggers.
@@ -131,15 +132,6 @@ type AlertConfig struct {
 	Condition   string `yaml:"condition,omitempty" json:"condition,omitempty"`
 }
 
-// HTTPConfig holds configuration for HTTP triggers.
-type HTTPConfig struct {
-	Description string `yaml:"description,omitempty" json:"description,omitempty"`
-	Pipeline    string `yaml:"pipeline" json:"pipeline"`
-	URL         string `yaml:"url,omitempty" json:"url,omitempty"`
-	Method      string `yaml:"method,omitempty" json:"method,omitempty"`
-	Body        string `yaml:"body,omitempty" json:"body,omitempty"`
-}
-
 // NotificationConfig holds configuration for notification triggers.
 type NotificationConfig struct {
 	Description string `yaml:"description,omitempty" json:"description,omitempty"`
@@ -153,7 +145,6 @@ type NotificationConfig struct {
 type TriggerConfig struct {
 	Description  string            `yaml:"description,omitempty" json:"description,omitempty"`
 	Pipeline     string            `yaml:"pipeline,omitempty" json:"pipeline,omitempty"`
-	Webhook      *WebhookConfig    `yaml:"webhook,omitempty" json:"webhook,omitempty"`
 	Schedule     *ScheduleConfig   `yaml:"schedule,omitempty" json:"schedule,omitempty"`
 	Alert        *AlertConfig      `yaml:"alert,omitempty" json:"alert,omitempty"`
 	HTTP         *HTTPConfig       `yaml:"http,omitempty" json:"http,omitempty"`
@@ -442,14 +433,13 @@ func validateConfig(cfg Config) error {
 			}
 			// Validate trigger type
 			validTriggerTypes := map[TriggerType]bool{
-				TriggerTypeWebhook:        true,
 				TriggerTypeSchedule:       true,
 				TriggerTypeAlert:          true,
 				TriggerTypeHTTP:           true,
 				TriggerTypeNotification:   true,
 			}
 			if !validTriggerTypes[t.Type] {
-				return fmt.Errorf("flowpipe_triggers.triggers[%d].type must be one of: webhook, schedule, alert, http, notification", i)
+				return fmt.Errorf("flowpipe_triggers.triggers[%d].type must be one of: schedule, alert, http, notification", i)
 			}
 		}
 	}

@@ -37,7 +37,6 @@ interface FlowTriggersListProps {
 }
 
 const TRIGGER_TYPE_COLORS: Record<TriggerType, string> = {
-  webhook: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
   schedule: 'bg-green-500/20 text-green-400 border-green-500/30',
   alert: 'bg-red-500/20 text-red-400 border-red-500/30',
   http: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
@@ -62,7 +61,7 @@ export function FlowTriggersList({ flowId, module, pipelineRef, workspace }: Flo
     id: '',
     label: '',
     module: module,
-    type: 'webhook',
+    type: 'http',
     config: {},
   });
 
@@ -162,7 +161,7 @@ export function FlowTriggersList({ flowId, module, pipelineRef, workspace }: Flo
       id: '',
       label: '',
       module: module,
-      type: 'webhook',
+      type: 'http',
       config,
     });
   };
@@ -218,7 +217,6 @@ export function FlowTriggersList({ flowId, module, pipelineRef, workspace }: Flo
   );
 
   const triggerTypes: TriggerType[] = [
-    'webhook',
     'schedule',
     'alert',
     'http',
@@ -375,7 +373,7 @@ export function FlowTriggersList({ flowId, module, pipelineRef, workspace }: Flo
 
                     {/* Actions */}
                     <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-                      {trigger.type === 'webhook' && (
+                      {trigger.type === 'http' && (
                         <Button
                           variant="ghost"
                           size="icon-xs"

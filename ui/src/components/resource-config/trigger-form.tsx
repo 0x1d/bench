@@ -13,7 +13,6 @@ import type { TriggerEntry, TriggerType } from '@/services/api';
 import type { Dispatch, SetStateAction } from 'react';
 
 const TRIGGER_TYPES: { value: TriggerType; label: string }[] = [
-  { value: 'webhook', label: 'Webhook' },
   { value: 'schedule', label: 'Schedule' },
   { value: 'alert', label: 'Alert' },
   { value: 'http', label: 'HTTP' },
@@ -138,14 +137,6 @@ export function TriggerForm({
       )}
 
       {/* Type-specific Config Fields */}
-      {draft.type === 'webhook' && (
-        <WebhookConfigFields
-          config={draft.config}
-          onChange={updateConfig}
-          availablePipelines={availablePipelines}
-        />
-      )}
-
       {draft.type === 'schedule' && (
         <ScheduleConfigFields
           config={draft.config}
@@ -252,33 +243,6 @@ function PipelineRefInput({
         </div>
       )}
     </div>
-  );
-}
-
-function WebhookConfigFields({
-  config,
-  onChange,
-  availablePipelines,
-}: {
-  config: Record<string, unknown>;
-  onChange: (key: string, value: unknown) => void;
-  availablePipelines: { id: string; name?: string }[];
-}) {
-  return (
-    <>
-      <div className="space-y-1">
-        <Label>Pipeline *</Label>
-        <PipelineRefInput
-          value={(config.pipeline as string) || ''}
-          onChange={(v) => onChange('pipeline', v)}
-          availablePipelines={availablePipelines}
-          placeholder="pipeline.my_pipeline"
-        />
-        <p className="text-xs text-muted-foreground">
-          Flowpipe pipeline to execute when webhook is triggered.
-        </p>
-      </div>
-    </>
   );
 }
 
@@ -435,45 +399,29 @@ function HttpConfigFields({
   onChange: (key: string, value: unknown) => void;
   availablePipelines: { id: string; name?: string }[];
 }) {
+  const args = (config.args as Record<string, string>) || {};
+
+  const addArg = () => {
+    onChange('args', { ...args, '': 'self.request_body' });
+  };
+
+  const updateArg = (oldKey: string, newKey: string, value: string) => {
+    const updated = { ...args };
+    if (oldKey !== newKey) {
+      delete updated[oldKey];
+    }
+    updated[newKey] = value;
+    onChange('args', updated);
+  };
+
+  const removeArg = (key: string) => {
+    const updated = { ...args };
+    delete updated[key];
+    onChange('args', updated);
+  };
+
   return (
     <>
-      <div className="space-y-1">
-        <Label>URL *</Label>
-        <Input
-          value={(config.url as string) || ''}
-          onChange={(e) => onChange('url', e.target.value)}
-          placeholder="https://api.example.com/endpoint"
-          className="font-mono"
-        />
-      </div>
-      <div className="space-y-1">
-        <Label>Method</Label>
-        <Select
-          value={(config.method as string) || 'POST'}
-          onValueChange={(value) => onChange('method', value)}
-        >
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="GET">GET</SelectItem>
-            <SelectItem value="POST">POST</SelectItem>
-            <SelectItem value="PUT">PUT</SelectItem>
-            <SelectItem value="PATCH">PATCH</SelectItem>
-            <SelectItem value="DELETE">DELETE</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <div className="space-y-1">
-        <Label>Body</Label>
-        <Textarea
-          value={(config.body as string) || ''}
-          onChange={(e) => onChange('body', e.target.value)}
-          placeholder='{"key": "value"}'
-          rows={4}
-          className="font-mono text-xs"
-        />
-      </div>
       <div className="space-y-1">
         <Label>Pipeline *</Label>
         <PipelineRefInput
@@ -482,6 +430,68 @@ function HttpConfigFields({
           availablePipelines={availablePipelines}
           placeholder="pipeline.my_pipeline"
         />
+        <p className="text-xs text-muted-foreground">
+          Flowpipe pipeline to execute when HTTP request is received.
+        </p>
+      </div>
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <Label>Args</Label>
+          <button
+            type="button"
+            className="text-xs text-muted-foreground hover:text-foreground"
+            onClick={addArg}
+          >
+            + Add arg
+          </button>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Pipeline arguments to receive from the request. Use{' '}
+          <code className="text-xs">self.request_body</code> or{' '}
+          <code className="text-xs">self.request_headers</code> to pass request data.
+        </p>
+        {Object.entries(args).map(([key, value], idx) => (
+          <div key={idx} className="flex gap-2 items-start">
+            <Input
+              value={key}
+              onChange={(e) => updateArg(key, e.target.value, value)}
+              placeholder="param name"
+              className="flex-1 font-mono text-sm"
+            />
+            <Input
+              value={value}
+              onChange={(e) => updateArg(key, key, e.target.value)}
+              placeholder="e.g. self.request_body"
+              className="flex-1 font-mono text-sm"
+            />
+            <button
+              type="button"
+              className="mt-1 text-muted-foreground hover:text-destructive"
+              onClick={() => removeArg(key)}
+              title="Remove"
+            >
+              ✕
+            </button>
+          </div>
+        ))}
+      </div>
+      <div className="space-y-1">
+        <Label>Execution Mode</Label>
+        <Select
+          value={(config.executionMode as string) || 'asynchronous'}
+          onValueChange={(value) => onChange('executionMode', value)}
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="asynchronous">Asynchronous</SelectItem>
+            <SelectItem value="synchronous">Synchronous</SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground">
+          Whether the pipeline runs async (default) or returns output in the response.
+        </p>
       </div>
     </>
   );

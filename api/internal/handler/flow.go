@@ -608,10 +608,10 @@ func HandleFlowExecution(w http.ResponseWriter, r *http.Request) {
 // triggerService is the global trigger service instance.
 var triggerService = flow.NewService()
 
-// HandleTriggersList returns all triggers from all flows.
+// HandleTriggersList returns all triggers from all modules.
 // Query params:
 //   - workspace: filter triggers by workspace
-//   - flow: filter triggers by flow ID
+//   - module: filter triggers by module
 func HandleTriggersList(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -619,7 +619,7 @@ func HandleTriggersList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	workspace := strings.TrimSpace(r.URL.Query().Get("workspace"))
-	flowID := strings.TrimSpace(r.URL.Query().Get("flow"))
+	moduleID := strings.TrimSpace(r.URL.Query().Get("module"))
 
 	triggers, err := triggerService.ListTriggers()
 	if err != nil {
@@ -638,11 +638,11 @@ func HandleTriggersList(w http.ResponseWriter, r *http.Request) {
 		triggers = filtered
 	}
 
-	// Filter by flow if specified
-	if flowID != "" {
+	// Filter by module if specified
+	if moduleID != "" {
 		filtered := []model.TriggerState{}
 		for _, t := range triggers {
-			if t.Flow == flowID {
+			if t.Module == moduleID {
 				filtered = append(filtered, t)
 			}
 		}
@@ -655,7 +655,7 @@ func HandleTriggersList(w http.ResponseWriter, r *http.Request) {
 	}{Triggers: triggers})
 }
 
-// HandleTriggerGet returns a specific trigger from a flow.
+// HandleTriggerGet returns a specific trigger from a module.
 func HandleTriggerGet(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -668,9 +668,9 @@ func HandleTriggerGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	flowID := strings.TrimSpace(r.PathValue("flowId"))
-	if flowID == "" {
-		// For backward compatibility, look up trigger across all flows
+	moduleID := strings.TrimSpace(r.PathValue("moduleId"))
+	if moduleID == "" {
+		// Look up trigger across all modules
 		triggers, err := triggerService.ListTriggers()
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -687,7 +687,7 @@ func HandleTriggerGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	trigger, err := triggerService.GetTrigger(flowID, triggerID)
+	trigger, err := triggerService.GetTrigger(moduleID, triggerID)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			http.Error(w, err.Error(), http.StatusNotFound)
@@ -701,6 +701,117 @@ func HandleTriggerGet(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(trigger)
 }
 
+// normalizeTriggerConfig maps flat config keys (as sent by the UI) into the
+// nested type-specific structs expected by model.TriggerConfig.
+// The UI sends flat keys like {cron, timezone, source, ...} on config, but the
+// Go model expects config.Schedule.Cron, config.Alert.Source, etc.
+// Since encoding/json silently drops unknown fields, we re-decode from the
+// raw body to capture them, then promote into the nested structs.
+func normalizeTriggerConfig(t *model.TriggerEntry, rawBody []byte) error {
+	// Decode the full config into a generic map to capture flat keys the
+	// struct decoder silently dropped.
+	var envelope struct {
+		Config map[string]any `json:"config"`
+	}
+	if err := json.Unmarshal(rawBody, &envelope); err != nil {
+		return err
+	}
+	flat := envelope.Config
+	if flat == nil {
+		return nil
+	}
+
+	c := &t.Config
+
+	// Schedule fields
+	if v, ok := flat["cron"].(string); ok && v != "" {
+		if c.Schedule == nil {
+			c.Schedule = &model.ScheduleConfig{}
+		}
+		c.Schedule.Cron = v
+	}
+	if v, ok := flat["timezone"].(string); ok && v != "" {
+		if c.Schedule == nil {
+			c.Schedule = &model.ScheduleConfig{}
+		}
+		c.Schedule.Timezone = v
+	}
+	// args: map[string]string from UI
+	if args, ok := flat["args"].(map[string]any); ok && len(args) > 0 {
+		if c.Schedule == nil {
+			c.Schedule = &model.ScheduleConfig{}
+		}
+		c.Schedule.Args = make(map[string]string)
+		for k, v := range args {
+			if s, ok := v.(string); ok {
+				c.Schedule.Args[k] = s
+			}
+		}
+	}
+
+	// Alert fields
+	if v, ok := flat["source"].(string); ok && v != "" {
+		switch t.Type {
+		case model.TriggerTypeAlert:
+			if c.Alert == nil {
+				c.Alert = &model.AlertConfig{}
+			}
+			c.Alert.Source = v
+		case model.TriggerTypeNotification:
+			if c.Notification == nil {
+				c.Notification = &model.NotificationConfig{}
+			}
+			c.Notification.Source = v
+		}
+	}
+	if v, ok := flat["condition"].(string); ok && v != "" {
+		if c.Alert == nil {
+			c.Alert = &model.AlertConfig{}
+		}
+		c.Alert.Condition = v
+	}
+
+	// HTTP fields
+	if v, ok := flat["url"].(string); ok && v != "" {
+		if c.HTTP == nil {
+			c.HTTP = &model.HTTPConfig{}
+		}
+		c.HTTP.URL = v
+	}
+	if v, ok := flat["method"].(string); ok && v != "" {
+		if c.HTTP == nil {
+			c.HTTP = &model.HTTPConfig{}
+		}
+		c.HTTP.Method = v
+	}
+	if v, ok := flat["body"].(string); ok && v != "" {
+		if c.HTTP == nil {
+			c.HTTP = &model.HTTPConfig{}
+		}
+		c.HTTP.Body = v
+	}
+
+	// Notification fields
+	if v, ok := flat["channel"].(string); ok && v != "" {
+		if c.Notification == nil {
+			c.Notification = &model.NotificationConfig{}
+		}
+		c.Notification.Channel = v
+	}
+	if v, ok := flat["conditions"].([]any); ok {
+		if c.Notification == nil {
+			c.Notification = &model.NotificationConfig{}
+		}
+		for _, item := range v {
+			if s, ok := item.(string); ok {
+				c.Notification.Conditions = append(c.Notification.Conditions, s)
+			}
+		}
+	}
+
+	return nil
+}
+
 // HandleTriggerCreate creates a new trigger.
 func HandleTriggerCreate(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -708,20 +819,28 @@ func HandleTriggerCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	rawBody, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "failed to read request body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	var trigger model.TriggerEntry
-	if err := json.NewDecoder(r.Body).Decode(&trigger); err != nil {
+	if err := json.Unmarshal(rawBody, &trigger); err != nil {
 		http.Error(w, "invalid request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	// Extract flow ID from URL if not in body
-	if trigger.Flow == "" {
-		flowID := strings.TrimSpace(r.PathValue("flowId"))
-		if flowID == "" {
-			http.Error(w, "flow id required", http.StatusBadRequest)
-			return
-		}
-		trigger.Flow = flowID
+	// UI sends flat config keys; normalize into nested structs.
+	if err := normalizeTriggerConfig(&trigger, rawBody); err != nil {
+		http.Error(w, "invalid request body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Module must be provided in request body
+	if trigger.Module == "" {
+		http.Error(w, "module is required in request body", http.StatusBadRequest)
+		return
 	}
 
 	if err := triggerService.CreateTrigger(&trigger); err != nil {
@@ -755,21 +874,34 @@ func HandleTriggerUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	rawBody, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "failed to read request body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	var trigger model.TriggerEntry
-	if err := json.NewDecoder(r.Body).Decode(&trigger); err != nil {
+	if err := json.Unmarshal(rawBody, &trigger); err != nil {
 		http.Error(w, "invalid request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
+
+	// UI sends flat config keys; normalize into nested structs.
+	if err := normalizeTriggerConfig(&trigger, rawBody); err != nil {
+		http.Error(w, "invalid request body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	trigger.ID = triggerID
 
-	// Extract flow ID from URL if not in body
-	if trigger.Flow == "" {
-		flowID := strings.TrimSpace(r.PathValue("flowId"))
-		if flowID == "" {
-			http.Error(w, "flow id required", http.StatusBadRequest)
+	// Extract module ID from URL if not in body
+	if trigger.Module == "" {
+		moduleID := strings.TrimSpace(r.PathValue("moduleId"))
+		if moduleID == "" {
+			http.Error(w, "module id required", http.StatusBadRequest)
 			return
 		}
-		trigger.Flow = flowID
+		trigger.Module = moduleID
 	}
 
 	if err := triggerService.UpdateTrigger(&trigger); err != nil {
@@ -798,13 +930,13 @@ func HandleTriggerDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	flowID := strings.TrimSpace(r.PathValue("flowId"))
-	if flowID == "" {
-		http.Error(w, "flow id required", http.StatusBadRequest)
+	moduleID := strings.TrimSpace(r.PathValue("moduleId"))
+	if moduleID == "" {
+		http.Error(w, "module id required", http.StatusBadRequest)
 		return
 	}
 
-	if err := triggerService.DeleteTrigger(flowID, triggerID); err != nil {
+	if err := triggerService.DeleteTrigger(moduleID, triggerID); err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			http.Error(w, err.Error(), http.StatusNotFound)
 			return
@@ -829,9 +961,9 @@ func HandleTriggerTest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	flowID := strings.TrimSpace(r.PathValue("flowId"))
-	if flowID == "" {
-		http.Error(w, "flow id required", http.StatusBadRequest)
+	moduleID := strings.TrimSpace(r.PathValue("moduleId"))
+	if moduleID == "" {
+		http.Error(w, "module id required", http.StatusBadRequest)
 		return
 	}
 
@@ -843,7 +975,7 @@ func HandleTriggerTest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := triggerService.TestTrigger(flowID, triggerID, testReq.Payload)
+	result, err := triggerService.TestTrigger(moduleID, triggerID, testReq.Payload)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			http.Error(w, err.Error(), http.StatusNotFound)
@@ -870,14 +1002,14 @@ func HandleTriggerWebhookURL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	flowID := strings.TrimSpace(r.PathValue("flowId"))
-	if flowID == "" {
-		http.Error(w, "flow id required", http.StatusBadRequest)
+	moduleID := strings.TrimSpace(r.PathValue("moduleId"))
+	if moduleID == "" {
+		http.Error(w, "module id required", http.StatusBadRequest)
 		return
 	}
 
 	// Get the trigger to find its workspace
-	trigger, err := triggerService.GetTrigger(flowID, triggerID)
+	trigger, err := triggerService.GetTrigger(moduleID, triggerID)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			http.Error(w, err.Error(), http.StatusNotFound)
@@ -895,6 +1027,124 @@ func HandleTriggerWebhookURL(w http.ResponseWriter, r *http.Request) {
 	flowpipeURL := strings.TrimSuffix(config.FlowpipeURLForWorkspace(workspace), "/")
 	webhookURL := fmt.Sprintf("%s/api/v0/webhook/%s", flowpipeURL, triggerID)
 
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(struct {
+		URL string `json:"url"`
+	}{URL: webhookURL})
+}
+
+// Root module trigger handlers - use "." as module ID for the root module.
+
+func HandleRootTriggerGet(w http.ResponseWriter, r *http.Request) {
+	triggerID := strings.TrimSpace(r.PathValue("triggerId"))
+	if triggerID == "" {
+		http.Error(w, "trigger id required", http.StatusBadRequest)
+		return
+	}
+	trigger, err := triggerService.GetTrigger(".", triggerID)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(trigger)
+}
+
+func HandleRootTriggerUpdate(w http.ResponseWriter, r *http.Request) {
+	triggerID := strings.TrimSpace(r.PathValue("triggerId"))
+	if triggerID == "" {
+		http.Error(w, "trigger id required", http.StatusBadRequest)
+		return
+	}
+	var trigger model.TriggerEntry
+	if err := json.NewDecoder(r.Body).Decode(&trigger); err != nil {
+		http.Error(w, "invalid request body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	trigger.ID = triggerID
+	if trigger.Module == "" {
+		trigger.Module = "."
+	}
+	if err := triggerService.UpdateTrigger(&trigger); err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(trigger)
+}
+
+func HandleRootTriggerDelete(w http.ResponseWriter, r *http.Request) {
+	triggerID := strings.TrimSpace(r.PathValue("triggerId"))
+	if triggerID == "" {
+		http.Error(w, "trigger id required", http.StatusBadRequest)
+		return
+	}
+	if err := triggerService.DeleteTrigger(".", triggerID); err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func HandleRootTriggerTest(w http.ResponseWriter, r *http.Request) {
+	triggerID := strings.TrimSpace(r.PathValue("triggerId"))
+	if triggerID == "" {
+		http.Error(w, "trigger id required", http.StatusBadRequest)
+		return
+	}
+	var testReq struct {
+		Payload map[string]any `json:"payload,omitempty"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&testReq); err != nil {
+		http.Error(w, "invalid request body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	result, err := triggerService.TestTrigger(".", triggerID, testReq.Payload)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(result)
+}
+
+func HandleRootTriggerWebhookURL(w http.ResponseWriter, r *http.Request) {
+	triggerID := strings.TrimSpace(r.PathValue("triggerId"))
+	if triggerID == "" {
+		http.Error(w, "trigger id required", http.StatusBadRequest)
+		return
+	}
+	trigger, err := triggerService.GetTrigger(".", triggerID)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	workspace := trigger.Workspace
+	if workspace == "" {
+		workspace = "default"
+	}
+	flowpipeURL := strings.TrimSuffix(config.FlowpipeURLForWorkspace(workspace), "/")
+	webhookURL := fmt.Sprintf("%s/api/v0/webhook/%s", flowpipeURL, triggerID)
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(struct {
 		URL string `json:"url"`

@@ -1088,7 +1088,7 @@ export interface TriggerEntry {
   id: string;
   label?: string;
   workspace?: string;
-  flow: string;
+  module: string;
   type: TriggerType;
   config: TriggerConfig;
 }
@@ -1096,7 +1096,7 @@ export interface TriggerEntry {
 export interface TriggerState {
   id: string;
   label?: string;
-  flow: string;
+  module: string;
   type: TriggerType;
   workspace?: string;
   enabled: boolean;
@@ -1130,11 +1130,11 @@ export interface WebhookUrlResponse {
 
 export async function fetchTriggerList(
   workspace?: string,
-  flow?: string
+  module?: string
 ): Promise<TriggerListResponse> {
   const params = new URLSearchParams();
   if (workspace) params.set('workspace', workspace);
-  if (flow) params.set('flow', flow);
+  if (module) params.set('module', module);
   const qs = params.toString();
   const url = qs ? `${API_BASE}/flows/triggers?${qs}` : `${API_BASE}/flows/triggers`;
   const response = await fetch(url);
@@ -1145,11 +1145,11 @@ export async function fetchTriggerList(
 }
 
 export async function fetchTrigger(
-  flowId: string,
+  moduleId: string,
   triggerId: string
 ): Promise<TriggerResponse> {
   const response = await fetch(
-    `${API_BASE}/flows/${encodeURIComponent(flowId)}/triggers/${encodeURIComponent(triggerId)}`
+    `${API_BASE}/flows/${encodeURIComponent(moduleId)}/triggers/${encodeURIComponent(triggerId)}`
   );
   if (!response.ok) {
     throw new Error(`Failed to fetch trigger: ${response.status} ${response.statusText}`);
@@ -1158,11 +1158,10 @@ export async function fetchTrigger(
 }
 
 export async function createTrigger(
-  flowId: string,
   entry: TriggerEntry
 ): Promise<TriggerResponse> {
   const response = await fetch(
-    `${API_BASE}/flows/${encodeURIComponent(flowId)}/triggers`,
+    `${API_BASE}/flows/triggers`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1177,12 +1176,12 @@ export async function createTrigger(
 }
 
 export async function updateTrigger(
-  flowId: string,
+  moduleId: string,
   triggerId: string,
   entry: TriggerEntry
 ): Promise<TriggerResponse> {
   const response = await fetch(
-    `${API_BASE}/flows/${encodeURIComponent(flowId)}/triggers/${encodeURIComponent(triggerId)}`,
+    `${API_BASE}/flows/${encodeURIComponent(moduleId)}/triggers/${encodeURIComponent(triggerId)}`,
     {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -1197,11 +1196,11 @@ export async function updateTrigger(
 }
 
 export async function deleteTrigger(
-  flowId: string,
+  moduleId: string,
   triggerId: string
 ): Promise<void> {
   const response = await fetch(
-    `${API_BASE}/flows/${encodeURIComponent(flowId)}/triggers/${encodeURIComponent(triggerId)}`,
+    `${API_BASE}/flows/${encodeURIComponent(moduleId)}/triggers/${encodeURIComponent(triggerId)}`,
     {
       method: 'DELETE',
     }
@@ -1213,12 +1212,12 @@ export async function deleteTrigger(
 }
 
 export async function testTrigger(
-  flowId: string,
+  moduleId: string,
   triggerId: string,
   req: TriggerTestRequest = {}
 ): Promise<TriggerTestResponse> {
   const response = await fetch(
-    `${API_BASE}/flows/${encodeURIComponent(flowId)}/triggers/${encodeURIComponent(triggerId)}/test`,
+    `${API_BASE}/flows/${encodeURIComponent(moduleId)}/triggers/${encodeURIComponent(triggerId)}/test`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1233,11 +1232,11 @@ export async function testTrigger(
 }
 
 export async function getTriggerWebhookUrl(
-  flowId: string,
+  moduleId: string,
   triggerId: string
 ): Promise<WebhookUrlResponse> {
   const response = await fetch(
-    `${API_BASE}/flows/${encodeURIComponent(flowId)}/triggers/${encodeURIComponent(triggerId)}/webhook`
+    `${API_BASE}/flows/${encodeURIComponent(moduleId)}/triggers/${encodeURIComponent(triggerId)}/webhook`
   );
   if (!response.ok) {
     const text = await response.text();

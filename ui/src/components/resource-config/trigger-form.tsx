@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -22,11 +23,18 @@ const TRIGGER_TYPES: { value: TriggerType; label: string }[] = [
 interface TriggerFormProps {
   draft: TriggerEntry;
   onChange: Dispatch<SetStateAction<TriggerEntry>>;
-  flows?: string[];
+  modules?: string[];
   workspaces?: string[];
+  availablePipelines?: { id: string; name?: string }[];
 }
 
-export function TriggerForm({ draft, onChange, flows = [], workspaces = [] }: TriggerFormProps) {
+export function TriggerForm({
+  draft,
+  onChange,
+  modules = [],
+  workspaces = [],
+  availablePipelines = [],
+}: TriggerFormProps) {
   const updateField = <K extends keyof TriggerEntry>(field: K, value: TriggerEntry[K]) => {
     onChange((prev) => ({ ...prev, [field]: value }));
   };
@@ -79,30 +87,33 @@ export function TriggerForm({ draft, onChange, flows = [], workspaces = [] }: Tr
       </div>
 
       <div className="space-y-1">
-        <Label>Flow *</Label>
-        {flows.length > 0 ? (
+        <Label>Module *</Label>
+        {modules.length > 0 ? (
           <Select
-            value={draft.flow}
-            onValueChange={(value) => updateField('flow', value)}
+            value={draft.module}
+            onValueChange={(value) => updateField('module', value)}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Select flow" />
+              <SelectValue placeholder="Select module" />
             </SelectTrigger>
             <SelectContent>
-              {flows.map((f) => (
-                <SelectItem key={f} value={f}>
-                  {f}
+              {modules.map((m) => (
+                <SelectItem key={m} value={m}>
+                  {m}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
         ) : (
           <Input
-            value={draft.flow}
-            onChange={(e) => updateField('flow', e.target.value)}
-            placeholder="flow_name"
+            value={draft.module}
+            onChange={(e) => updateField('module', e.target.value)}
+            placeholder="module_name (empty for root)"
           />
         )}
+        <p className="text-xs text-muted-foreground">
+          The Flowpipe module where the trigger will be defined.
+        </p>
       </div>
 
       {workspaces.length > 0 && (
@@ -128,23 +139,117 @@ export function TriggerForm({ draft, onChange, flows = [], workspaces = [] }: Tr
 
       {/* Type-specific Config Fields */}
       {draft.type === 'webhook' && (
-        <WebhookConfigFields config={draft.config} onChange={updateConfig} />
+        <WebhookConfigFields
+          config={draft.config}
+          onChange={updateConfig}
+          availablePipelines={availablePipelines}
+        />
       )}
 
       {draft.type === 'schedule' && (
-        <ScheduleConfigFields config={draft.config} onChange={updateConfig} />
+        <ScheduleConfigFields
+          config={draft.config}
+          onChange={updateConfig}
+          availablePipelines={availablePipelines}
+        />
       )}
 
       {draft.type === 'alert' && (
-        <AlertConfigFields config={draft.config} onChange={updateConfig} />
+        <AlertConfigFields
+          config={draft.config}
+          onChange={updateConfig}
+          availablePipelines={availablePipelines}
+        />
       )}
 
       {draft.type === 'http' && (
-        <HttpConfigFields config={draft.config} onChange={updateConfig} />
+        <HttpConfigFields
+          config={draft.config}
+          onChange={updateConfig}
+          availablePipelines={availablePipelines}
+        />
       )}
 
       {draft.type === 'notification' && (
-        <NotificationConfigFields config={draft.config} onChange={updateConfig} />
+        <NotificationConfigFields
+          config={draft.config}
+          onChange={updateConfig}
+          availablePipelines={availablePipelines}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Inline pipeline reference selector with autocomplete. */
+function PipelineRefInput({
+  value,
+  onChange,
+  availablePipelines,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  availablePipelines: { id: string; name?: string }[];
+  placeholder?: string;
+}) {
+  const [open, setOpen] = useState(false);
+
+  if (availablePipelines.length === 0) {
+    return (
+      <Input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder || 'e.g. pipeline.my_pipeline'}
+        className="w-full font-mono text-sm"
+      />
+    );
+  }
+
+  return (
+    <div className="relative">
+      <Input
+        value={value}
+        onChange={(e) => {
+          onChange(e.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        placeholder={placeholder || 'Select or type pipeline name'}
+        className="w-full font-mono text-sm"
+        autoComplete="off"
+      />
+      {open && (
+        <div className="absolute z-50 w-full mt-1 rounded-md border border-border bg-popover shadow-md max-h-48 overflow-auto">
+          {availablePipelines
+            .filter(
+              (f) =>
+                !value ||
+                f.id.toLowerCase().includes(value.toLowerCase()) ||
+                (f.name ?? '').toLowerCase().includes(value.toLowerCase())
+            )
+            .map((f) => (
+              <div
+                key={f.id}
+                className="px-3 py-2 text-sm cursor-pointer font-mono hover:bg-accent hover:text-accent-foreground"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  onChange(f.id);
+                  setOpen(false);
+                }}
+              >
+                {f.name && f.name !== f.id ? (
+                  <span>
+                    {f.name}{' '}
+                    <span className="text-muted-foreground text-xs">({f.id})</span>
+                  </span>
+                ) : (
+                  f.id
+                )}
+              </div>
+            ))}
+        </div>
       )}
     </div>
   );
@@ -153,18 +258,21 @@ export function TriggerForm({ draft, onChange, flows = [], workspaces = [] }: Tr
 function WebhookConfigFields({
   config,
   onChange,
+  availablePipelines,
 }: {
   config: Record<string, unknown>;
   onChange: (key: string, value: unknown) => void;
+  availablePipelines: { id: string; name?: string }[];
 }) {
   return (
     <>
       <div className="space-y-1">
-        <Label>Pipeline</Label>
-        <Input
+        <Label>Pipeline *</Label>
+        <PipelineRefInput
           value={(config.pipeline as string) || ''}
-          onChange={(e) => onChange('pipeline', e.target.value)}
-          placeholder="mod.pipe.pipeline_name"
+          onChange={(v) => onChange('pipeline', v)}
+          availablePipelines={availablePipelines}
+          placeholder="pipeline.my_pipeline"
         />
         <p className="text-xs text-muted-foreground">
           Flowpipe pipeline to execute when webhook is triggered.
@@ -177,10 +285,33 @@ function WebhookConfigFields({
 function ScheduleConfigFields({
   config,
   onChange,
+  availablePipelines,
 }: {
   config: Record<string, unknown>;
   onChange: (key: string, value: unknown) => void;
+  availablePipelines: { id: string; name?: string }[];
 }) {
+  const args = (config.args as Record<string, string>) || {};
+
+  const addArg = () => {
+    onChange('args', { ...args, '': '' });
+  };
+
+  const updateArg = (oldKey: string, newKey: string, value: string) => {
+    const updated = { ...args };
+    if (oldKey !== newKey) {
+      delete updated[oldKey];
+    }
+    updated[newKey] = value;
+    onChange('args', updated);
+  };
+
+  const removeArg = (key: string) => {
+    const updated = { ...args };
+    delete updated[key];
+    onChange('args', updated);
+  };
+
   return (
     <>
       <div className="space-y-1">
@@ -203,12 +334,52 @@ function ScheduleConfigFields({
         />
       </div>
       <div className="space-y-1">
-        <Label>Pipeline</Label>
-        <Input
+        <Label>Pipeline *</Label>
+        <PipelineRefInput
           value={(config.pipeline as string) || ''}
-          onChange={(e) => onChange('pipeline', e.target.value)}
-          placeholder="mod.pipe.pipeline_name"
+          onChange={(v) => onChange('pipeline', v)}
+          availablePipelines={availablePipelines}
+          placeholder="pipeline.my_pipeline"
         />
+      </div>
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <Label>Args</Label>
+          <button
+            type="button"
+            className="text-xs text-muted-foreground hover:text-foreground"
+            onClick={addArg}
+          >
+            + Add arg
+          </button>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Pipeline parameters passed when the trigger fires.
+        </p>
+        {Object.entries(args).map(([key, value], idx) => (
+          <div key={idx} className="flex gap-2 items-start">
+            <Input
+              value={key}
+              onChange={(e) => updateArg(key, e.target.value, value)}
+              placeholder="param name"
+              className="flex-1 font-mono text-sm"
+            />
+            <Input
+              value={value}
+              onChange={(e) => updateArg(key, key, e.target.value)}
+              placeholder="value"
+              className="flex-1 font-mono text-sm"
+            />
+            <button
+              type="button"
+              className="mt-1 text-muted-foreground hover:text-destructive"
+              onClick={() => removeArg(key)}
+              title="Remove"
+            >
+              ✕
+            </button>
+          </div>
+        ))}
       </div>
     </>
   );
@@ -217,9 +388,11 @@ function ScheduleConfigFields({
 function AlertConfigFields({
   config,
   onChange,
+  availablePipelines,
 }: {
   config: Record<string, unknown>;
   onChange: (key: string, value: unknown) => void;
+  availablePipelines: { id: string; name?: string }[];
 }) {
   return (
     <>
@@ -241,11 +414,12 @@ function AlertConfigFields({
         />
       </div>
       <div className="space-y-1">
-        <Label>Pipeline</Label>
-        <Input
+        <Label>Pipeline *</Label>
+        <PipelineRefInput
           value={(config.pipeline as string) || ''}
-          onChange={(e) => onChange('pipeline', e.target.value)}
-          placeholder="mod.pipe.pipeline_name"
+          onChange={(v) => onChange('pipeline', v)}
+          availablePipelines={availablePipelines}
+          placeholder="pipeline.my_pipeline"
         />
       </div>
     </>
@@ -255,9 +429,11 @@ function AlertConfigFields({
 function HttpConfigFields({
   config,
   onChange,
+  availablePipelines,
 }: {
   config: Record<string, unknown>;
   onChange: (key: string, value: unknown) => void;
+  availablePipelines: { id: string; name?: string }[];
 }) {
   return (
     <>
@@ -299,11 +475,12 @@ function HttpConfigFields({
         />
       </div>
       <div className="space-y-1">
-        <Label>Pipeline</Label>
-        <Input
+        <Label>Pipeline *</Label>
+        <PipelineRefInput
           value={(config.pipeline as string) || ''}
-          onChange={(e) => onChange('pipeline', e.target.value)}
-          placeholder="mod.pipe.pipeline_name"
+          onChange={(v) => onChange('pipeline', v)}
+          availablePipelines={availablePipelines}
+          placeholder="pipeline.my_pipeline"
         />
       </div>
     </>
@@ -313,9 +490,11 @@ function HttpConfigFields({
 function NotificationConfigFields({
   config,
   onChange,
+  availablePipelines,
 }: {
   config: Record<string, unknown>;
   onChange: (key: string, value: unknown) => void;
+  availablePipelines: { id: string; name?: string }[];
 }) {
   return (
     <>
@@ -352,11 +531,12 @@ function NotificationConfigFields({
         />
       </div>
       <div className="space-y-1">
-        <Label>Pipeline</Label>
-        <Input
+        <Label>Pipeline *</Label>
+        <PipelineRefInput
           value={(config.pipeline as string) || ''}
-          onChange={(e) => onChange('pipeline', e.target.value)}
-          placeholder="mod.pipe.pipeline_name"
+          onChange={(v) => onChange('pipeline', v)}
+          availablePipelines={availablePipelines}
+          placeholder="pipeline.my_pipeline"
         />
       </div>
     </>

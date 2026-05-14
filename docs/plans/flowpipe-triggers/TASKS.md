@@ -1,7 +1,7 @@
 ---
-state: DRAFT
+state: DONE
 created: 2026-05-08
-updated: 2026-05-13
+updated: 2026-05-14
 ---
 
 # Flowpipe Triggers — Task Tracker

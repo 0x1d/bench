@@ -149,7 +149,7 @@ func TestBuildTriggerHCLBlock(t *testing.T) {
 			trigger: &model.TriggerEntry{
 				ID:        "test_webhook",
 				Label:     "Test Webhook",
-				Flow:      "test_flow",
+				Module:      "test_flow",
 				Type:      model.TriggerTypeWebhook,
 				Workspace: "default",
 				Config: model.TriggerConfig{
@@ -172,7 +172,7 @@ func TestBuildTriggerHCLBlock(t *testing.T) {
 			trigger: &model.TriggerEntry{
 				ID:        "daily_report",
 				Label:     "Daily Report",
-				Flow:      "test_flow",
+				Module:      "test_flow",
 				Type:      model.TriggerTypeSchedule,
 				Workspace: "default",
 				Config: model.TriggerConfig{
@@ -190,8 +190,33 @@ func TestBuildTriggerHCLBlock(t *testing.T) {
 				`trigger "schedule" "daily_report"`,
 				`description = "Run daily at 9 AM"`,
 				`pipeline    = pipeline.daily_report_pipeline`,
-				`cron        = "0 9 * * *"`,
+				`schedule    = "0 9 * * *"`,
 				`timezone    = "UTC"`,
+			},
+		},
+		{
+			name: "schedule trigger with args",
+			trigger: &model.TriggerEntry{
+				ID:        "scheduled_with_args",
+				Label:     "Scheduled with Args",
+				Module:      "test_flow",
+				Type:      model.TriggerTypeSchedule,
+				Workspace: "default",
+				Config: model.TriggerConfig{
+					Description: "Run with params",
+					Pipeline:    "my_pipeline",
+					Schedule: &model.ScheduleConfig{
+						Description: "Run with params",
+						Pipeline:    "my_pipeline",
+						Cron:        "*/5 * * * *",
+						Args:        map[string]string{"input1": "hello", "conn_local": "local"},
+					},
+				},
+			},
+			expected: []string{
+				`trigger "schedule" "scheduled_with_args"`,
+				`schedule    = "*/5 * * * *"`,
+				`args = {`,
 			},
 		},
 		{
@@ -199,7 +224,7 @@ func TestBuildTriggerHCLBlock(t *testing.T) {
 			trigger: &model.TriggerEntry{
 				ID:        "high_latency_alert",
 				Label:     "High Latency Alert",
-				Flow:      "test_flow",
+				Module:      "test_flow",
 				Type:      model.TriggerTypeAlert,
 				Workspace: "default",
 				Config: model.TriggerConfig{
@@ -224,7 +249,7 @@ func TestBuildTriggerHCLBlock(t *testing.T) {
 			trigger: &model.TriggerEntry{
 				ID:        "http_callback",
 				Label:     "HTTP Callback",
-				Flow:      "test_flow",
+				Module:      "test_flow",
 				Type:      model.TriggerTypeHTTP,
 				Workspace: "default",
 				Config: model.TriggerConfig{
@@ -251,7 +276,7 @@ func TestBuildTriggerHCLBlock(t *testing.T) {
 			trigger: &model.TriggerEntry{
 				ID:        "slack_notify",
 				Label:     "Slack Notify",
-				Flow:      "test_flow",
+				Module:      "test_flow",
 				Type:      model.TriggerTypeNotification,
 				Workspace: "default",
 				Config: model.TriggerConfig{
@@ -317,7 +342,7 @@ func TestCreateTrigger(t *testing.T) {
 	trigger := &model.TriggerEntry{
 		ID:        "test_trigger",
 		Label:     "Test Trigger",
-		Flow:      testFlowID,
+		Module:      testFlowID,
 		Type:      model.TriggerTypeWebhook,
 		Workspace: "default",
 		Config: model.TriggerConfig{
@@ -349,7 +374,7 @@ func TestCreateTrigger(t *testing.T) {
 
 	t.Run("empty flow", func(t *testing.T) {
 		trig := *trigger
-		trig.Flow = ""
+		trig.Module = ""
 		err := s.CreateTrigger(&trig)
 		if err == nil || !strings.Contains(err.Error(), "trigger flow is required") {
 			t.Errorf("Expected 'trigger flow is required' error, got: %v", err)
@@ -405,7 +430,7 @@ func TestUpdateTrigger(t *testing.T) {
 	newTrigger := &model.TriggerEntry{
 		ID:        "update_test",
 		Label:     "Updated Trigger",
-		Flow:      testFlowID,
+		Module:      testFlowID,
 		Type:      model.TriggerTypeWebhook,
 		Workspace: "default",
 		Config: model.TriggerConfig{
@@ -437,7 +462,7 @@ func TestUpdateTrigger(t *testing.T) {
 
 	t.Run("empty flow", func(t *testing.T) {
 		trig := *newTrigger
-		trig.Flow = ""
+		trig.Module = ""
 		err := s.UpdateTrigger(&trig)
 		if err == nil || !strings.Contains(err.Error(), "trigger flow is required") {
 			t.Errorf("Expected 'trigger flow is required' error, got: %v", err)
@@ -528,13 +553,28 @@ func TestParseTriggerBlock(t *testing.T) {
 			name:    "schedule trigger",
 			typeStr: "schedule",
 			id:      "daily_report",
-			block:   `pipeline = pipeline.daily_report cron = "0 9 * * *"`,
+			block:   "pipeline = pipeline.daily_report\n  schedule = \"0 9 * * *\"\n  args = {\n    input1     = \"hello\"\n    conn_local = \"local\"\n  }",
 			checks: func(t *testing.T, state model.TriggerState) {
 				if state.Type != model.TriggerTypeSchedule {
 					t.Errorf("Expected schedule type, got %s", state.Type)
 				}
 				if state.ID != "daily_report" {
 					t.Errorf("Expected ID daily_report, got %s", state.ID)
+				}
+				if state.Config.Schedule == nil {
+					t.Fatal("Expected Schedule config to be set")
+				}
+				if state.Config.Schedule.Cron != "0 9 * * *" {
+					t.Errorf("Expected cron '0 9 * * *', got %q", state.Config.Schedule.Cron)
+				}
+				if state.Config.Schedule.Args == nil {
+					t.Fatal("Expected Args to be set")
+				}
+				if state.Config.Schedule.Args["input1"] != "hello" {
+					t.Errorf("Expected args.input1='hello', got %q", state.Config.Schedule.Args["input1"])
+				}
+				if state.Config.Schedule.Args["conn_local"] != "local" {
+					t.Errorf("Expected args.conn_local='local', got %q", state.Config.Schedule.Args["conn_local"])
 				}
 			},
 		},
@@ -703,7 +743,7 @@ func TestBuildTriggerHCLBlock_PipelineRefHandling(t *testing.T) {
 			trigger := &model.TriggerEntry{
 				ID:        "test",
 				Label:     "Test",
-				Flow:      "test_flow",
+				Module:      "test_flow",
 				Type:      model.TriggerTypeWebhook,
 				Workspace: "default",
 				Config: model.TriggerConfig{
@@ -733,7 +773,7 @@ func TestBuildTriggerHCLBlock_NoExtraWhitespace(t *testing.T) {
 	trigger := &model.TriggerEntry{
 		ID:        "test",
 		Label:     "Test",
-		Flow:      "test_flow",
+		Module:      "test_flow",
 		Type:      model.TriggerTypeWebhook,
 		Workspace: "default",
 		Config: model.TriggerConfig{
@@ -775,7 +815,7 @@ func TestTriggerConfig_Validation(t *testing.T) {
 			name: "valid webhook",
 			trigger: &model.TriggerEntry{
 				ID:        "valid",
-				Flow:      "test_flow",
+				Module:      "test_flow",
 				Type:      model.TriggerTypeWebhook,
 				Config:    model.TriggerConfig{Pipeline: "test_pipeline"},
 			},
@@ -785,7 +825,7 @@ func TestTriggerConfig_Validation(t *testing.T) {
 			name: "invalid - no ID",
 			trigger: &model.TriggerEntry{
 				ID:        "",
-				Flow:      "test_flow",
+				Module:      "test_flow",
 				Type:      model.TriggerTypeWebhook,
 				Config:    model.TriggerConfig{Pipeline: "test_pipeline"},
 			},
@@ -795,7 +835,7 @@ func TestTriggerConfig_Validation(t *testing.T) {
 			name: "invalid - no flow",
 			trigger: &model.TriggerEntry{
 				ID:        "valid",
-				Flow:      "",
+				Module:      "",
 				Type:      model.TriggerTypeWebhook,
 				Config:    model.TriggerConfig{Pipeline: "test_pipeline"},
 			},
@@ -805,7 +845,7 @@ func TestTriggerConfig_Validation(t *testing.T) {
 			name: "invalid - no type",
 			trigger: &model.TriggerEntry{
 				ID:        "valid",
-				Flow:      "test_flow",
+				Module:      "test_flow",
 				Type:      "",
 				Config:    model.TriggerConfig{Pipeline: "test_pipeline"},
 			},
@@ -815,7 +855,7 @@ func TestTriggerConfig_Validation(t *testing.T) {
 			name: "invalid - no pipeline",
 			trigger: &model.TriggerEntry{
 				ID:        "valid",
-				Flow:      "test_flow",
+				Module:      "test_flow",
 				Type:      model.TriggerTypeWebhook,
 				Config:    model.TriggerConfig{Pipeline: ""},
 			},
@@ -830,7 +870,7 @@ func TestTriggerConfig_Validation(t *testing.T) {
 			if tt.trigger.ID == "" {
 				hasError = true
 			}
-			if tt.trigger.Flow == "" {
+			if tt.trigger.Module == "" {
 				hasError = true
 			}
 			if tt.trigger.Type == "" {

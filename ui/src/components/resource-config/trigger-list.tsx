@@ -134,7 +134,7 @@ export function TriggerList({
             <tr className="border-b border-border bg-muted/30">
               <th className="px-4 py-3 text-left font-medium">ID</th>
               <th className="px-4 py-3 text-left font-medium">Label</th>
-              <th className="px-4 py-3 text-left font-medium">Flow</th>
+              <th className="px-4 py-3 text-left font-medium">Module</th>
               <th className="px-4 py-3 text-left font-medium">Type</th>
               <th className="px-4 py-3 text-left font-medium">Workspace</th>
               <th className="px-4 py-3 text-left font-medium">Status</th>
@@ -156,7 +156,7 @@ export function TriggerList({
                 >
                   <td className="px-4 py-2 font-mono text-xs">{trigger.id}</td>
                   <td className="px-4 py-2">{trigger.label || '—'}</td>
-                  <td className="px-4 py-2 font-mono text-xs">{trigger.flow}</td>
+                  <td className="px-4 py-2 font-mono text-xs">{trigger.module}</td>
                   <td className="px-4 py-2">
                     <span
                       className={cn(

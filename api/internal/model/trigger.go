@@ -21,10 +21,11 @@ type WebhookConfig struct {
 
 // ScheduleConfig holds configuration for schedule triggers.
 type ScheduleConfig struct {
-	Description string `yaml:"description,omitempty" json:"description,omitempty"`
-	Pipeline    string `yaml:"pipeline" json:"pipeline"`
-	Cron        string `yaml:"cron,omitempty" json:"cron,omitempty"`
-	Timezone    string `yaml:"timezone,omitempty" json:"timezone,omitempty"`
+	Description string            `yaml:"description,omitempty" json:"description,omitempty"`
+	Pipeline    string            `yaml:"pipeline" json:"pipeline"`
+	Cron        string            `yaml:"cron,omitempty" json:"cron,omitempty"`
+	Timezone    string            `yaml:"timezone,omitempty" json:"timezone,omitempty"`
+	Args        map[string]string `yaml:"args,omitempty" json:"args,omitempty"`
 }
 
 // AlertConfig holds configuration for alert triggers.
@@ -66,11 +67,11 @@ type TriggerConfig struct {
 
 // TriggerEntry represents a configured trigger in config.yaml (flowpipe_triggers[]).
 type TriggerEntry struct {
-	ID        string       `yaml:"id" json:"id"`
-	Label     string       `yaml:"label,omitempty" json:"label,omitempty"`
-	Workspace string       `yaml:"workspace,omitempty" json:"workspace,omitempty"`
-	Flow      string       `yaml:"flow" json:"flow"`
-	Type      TriggerType  `yaml:"type" json:"type"`
+	ID        string        `yaml:"id" json:"id"`
+	Label     string        `yaml:"label,omitempty" json:"label,omitempty"`
+	Workspace string        `yaml:"workspace,omitempty" json:"workspace,omitempty"`
+	Module    string        `yaml:"module" json:"module"`
+	Type      TriggerType   `yaml:"type" json:"type"`
 	Config    TriggerConfig `yaml:"config" json:"config"`
 }
 
@@ -78,7 +79,7 @@ type TriggerEntry struct {
 type TriggerState struct {
 	ID        string        `json:"id"`
 	Label     string        `json:"label"`
-	Flow      string        `json:"flow"`
+	Module    string        `json:"module"`
 	Type      TriggerType   `json:"type"`
 	Workspace string        `json:"workspace"`
 	Enabled   bool          `json:"enabled"`

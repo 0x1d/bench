@@ -2,7 +2,7 @@
 # Downloads the linux amd64 binary from GitHub releases (requires glibc)
 FROM debian:trixie-slim
 
-ARG FLOWPIPE_VERSION=v1.2.0
+ARG FLOWPIPE_VERSION=v1.2.1
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \

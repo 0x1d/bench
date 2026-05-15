@@ -87,9 +87,9 @@ export function TriggerList({
               })
             }
           >
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Filter by type" />
-            </SelectTrigger>
+            <SelectTrigger className="w-45">
+                          <SelectValue placeholder="Filter by type" />
+                        </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All types</SelectItem>
               {triggerTypes.map((t) => (
@@ -110,9 +110,9 @@ export function TriggerList({
                 })
               }
             >
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Filter by workspace" />
-              </SelectTrigger>
+              <SelectTrigger className="w-45">
+                              <SelectValue placeholder="Filter by workspace" />
+                            </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All workspaces</SelectItem>
                 {workspaces.map((w) => (

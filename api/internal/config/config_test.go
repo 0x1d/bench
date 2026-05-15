@@ -147,9 +147,9 @@ func TestSchemaEntries_ReadConfigError(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("BENCH_CONFIG", filepath.Join(dir, "nonexistent.yaml"))
 	t.Cleanup(func() { _ = os.Unsetenv("BENCH_CONFIG") })
-	if s := SchemaEntries(); s != nil && len(s) != 0 {
-		t.Fatalf("expected nil or empty when config missing, got %v", s)
-	}
+	if s := SchemaEntries(); len(s) != 0 {
+				t.Fatalf("expected nil or empty when config missing, got %v", s)
+			}
 }
 
 func TestSchemaEntries_SchemaByID(t *testing.T) {

@@ -472,9 +472,9 @@ export function FlowsPage({ view }: { view: FlowsListView }) {
             handleWorkspaceChange(v);
           }}
         >
-          <SelectTrigger className="w-[200px]">
-            <SelectValue placeholder="Select profile" />
-          </SelectTrigger>
+          <SelectTrigger className="w-50">
+                      <SelectValue placeholder="Select profile" />
+                    </SelectTrigger>
           <SelectContent>
             {workspaces.map((w) => (
               <SelectItem key={w.id} value={w.id}>
@@ -495,7 +495,7 @@ export function FlowsPage({ view }: { view: FlowsListView }) {
           />
         </div>
         <div className="flex flex-1" />
-        <div className="flex flex-shrink-0 items-center gap-2">
+                <div className="flex shrink-0 items-center gap-2">
           <Button
             variant="outline"
             size="sm"
@@ -748,9 +748,9 @@ export function FlowsPage({ view }: { view: FlowsListView }) {
                           >
                             <td className="px-4 py-2 font-mono">{w.id}</td>
                             <td className="px-4 py-2">{w.label || '—'}</td>
-                            <td className="max-w-[200px] truncate px-4 py-2 font-mono" title={w.flowpipeUrl}>
-                              {w.flowpipeUrl}
-                            </td>
+                            <td className="max-w-50 truncate px-4 py-2 font-mono" title={w.flowpipeUrl}>
+                                                          {w.flowpipeUrl}
+                                                        </td>
                             <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
                               <div className="flex items-center justify-end gap-1">
                                 <Button

@@ -220,7 +220,7 @@ export function App() {
                       <div className="flex flex-1 min-h-0 overflow-hidden">
                         <SidebarLeft
                           currentHash={hash}
-                          className="top-[var(--header-height)] h-[calc(100svh-var(--header-height))]"
+                          className="top-(--header-height) h-[calc(100svh-var(--header-height))]"
                         />
                         <SidebarInset
                           className={cn('min-h-0', insetOverflowHidden ? 'overflow-hidden' : 'overflow-auto')}

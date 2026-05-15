@@ -707,9 +707,9 @@ export default function FlowEditorPage() {
           Flows
         </button>
         <span className="text-muted-foreground">/</span>
-        <span className="rounded px-2 py-1 font-mono truncate max-w-[200px]">
-          {displayFlowName || flow.id}
-        </span>
+        <span className="rounded px-2 py-1 font-mono truncate max-w-50">
+                  {displayFlowName || flow.id}
+                </span>
       </nav>
 
       <div
@@ -721,9 +721,9 @@ export default function FlowEditorPage() {
         )}
       >
         <div className="flex items-center gap-2 min-w-0">
-          <span className="font-medium truncate max-w-[200px]">
-            {displayFlowName || flow.id}
-          </span>
+          <span className="font-medium truncate max-w-50">
+                      {displayFlowName || flow.id}
+                    </span>
           {isDirty && (
             <span className="shrink-0 rounded-full bg-amber-500/20 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-400">
               Unsaved changes
@@ -741,7 +741,7 @@ export default function FlowEditorPage() {
             <Pencil className="size-3" />
           </Button>
         </div>
-        <div className="ml-auto flex flex-shrink-0 items-center gap-2">
+        <div className="ml-auto flex shrink-0 items-center gap-2">
           {updateMutation.isError && (
             <span className="text-sm text-destructive">
               {updateMutation.error instanceof Error
@@ -793,7 +793,7 @@ export default function FlowEditorPage() {
       </div>
 
       <div className="flex min-h-0 min-w-0 w-full flex-1 flex-col overflow-hidden">
-        <div className="flow-editor-canvas flex flex-1 min-h-[300px] gap-2 overflow-hidden">
+        <div className="flow-editor-canvas flex flex-1 min-h-75 gap-2 overflow-hidden">
           <FlowPalette
             hasInputStep={nodes.some(
               (n) => ((n.data as { step?: FlowStep })?.step?.type ?? '') === 'input'

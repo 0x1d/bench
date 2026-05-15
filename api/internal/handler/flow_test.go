@@ -96,30 +96,39 @@ func TestCollectRequiredConnectionParamIDs_NestedPipelineUsesDefaultDB(t *testin
 
 // === Helper for trigger tests ===
 
-// Create a test flows directory with a sample .fp file containing triggers
+// Create a test flows directory with triggers embedded in mod.fp
 func createTestFlowsDirWithTriggers(t *testing.T) string {
 	t.Helper()
 	flowsDir := t.TempDir()
 
-	// Create a flow.fp file with some triggers
-	// Using proper trigger types: webhook, schedule, alert, http, notification
-	flowContent := `flow "test_flow" {
-  name = "Test Flow"
+	// Create a module subdirectory
+	modDir := filepath.Join(flowsDir, "mod")
+	if err := os.MkdirAll(modDir, 0755); err != nil {
+		t.Fatalf("mkdir mod: %v", err)
+	}
+
+	// Create mod.fp with embedded triggers
+	modContent := `mod "test" {
+  title = "Test Module"
 }
 
-trigger "webhook" "webhook1" {
-  description = "Test webhook trigger"
+trigger "http" "http1" {
+  description = "Test HTTP trigger"
   pipeline    = pipeline.test_pipeline
+  args = {
+    body    = self.request_body
+    headers = self.request_headers
+  }
 }
 
 trigger "schedule" "schedule1" {
   description = "Scheduled trigger"
   pipeline    = pipeline.test_pipeline
-  cron        = "0 * * * *"
+  schedule    = "0 * * * *"
 }
 `
-	if err := os.WriteFile(filepath.Join(flowsDir, "flow.fp"), []byte(flowContent), 0644); err != nil {
-		t.Fatalf("write flow file: %v", err)
+	if err := os.WriteFile(filepath.Join(modDir, "mod.fp"), []byte(modContent), 0644); err != nil {
+		t.Fatalf("write mod.fp: %v", err)
 	}
 
 	return flowsDir
@@ -190,7 +199,7 @@ func TestHandleTriggersList_WithFlowFilter(t *testing.T) {
 	flowsDir := createTestFlowsDirWithTriggers(t)
 	writeFlowHandlerTestConfig(t, flowsDir)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/flows/triggers?flow=flow", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/flows/triggers?module=mod", nil)
 	rec := httptest.NewRecorder()
 	HandleTriggersList(rec, req)
 
@@ -213,7 +222,7 @@ func TestHandleTriggersList_EmptyResult(t *testing.T) {
 	flowsDir := createTestFlowsDirWithTriggers(t)
 	writeFlowHandlerTestConfig(t, flowsDir)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/flows/triggers?flow=nonexistent", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/flows/triggers?module=nonexistent", nil)
 	rec := httptest.NewRecorder()
 	HandleTriggersList(rec, req)
 
@@ -236,9 +245,9 @@ func TestHandleTriggerGet_200(t *testing.T) {
 	flowsDir := createTestFlowsDirWithTriggers(t)
 	writeFlowHandlerTestConfig(t, flowsDir)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/flows/flow/triggers/webhook1", nil)
-	req.SetPathValue("flowId", "flow")
-	req.SetPathValue("triggerId", "webhook1")
+	req := httptest.NewRequest(http.MethodGet, "/api/flows/mod/triggers/http1", nil)
+	req.SetPathValue("moduleId", "mod")
+	req.SetPathValue("triggerId", "http1")
 	rec := httptest.NewRecorder()
 	HandleTriggerGet(rec, req)
 
@@ -250,10 +259,10 @@ func TestHandleTriggerGet_200(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&trigger); err != nil {
 		t.Fatal(err)
 	}
-	if trigger.ID != "webhook1" {
-		t.Fatalf("expected id webhook1, got %s", trigger.ID)
+	if trigger.ID != "http1" {
+		t.Fatalf("expected id http1, got %s", trigger.ID)
 	}
-	if trigger.Type != model.TriggerTypeWebhook {
+	if trigger.Type != model.TriggerTypeHTTP {
 		t.Fatalf("expected type webhook, got %s", trigger.Type)
 	}
 }
@@ -262,8 +271,8 @@ func TestHandleTriggerGet_404(t *testing.T) {
 	flowsDir := createTestFlowsDirWithTriggers(t)
 	writeFlowHandlerTestConfig(t, flowsDir)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/flows/flow/triggers/nonexistent", nil)
-	req.SetPathValue("flowId", "flow")
+	req := httptest.NewRequest(http.MethodGet, "/api/flows/mod/triggers/nonexistent", nil)
+	req.SetPathValue("moduleId", "mod")
 	req.SetPathValue("triggerId", "nonexistent")
 	rec := httptest.NewRecorder()
 	HandleTriggerGet(rec, req)
@@ -280,8 +289,8 @@ func TestHandleTriggerCreate_201(t *testing.T) {
 	newTrigger := model.TriggerEntry{
 		ID:        "new_trigger",
 		Label:     "New Trigger",
-		Flow:      "flow",
-		Type:      model.TriggerTypeWebhook,
+		Module: "mod",
+		Type:      model.TriggerTypeHTTP,
 		Workspace: "default",
 		Config: model.TriggerConfig{
 			Description: "New trigger description",
@@ -290,7 +299,7 @@ func TestHandleTriggerCreate_201(t *testing.T) {
 	}
 	body, _ := json.Marshal(newTrigger)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/flows/triggers", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/flows/mod/triggers", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	HandleTriggerCreate(rec, req)
@@ -312,7 +321,7 @@ func TestHandleTriggerCreate_InvalidPayload(t *testing.T) {
 	flowsDir := createTestFlowsDirWithTriggers(t)
 	writeFlowHandlerTestConfig(t, flowsDir)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/flows/triggers", bytes.NewReader([]byte(`invalid json`)))
+	req := httptest.NewRequest(http.MethodPost, "/api/flows/mod/triggers", bytes.NewReader([]byte(`invalid json`)))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	HandleTriggerCreate(rec, req)
@@ -333,8 +342,8 @@ func TestHandleTriggerUpdate_200(t *testing.T) {
 	newTrigger := model.TriggerEntry{
 		ID:        triggerID,
 		Label:     "To Update",
-		Flow:      "flow",
-		Type:      model.TriggerTypeWebhook,
+		Module: "mod",
+		Type:      model.TriggerTypeHTTP,
 		Workspace: "default",
 		Config: model.TriggerConfig{
 			Description: "Original description",
@@ -342,7 +351,7 @@ func TestHandleTriggerUpdate_200(t *testing.T) {
 		},
 	}
 	body, _ := json.Marshal(newTrigger)
-	req := httptest.NewRequest(http.MethodPost, "/api/flows/triggers", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/flows/mod/triggers", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	HandleTriggerCreate(rec, req)
@@ -354,8 +363,8 @@ func TestHandleTriggerUpdate_200(t *testing.T) {
 	updatedTrigger := model.TriggerEntry{
 		ID:        triggerID,
 		Label:     "Updated Trigger",
-		Flow:      "flow",
-		Type:      model.TriggerTypeWebhook,
+		Module: "mod",
+		Type:      model.TriggerTypeHTTP,
 		Workspace: "default",
 		Config: model.TriggerConfig{
 			Description: "Updated description",
@@ -364,7 +373,7 @@ func TestHandleTriggerUpdate_200(t *testing.T) {
 	}
 	body, _ = json.Marshal(updatedTrigger)
 
-	req = httptest.NewRequest(http.MethodPut, "/api/flows/triggers/"+triggerID, bytes.NewReader(body))
+	req = httptest.NewRequest(http.MethodPut, "/api/flows/mod/triggers/"+triggerID, bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.SetPathValue("triggerId", triggerID)
 	rec = httptest.NewRecorder()
@@ -390,13 +399,13 @@ func TestHandleTriggerUpdate_404(t *testing.T) {
 	updatedTrigger := model.TriggerEntry{
 		ID:        "nonexistent",
 		Label:     "Nonexistent",
-		Flow:      "flow",
-		Type:      model.TriggerTypeWebhook,
+		Module: "mod",
+		Type:      model.TriggerTypeHTTP,
 		Config:    model.TriggerConfig{Pipeline: "pipeline.test"},
 	}
 	body, _ := json.Marshal(updatedTrigger)
 
-	req := httptest.NewRequest(http.MethodPut, "/api/flows/triggers/nonexistent", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPut, "/api/flows/mod/triggers/nonexistent", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.SetPathValue("triggerId", "nonexistent")
 	rec := httptest.NewRecorder()
@@ -418,9 +427,9 @@ func TestHandleTriggerDelete_204(t *testing.T) {
 	}
 	t.Logf("Triggers before delete: %d", len(triggersBefore))
 
-	req := httptest.NewRequest(http.MethodDelete, "/api/flows/flow/triggers/webhook1", nil)
-	req.SetPathValue("flowId", "flow")
-	req.SetPathValue("triggerId", "webhook1")
+	req := httptest.NewRequest(http.MethodDelete, "/api/flows/mod/triggers/http1", nil)
+	req.SetPathValue("moduleId", "mod")
+	req.SetPathValue("triggerId", "http1")
 	rec := httptest.NewRecorder()
 	HandleTriggerDelete(rec, req)
 
@@ -434,8 +443,8 @@ func TestHandleTriggerDelete_404(t *testing.T) {
 	flowsDir := createTestFlowsDirWithTriggers(t)
 	writeFlowHandlerTestConfig(t, flowsDir)
 
-	req := httptest.NewRequest(http.MethodDelete, "/api/flows/flow/triggers/nonexistent", nil)
-	req.SetPathValue("flowId", "flow")
+	req := httptest.NewRequest(http.MethodDelete, "/api/flows/mod/triggers/nonexistent", nil)
+	req.SetPathValue("moduleId", "mod")
 	req.SetPathValue("triggerId", "nonexistent")
 	rec := httptest.NewRecorder()
 	HandleTriggerDelete(rec, req)
@@ -455,9 +464,9 @@ func TestHandleTriggerTest_200(t *testing.T) {
 	}{Payload: map[string]any{"test": "data"}}
 	body, _ := json.Marshal(testReq)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/flows/flow/triggers/webhook1/test", bytes.NewReader(body))
-	req.SetPathValue("flowId", "flow")
-	req.SetPathValue("triggerId", "webhook1")
+	req := httptest.NewRequest(http.MethodPost, "/api/flows/mod/triggers/http1/test", bytes.NewReader(body))
+	req.SetPathValue("moduleId", "mod")
+	req.SetPathValue("triggerId", "http1")
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
@@ -474,9 +483,9 @@ func TestHandleTriggerWebhookURL_200(t *testing.T) {
 	flowsDir := createTestFlowsDirWithTriggers(t)
 	writeFlowHandlerTestConfig(t, flowsDir)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/flows/flow/triggers/webhook1/webhook", nil)
-	req.SetPathValue("flowId", "flow")
-	req.SetPathValue("triggerId", "webhook1")
+	req := httptest.NewRequest(http.MethodGet, "/api/flows/mod/triggers/http1/webhook", nil)
+	req.SetPathValue("moduleId", "mod")
+	req.SetPathValue("triggerId", "http1")
 	rec := httptest.NewRecorder()
 	HandleTriggerWebhookURL(rec, req)
 
@@ -518,12 +527,12 @@ func TestRegisterRoutes_TriggerRoutes(t *testing.T) {
 	// Test POST /api/flows/{flowId}/triggers (create)
 	newTrigger := model.TriggerEntry{
 		ID:     "route_test",
-		Flow:   "flow",
-		Type:   model.TriggerTypeWebhook,
+		Module: "mod",
+		Type:   model.TriggerTypeHTTP,
 		Config: model.TriggerConfig{Pipeline: "pipeline.test"},
 	}
 	body, _ := json.Marshal(newTrigger)
-	req = httptest.NewRequest(http.MethodPost, "/api/flows/flow/triggers", bytes.NewReader(body))
+	req = httptest.NewRequest(http.MethodPost, "/api/flows/mod/triggers", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec = httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
@@ -540,20 +549,20 @@ func TestRegisterRoutes_TriggerRoutes_WithQueryFilter(t *testing.T) {
 	mux := http.NewServeMux()
 	RegisterRoutes(mux)
 
-	// Test GET /api/flows/triggers with flow filter
-	req := httptest.NewRequest(http.MethodGet, "/api/flows/triggers?flow=flow", nil)
+	// Test GET /api/flows/triggers with module filter
+	req := httptest.NewRequest(http.MethodGet, "/api/flows/triggers?module=mod", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
-		t.Fatalf("GET /api/flows/triggers?flow=flow: expected 200, got %d", rec.Code)
+		t.Fatalf("GET /api/flows/triggers?module=mod: expected 200, got %d", rec.Code)
 	}
 
 	// Test GET /api/flows/{flowId}/triggers/{triggerId}
-	req = httptest.NewRequest(http.MethodGet, "/api/flows/flow/triggers/webhook1", nil)
+	req = httptest.NewRequest(http.MethodGet, "/api/flows/mod/triggers/http1", nil)
 	rec = httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
-		t.Fatalf("GET /api/flows/flow/triggers/webhook1: expected 200, got %d", rec.Code)
+		t.Fatalf("GET /api/flows/mod/triggers/http1: expected 200, got %d", rec.Code)
 	}
 }
 
@@ -565,14 +574,14 @@ func TestRegisterRoutes_TriggerHTTPMethods(t *testing.T) {
 	RegisterRoutes(mux)
 
 	// Test DELETE /api/flows/{flowId}/triggers/{triggerId}
-	req := httptest.NewRequest(http.MethodDelete, "/api/flows/flow/triggers/webhook1", nil)
-	req.SetPathValue("flowId", "flow")
-	req.SetPathValue("triggerId", "webhook1")
+	req := httptest.NewRequest(http.MethodDelete, "/api/flows/mod/triggers/http1", nil)
+	req.SetPathValue("moduleId", "mod")
+	req.SetPathValue("triggerId", "http1")
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 	// May return 404 if trigger was already deleted by previous test
 	if rec.Code != http.StatusNoContent && rec.Code != http.StatusNotFound {
-		t.Errorf("DELETE /api/flows/flow/triggers/webhook1: unexpected status %d", rec.Code)
+		t.Errorf("DELETE /api/flows/mod/triggers/http1: unexpected status %d", rec.Code)
 	}
 }
 

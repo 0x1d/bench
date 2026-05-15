@@ -5,7 +5,16 @@
       "Bash(git add *)",
       "Bash(git commit *)",
       "Bash(git push *)",
-      "Bash(pnpm *)"
+      "Bash(pnpm *)",
+      "Bash(curl *)",
+      "Bash(python3 *)",
+      "Bash(ls *)",
+      "Bash(pkill *)",
+      "Bash(sleep *)",
+      "Bash(timeout *)",
+      "Bash(true)",
+      "Bash(go *)",
+      "WebFetch(flowpipe.io)"
     ]
   },
   "$version": 4

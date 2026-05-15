@@ -147,9 +147,9 @@ func TestSchemaEntries_ReadConfigError(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("BENCH_CONFIG", filepath.Join(dir, "nonexistent.yaml"))
 	t.Cleanup(func() { _ = os.Unsetenv("BENCH_CONFIG") })
-	if s := SchemaEntries(); s != nil && len(s) != 0 {
-		t.Fatalf("expected nil or empty when config missing, got %v", s)
-	}
+	if s := SchemaEntries(); len(s) != 0 {
+				t.Fatalf("expected nil or empty when config missing, got %v", s)
+			}
 }
 
 func TestSchemaEntries_SchemaByID(t *testing.T) {
@@ -223,13 +223,13 @@ func TestValidateConfig_Triggers_DuplicateID(t *testing.T) {
 flowpipe_triggers:
   triggers:
     - id: dup
-      flow: pipeline1
-      type: webhook
+      module: pipeline1
+      type: http
       config:
         description: A
     - id: dup
-      flow: pipeline2
-      type: webhook
+      module: pipeline2
+      type: http
       config:
         description: B
 `)
@@ -244,7 +244,7 @@ func TestValidateConfig_Triggers_InvalidType(t *testing.T) {
 flowpipe_triggers:
   triggers:
     - id: t1
-      flow: pipeline1
+      module: pipeline1
       type: invalid-type
       config:
         description: Test
@@ -260,7 +260,7 @@ func TestValidateConfig_Triggers_EmptyType(t *testing.T) {
 flowpipe_triggers:
   triggers:
     - id: t1
-      flow: pipeline1
+      module: pipeline1
       type: ""
       config:
         description: Test
@@ -276,13 +276,13 @@ func TestValidateConfig_Triggers_EmptyFlow(t *testing.T) {
 flowpipe_triggers:
   triggers:
     - id: t1
-      flow: ""
-      type: webhook
+      module: ""
+      type: http
       config:
         description: Test
 `)
 	err := validateConfig(cfg)
-	if err == nil || !strings.Contains(err.Error(), "flow is required") {
+	if err == nil || !strings.Contains(err.Error(), "module is required") {
 		t.Fatalf("expected flow required error, got %v", err)
 	}
 }
@@ -292,8 +292,8 @@ func TestValidateConfig_Triggers_EmptyID(t *testing.T) {
 flowpipe_triggers:
   triggers:
     - id: ""
-      flow: pipeline1
-      type: webhook
+      module: pipeline1
+      type: http
       config:
         description: Test
 `)
@@ -307,14 +307,14 @@ func TestValidateConfig_Triggers_Complete(t *testing.T) {
 	cfg := mustUnmarshal(t, `
 flowpipe_triggers:
   triggers:
-    - id: webhook-trigger
-      flow: daily_report
-      type: webhook
+    - id: http-trigger
+      module: daily_report
+      type: http
       config:
-        description: "Webhook trigger"
+        description: "HTTP trigger"
         pipeline: pipeline.daily_report
     - id: schedule-trigger
-      flow: hourly_check
+      module: hourly_check
       type: schedule
       config:
         description: "Schedule trigger"

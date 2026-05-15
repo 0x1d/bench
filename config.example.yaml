@@ -55,13 +55,17 @@ agent:
 
 flowpipe_triggers:
   triggers:
-    - id: daily-report-webhook
-      label: Daily Report Webhook
+    - id: daily-report-http
+      label: Daily Report HTTP Trigger
       flow: daily_report
-      type: webhook
+      type: http
       config:
-        description: "Trigger daily report via webhook"
+        description: "Trigger daily report via HTTP webhook"
         pipeline: pipeline.daily_report
+        args:
+          body: self.request_body
+          headers: self.request_headers
+        executionMode: asynchronous
     - id: hourly-check-schedule
       label: Hourly Check
       flow: hourly_check

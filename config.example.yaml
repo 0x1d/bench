@@ -53,6 +53,10 @@ agent:
   workingDirectory: /workspace
   agent: cursor
 
+# Optional trigger metadata overlay. Bench discovers runtime triggers from
+# trigger blocks in each flow's .fp file; use the UI or trigger API to create
+# those blocks. Entries here enrich matching trigger IDs with labels, workspace,
+# and detailed config values in API/UI responses.
 flowpipe_triggers:
   triggers:
     - id: daily-report-webhook

@@ -1,6 +1,6 @@
 # Schema registry
 
-The schema registry stores OpenAPI, AsyncAPI, and JSON Schema documents in `config.yaml` under `resources.schemas`. The API lists metadata and serves raw file content; the UI lets you manage entries on the Configuration page (`#configuration`) and browse schemas on the Schemas page (`#schemas`).
+The schema registry stores OpenAPI, AsyncAPI, and JSON Schema documents in `config.yaml` under `resources.schemas`. The API lists metadata and serves raw file content; the Schemas page (`#schemas`) lets you manage entries and browse schema previews.
 
 ## Overview
 
@@ -52,9 +52,9 @@ resources:
 
 | Location | Behavior |
 |----------|----------|
-| **Configuration** (`#configuration`) | Section **Schemas**: list, add, edit, remove entries; save writes `resources.schemas` to `config.yaml`. |
+| **Schemas** (`#schemas`) | List schemas, preview parsed content, and add/edit/remove entries from the settings side panel. Saving writes `resources.schemas` to `config.yaml`. |
 | **REST** form | **OpenAPI schema (registry)** dropdown lists `openapi` schemas; optional **OpenAPI spec path** when no registry schema is selected. |
-| **Schemas** (`#schemas`) | Lists schemas from the API; selecting a row loads content and shows a parsed preview. |
+| **Configuration** (`#configuration`) | Legacy config editor remains available for direct YAML/resource editing. |
 
 ## API reference
 

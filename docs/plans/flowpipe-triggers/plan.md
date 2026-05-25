@@ -1,7 +1,7 @@
 ---
-state: DRAFT
+state: DONE
 created: 2026-05-08
-updated: 2026-05-08
+updated: 2026-05-25
 ---
 
 # Flowpipe Triggers Implementation Plan

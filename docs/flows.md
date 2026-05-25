@@ -10,8 +10,9 @@ When `flows` is configured in `config.yaml`, the Flows page enables:
 - **Flow editor** — Visual graph editor with drag-and-drop steps and connections
 - **Step types** — Input, output, HTTP (REST), query (database), message, sleep, transform, container, pipeline, plus Flowpipe common step attributes on executable steps
 - **Execution** — Run flows on Flowpipe and view process history and execution details
+- **Triggers** — Manage Flowpipe trigger blocks for webhook, schedule, alert, HTTP, and notification events
 
-Flows are persisted as `{id}.json` (Bench format) and `{id}.fp` (Flowpipe HCL). Database connections used in flows are auto-generated in `connections.fpc`.
+Flows are persisted as `{id}.json` (Bench format) and `{id}.fp` (Flowpipe HCL). Trigger CRUD writes Flowpipe `trigger` blocks into the matching `{id}.fp` file. Database connections used in flows are auto-generated in `connections.fpc`.
 
 ## Configuration
 
@@ -36,6 +37,22 @@ flows:
   - **flowpipeUrl** — Flowpipe server URL (default `http://localhost:7103`)
 
 If no workspaces are configured but `path` is set, a default workspace (`id: default`) is used.
+
+Optional trigger metadata can be declared under `flowpipe_triggers.triggers[]`:
+
+```yaml
+flowpipe_triggers:
+  triggers:
+    - id: daily-report-webhook
+      label: Daily Report Webhook
+      workspace: default
+      flow: daily_report
+      type: webhook
+      config:
+        pipeline: pipeline.daily_report
+```
+
+`flowpipe_triggers` does not create triggers by itself. Runtime triggers are discovered from `trigger "<type>" "<id>" { ... }` blocks in flow `.fp` files; matching config entries overlay labels, workspace selection, and richer config values in API/UI responses.
 
 ## Flow Structure
 
@@ -208,6 +225,93 @@ All endpoints require the `X-API-Token` header. Base path: `/api/flows`.
 }
 ```
 
+### Triggers
+
+Triggers are Flowpipe trigger blocks attached to a flow. The Triggers page is available at `#flows/triggers`, and the flow editor side panel can edit triggers for the currently open flow.
+
+Supported trigger types:
+
+| Type | Purpose | Additional config |
+|------|---------|-------------------|
+| `webhook` | Run a pipeline from a Flowpipe webhook URL | none beyond `pipeline` and optional `description` |
+| `schedule` | Run on a cron schedule | `schedule.cron`, `schedule.timezone` |
+| `alert` | Run from an alert source | `alert.source`, `alert.condition` |
+| `http` | Run from an HTTP polling trigger | `http.url`, `http.method`, `http.body` |
+| `notification` | Run from notification events | `notification.source`, `notification.channel`, `notification.conditions` |
+
+**Storage model:**
+
+- Creating or updating a trigger writes a `trigger "<type>" "<id>" { ... }` block into `{flows.path}/{flow}.fp`.
+- The flow `.fp` file must already exist; create the flow before adding triggers.
+- Listing triggers walks all `.fp` files under `flows.path` except `mod.fp`.
+- `flowpipe_triggers.triggers[]` entries in `config.yaml` only enrich matching runtime triggers; they are not a declarative source of trigger blocks.
+
+Example webhook block:
+
+```hcl
+trigger "webhook" "daily-report-webhook" {
+  description = "Trigger daily report via webhook"
+  pipeline    = pipeline.daily_report
+}
+```
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/flows/triggers` | List triggers across flows |
+| GET | `/api/flows/{flowId}/triggers/{triggerId}` | Get a trigger |
+| POST | `/api/flows/{flowId}/triggers` | Create a trigger in the flow `.fp` file |
+| PUT | `/api/flows/{flowId}/triggers/{triggerId}` | Replace a trigger block |
+| DELETE | `/api/flows/{flowId}/triggers/{triggerId}` | Delete a trigger block |
+| POST | `/api/flows/{flowId}/triggers/{triggerId}/test` | Run the trigger's configured pipeline through Flowpipe |
+| GET | `/api/flows/{flowId}/triggers/{triggerId}/webhook` | Return the Flowpipe webhook URL for a webhook trigger |
+
+**List query parameters:**
+
+| Param | Description |
+|-------|-------------|
+| `workspace` | Optional workspace filter. Empty trigger workspace is treated as `default`. |
+| `flow` | Optional flow id filter. |
+
+**Create/update request:**
+
+```json
+{
+  "id": "daily-report-webhook",
+  "label": "Daily Report Webhook",
+  "workspace": "default",
+  "flow": "daily_report",
+  "type": "webhook",
+  "config": {
+    "description": "Trigger daily report via webhook",
+    "pipeline": "pipeline.daily_report"
+  }
+}
+```
+
+`config.pipeline` is required. If it omits the `pipeline.` prefix, Bench adds it when writing HCL.
+
+**Test request:** `POST /api/flows/{flowId}/triggers/{triggerId}/test`
+
+```json
+{
+  "payload": {
+    "user_id": "123"
+  }
+}
+```
+
+Bench forwards the payload as Flowpipe run args. For webhook triggers with no payload, Bench sends a default test event containing `timestamp`, `trigger`, and `flow`.
+
+**Webhook URL response:** `GET /api/flows/{flowId}/triggers/{triggerId}/webhook`
+
+```json
+{
+  "url": "http://localhost:7103/api/v0/webhook/daily-report-webhook"
+}
+```
+
+The URL is `{flows.workspaces[].flowpipeUrl}/api/v0/webhook/{triggerId}` using the trigger workspace or `default`.
+
 ### Execution
 
 | Method | Path | Description |
@@ -256,7 +360,7 @@ The flows directory contains:
 | `connections.fpc` | Auto-generated PostgreSQL connection blocks from `resources.databases` |
 | `{module}/mod.fp` | Module metadata (title, description) |
 | `{module}/{id}.json` | Flow definition (Bench format) |
-| `{module}/{id}.fp` | Flowpipe pipeline HCL (generated from JSON) |
+| `{module}/{id}.fp` | Flowpipe pipeline HCL (generated from JSON) plus trigger blocks |
 
 Path traversal (`..`) in module paths is rejected.
 
@@ -270,6 +374,9 @@ Path traversal (`..`) in module paths is rejected.
 | Flow not found | 404 | `flow not found: {id}` |
 | Invalid flow id | 400 | `invalid flow id: {id}` |
 | Invalid module name | 400 | `invalid module name: {name}` |
+| Trigger not found | 404 | `trigger not found: {triggerId} in flow {flowId}` |
+| Trigger duplicate | 409 | `trigger "{triggerId}" already exists in flow "{flowId}"` |
+| Missing trigger pipeline | 400 | `trigger config.pipeline is required` |
 | Flowpipe request failed | 502 | `flowpipe request failed: {error}` |
 
 ## Troubleshooting
@@ -277,11 +384,15 @@ Path traversal (`..`) in module paths is rejected.
 - **Flow runs but step order looks wrong**: verify `dependsOn` on steps (not just rendered edges).
 - **Run args appear ignored**: only params declared in `input` steps are accepted.
 - **Query step run fails with missing connection arg**: ensure the step has `databaseId` and that the database resource exists.
+- **Create trigger returns "Create flow first"**: trigger CRUD writes to `{flow}.fp`; save or create the flow before adding triggers.
+- **Trigger test cannot connect to Flowpipe**: verify the trigger workspace and `flows.workspaces[].flowpipeUrl`.
+- **Webhook URL points at the wrong host**: set the trigger `workspace` in `flowpipe_triggers` or choose the correct workspace in the UI; otherwise `default` is used.
 - **Flowpipe process list returns gateway error**: Bench converts upstream Flowpipe 5xx on process listing into a friendly `502` error response.
 
 ## Security
 
 - **Flowpipe URL**: Workspace `flowpipeUrl` is server-side only; the UI receives only workspace id and label.
+- **Triggers**: Webhook URLs expose the Flowpipe host configured for the trigger workspace. Trigger testing runs the configured pipeline on that server.
 - **Database credentials**: Connection blocks in `connections.fpc` use env-interpolated URLs; credentials never reach the client.
 - **REST auth**: HTTP steps use Bench REST resources; auth is applied server-side when generating HCL or proxying.
 

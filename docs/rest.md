@@ -51,6 +51,8 @@ resources:
 - **schemaId** — Optional. References a registered schema with `type: openapi` under `resources.schemas`. When set, the OpenAPI spec for this REST resource is loaded from the registry (see [schema-registry.md](schema-registry.md)).
 - **openapiSpec** — Path to the OpenAPI spec file, relative to the config directory. Used when `schemaId` is empty or omitted.
 
+You can add or edit REST resources from the REST page side panel (`#rest`). Saving uses `POST /api/config/save` and rewrites `resources.rest` in `config.yaml`. Registered OpenAPI schemas are managed on the Schemas page (`#schemas`).
+
 ### Authentication
 
 | Type | Config fields | Env var for secret |

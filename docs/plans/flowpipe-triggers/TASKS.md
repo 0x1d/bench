@@ -1,7 +1,7 @@
 ---
-state: DRAFT
+state: DONE
 created: 2026-05-08
-updated: 2026-05-13
+updated: 2026-05-25
 ---
 
 # Flowpipe Triggers — Task Tracker
@@ -33,7 +33,7 @@ updated: 2026-05-13
 
 ## Phase 2: Trigger Service (CRUD + File I/O)
 
-**Phase status**: IN_PROGRESS
+**Phase status**: DONE
 **Deliverable**: Service can read, write, list, create, update, delete triggers in Flowpipe mod files.
 
 ### Service

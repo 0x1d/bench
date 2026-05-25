@@ -28,7 +28,7 @@ infrastructure:
 ```
 
 - `path` defaults to `./workspace/infra` (relative to config directory) when omitted in internal resolution.
-- On the Configuration page, this is shown as "Infrastructure directory".
+- You can edit this path from **Infrastructure -> Settings** (`#infrastructure/settings`). Saving uses `POST /api/config/save` and rewrites `infrastructure.path` in `config.yaml`.
 
 ## UI Workflow
 

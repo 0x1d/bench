@@ -206,3 +206,5 @@ docker compose up
 
 Legacy fallback: if `resources.databases` is not configured, `DATABASE_URL` is still supported.
 If no database is configured, the Database page shows a setup message and database endpoints return 503.
+
+You can add or edit database entries from **Database -> Settings** (`#database/settings`). Saving uses `POST /api/config/save`, rewrites `resources.databases` in `config.yaml`, and reloads the database runtime.

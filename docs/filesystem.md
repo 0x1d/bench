@@ -27,6 +27,8 @@ resources:
 
 If no roots are configured, the Filesystem page shows a setup message.
 
+You can edit roots from **Filesystem -> Settings** (`#filesystem/settings`). Saving uses `POST /api/config/save` and rewrites `resources.filesystem` in `config.yaml`.
+
 ## API Reference
 
 All endpoints require the `X-API-Token` header. Base path: **`/api/configuration`**. The same handlers are also mounted at **`/api/resources`** for backward compatibility.

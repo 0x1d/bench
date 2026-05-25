@@ -9,7 +9,7 @@ This document describes the security concepts and controls in place across the b
 | API | API token | All endpoints require `X-API-Token` |
 | Database | Connection string | Server-only, never exposed |
 | UI | Proxy | Token injected server-side, never in browser |
-| Config | File system | Paths from config, not user input |
+| Config | API token + file system | Token holder can read and rewrite `config.yaml` |
 | Infrastructure | Path controls + token | Terraform file writes are root-scoped; command execution is token-protected |
 
 ## API Authentication
@@ -76,6 +76,17 @@ The token is never sent to the browser or bundled into the frontend.
 - `API_TOKEN` is not prefixed with `VITE_`, so it is not exposed to the client bundle.
 - `DATABASE_URL` is API-only; the UI never receives it.
 
+## Config Read and Save
+
+- `GET /api/config` returns the raw `config.yaml` content to authenticated callers.
+- `GET /api/config/example` returns `config.example.yaml`.
+- `POST /api/config/save` accepts raw YAML and replaces the entire active config file.
+- `POST /api/config` accepts a multipart config upload and also replaces the active config file.
+
+After a successful save or upload, Bench reloads database resources and syncs Flowpipe workspace files (`mod.fp` and `workspaces.fpc`). A caller with `API_TOKEN` can change filesystem roots, database URLs, REST targets and credentials, schemas, Flowpipe workspaces, infrastructure path, agent settings, and trigger metadata. Treat config write access as administrative access.
+
+Flowpipe trigger blocks are stored in flow `.fp` files rather than `config.yaml`; the `flowpipe_triggers` config section is an overlay for labels, workspace selection, and richer trigger config returned by the API.
+
 ## REST Resources
 
 - REST resources are defined in `config.yaml` under `resources.rest`.
@@ -105,6 +116,7 @@ See [filesystem.md](filesystem.md) for the full API reference.
 - **Flowpipe URL**: Workspace `flowpipeUrl` is server-side; only id and label are exposed to the client.
 - **Database connections**: `connections.fpc` is auto-generated from `resources.databases`; credentials use env interpolation and are never sent to the client.
 - **Path validation**: Module paths reject `..` and path traversal.
+- **Triggers**: Trigger CRUD writes to flow `.fp` files, and trigger tests run the configured pipeline on the selected Flowpipe workspace. Webhook URLs include the Flowpipe host for that workspace.
 
 See [flows.md](flows.md) for the full API reference.
 

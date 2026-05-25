@@ -29,6 +29,6 @@ Phase status: `TODO` | `IN_PROGRESS` | `DONE`
 
 | Plan | Status | Description |
 |------|--------|-------------|
-| [flowpipe-triggers](./flowpipe-triggers/) | DRAFT | Flowpipe trigger configuration and management for automatic pipeline execution |
-| [schema-registry](./schema-registry/) | READY | Schema registry for OpenAPI, AsyncAPI, JSON Schema; flow integration |
+| [flowpipe-triggers](./flowpipe-triggers/) | DONE | Flowpipe trigger configuration and management for automatic pipeline execution |
+| [schema-registry](./schema-registry/) | DONE | Schema registry for OpenAPI, AsyncAPI, JSON Schema; flow integration |
 | [resource-config-ux-consolidation](./resource-config-ux-consolidation/) | IN_PROGRESS | Per-page resource settings; Configuration Overview + Agent; rename filesystem/configuration modules |

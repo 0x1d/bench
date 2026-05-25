@@ -1,7 +1,7 @@
 ---
-state: DRAFT
+state: DONE
 created: 2026-05-08
-updated: 2026-05-08
+updated: 2026-05-25
 ---
 
 # Flowpipe Triggers Implementation Plan
@@ -20,14 +20,14 @@ updated: 2026-05-08
 
 | Phase | Status | Description |
 |-------|--------|-------------|
-| 1 | TODO | Trigger config model and parsing |
-| 2 | TODO | Trigger service (CRUD, file I/O) |
-| 3 | TODO | Trigger API handlers and routes |
-| 4 | TODO | UI - Triggers management page |
-| 5 | TODO | UI - Flow editor expansion |
-| 6 | TODO | Webhook URL + testing |
+| 1 | DONE | Trigger config model and parsing |
+| 2 | DONE | Trigger service (CRUD, file I/O) |
+| 3 | DONE | Trigger API handlers and routes |
+| 4 | DONE | UI - Triggers management page |
+| 5 | DONE | UI - Flow editor expansion |
+| 6 | DONE | Webhook URL + testing |
 
-**Next up**: Phase 1 — Define trigger types and configuration model.
+**Completed**: Flowpipe trigger configuration, CRUD, UI management, webhook URL generation, and testing support.
 
 ## How to Use This Plan
 

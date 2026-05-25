@@ -102,8 +102,9 @@ The Flows page provides a visual flow editor for building pipelines that run on 
 - **Flow editor** — Visual graph editor with drag-and-drop steps and connections
 - **Step types** — Input, output, HTTP (REST), query (database), message, sleep, transform, container, pipeline
 - **Execution** — Run flows on Flowpipe and view process history and execution details
+- **Triggers** — Manage Flowpipe webhook, schedule, alert, HTTP, and notification triggers
 
-Configure `flows` in `config.yaml` with a `path` and `workspaces` (Flowpipe server URLs). If `flows` is not configured, the Flows page shows a setup message and the nav item remains available.
+Configure `flows` in `config.yaml` with a `path` and `workspaces` (Flowpipe server URLs). If `flows` is not configured, the Flows page shows a setup message and the nav item remains available. Manage trigger blocks from **Flows → Triggers** (`#flows/triggers`) or the flow editor side panel.
 
 See [docs/flows.md](docs/flows.md) for configuration, step types, and API details.
 
@@ -124,14 +125,14 @@ See [docs/infrastructure.md](docs/infrastructure.md) for workflow details, API r
 
 ## Schema registry
 
-The schema registry holds OpenAPI, AsyncAPI, and JSON Schema files declared under `resources.schemas`. REST resources can reference a registered OpenAPI document with `schemaId` (it takes precedence over `openapiSpec`). Register and edit schemas on the Configuration page (`#configuration`); the Schemas page (`#schemas`) lists entries and shows a simple preview by type.
+The schema registry holds OpenAPI, AsyncAPI, and JSON Schema files declared under `resources.schemas`. REST resources can reference a registered OpenAPI document with `schemaId` (it takes precedence over `openapiSpec`). Register, edit, browse, and preview schemas on the Schemas page (`#schemas`).
 
 See [docs/schema-registry.md](docs/schema-registry.md) for configuration, REST integration, UI, and API details.
 
 ## Documentation
 
 - [docs/database.md](docs/database.md) — Database integration API reference, query endpoint, and features
-- [docs/flows.md](docs/flows.md) — Flows (Flowpipe) configuration, step types, and execution
+- [docs/flows.md](docs/flows.md) — Flows (Flowpipe) configuration, step types, triggers, and execution
 - [docs/filesystem.md](docs/filesystem.md) — File system resource manager API reference
 - [docs/infrastructure.md](docs/infrastructure.md) — Terraform workflow, command runbook, and API reference
 - [docs/rest.md](docs/rest.md) — REST resource proxy and OpenAPI-based tooling
@@ -140,7 +141,7 @@ See [docs/schema-registry.md](docs/schema-registry.md) for configuration, REST i
 
 ## Filesystem
 
-The Configuration page (`#configuration`) provides a file browser for configured directory roots. Configure roots in `config.yaml` under `resources.filesystem`. Each entry has `id`, `label`, and `path` (absolute or relative to the config file). Supports list, download, upload, create folder, rename, and delete.
+The Filesystem page (`#filesystem`) provides a file browser for configured directory roots. Configure roots in `config.yaml` under `resources.filesystem` or **Filesystem → Settings** (`#filesystem/settings`). Each entry has `id`, `label`, and `path` (absolute or relative to the config file). Supports list, download, upload, create folder, rename, and delete.
 
 See [docs/filesystem.md](docs/filesystem.md) for the full API reference.
 
@@ -153,6 +154,21 @@ Configuration is in `config.yaml` (see `config.example.yaml`):
 - **resources.rest** — REST API resources for the REST page and flow HTTP steps (optional `schemaId` pointing at a registered OpenAPI schema)
 - **resources.schemas** — Registered schema files (OpenAPI, AsyncAPI, JSON Schema) for the registry API and UI
 - **flows** — Flow storage path and Flowpipe workspace URLs for the Flows page
+- **flowpipe_triggers** — Optional metadata overlay for trigger labels/workspaces; trigger blocks live in flow `.fp` files
+- **infrastructure** — Terraform workspace directory for the Infrastructure page
+- **agent** — Agent chat endpoint, working directory, and agent type (`cursor` or `gemini`)
+
+Most resource setup can be edited from the feature page Settings route, which saves the full config through `POST /api/config/save`:
+
+| Resource | UI location |
+|----------|-------------|
+| Filesystem roots | **Filesystem → Settings** (`#filesystem/settings`) |
+| Database connections | **Database → Settings** (`#database/settings`) |
+| REST resources | REST page side panel (`#rest`) |
+| Schemas | Schemas page side panel (`#schemas`) |
+| Flows workspaces | **Flows → Settings** (`#flows/settings`) |
+| Infrastructure directory | **Infrastructure → Settings** (`#infrastructure/settings`) |
+| Agent chat | Configuration page (`#configuration`) |
 
 ## Development
 

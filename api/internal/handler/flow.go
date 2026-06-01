@@ -83,10 +83,10 @@ func HandleFlowHCLSchema(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(struct {
-		StepTypes     []string            `json:"stepTypes"`
+		StepTypes      []string            `json:"stepTypes"`
 		StepAttributes map[string][]string `json:"stepAttributes"`
 	}{
-		StepTypes:     hclgen.StepTypes(),
+		StepTypes:      hclgen.StepTypes(),
 		StepAttributes: hclgen.StepAttributes(),
 	})
 }
@@ -608,6 +608,14 @@ func HandleFlowExecution(w http.ResponseWriter, r *http.Request) {
 // triggerService is the global trigger service instance.
 var triggerService = flow.NewService()
 
+func triggerFlowID(r *http.Request) string {
+	flowID := strings.TrimSpace(r.PathValue("flowId"))
+	if flowID == "" {
+		flowID = strings.TrimSpace(r.PathValue("id"))
+	}
+	return flowID
+}
+
 // HandleTriggersList returns all triggers from all flows.
 // Query params:
 //   - workspace: filter triggers by workspace
@@ -668,7 +676,7 @@ func HandleTriggerGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	flowID := strings.TrimSpace(r.PathValue("flowId"))
+	flowID := triggerFlowID(r)
 	if flowID == "" {
 		// For backward compatibility, look up trigger across all flows
 		triggers, err := triggerService.ListTriggers()
@@ -716,7 +724,7 @@ func HandleTriggerCreate(w http.ResponseWriter, r *http.Request) {
 
 	// Extract flow ID from URL if not in body
 	if trigger.Flow == "" {
-		flowID := strings.TrimSpace(r.PathValue("flowId"))
+		flowID := triggerFlowID(r)
 		if flowID == "" {
 			http.Error(w, "flow id required", http.StatusBadRequest)
 			return
@@ -764,7 +772,7 @@ func HandleTriggerUpdate(w http.ResponseWriter, r *http.Request) {
 
 	// Extract flow ID from URL if not in body
 	if trigger.Flow == "" {
-		flowID := strings.TrimSpace(r.PathValue("flowId"))
+		flowID := triggerFlowID(r)
 		if flowID == "" {
 			http.Error(w, "flow id required", http.StatusBadRequest)
 			return
@@ -798,7 +806,7 @@ func HandleTriggerDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	flowID := strings.TrimSpace(r.PathValue("flowId"))
+	flowID := triggerFlowID(r)
 	if flowID == "" {
 		http.Error(w, "flow id required", http.StatusBadRequest)
 		return
@@ -829,7 +837,7 @@ func HandleTriggerTest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	flowID := strings.TrimSpace(r.PathValue("flowId"))
+	flowID := triggerFlowID(r)
 	if flowID == "" {
 		http.Error(w, "flow id required", http.StatusBadRequest)
 		return
@@ -870,7 +878,7 @@ func HandleTriggerWebhookURL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	flowID := strings.TrimSpace(r.PathValue("flowId"))
+	flowID := triggerFlowID(r)
 	if flowID == "" {
 		http.Error(w, "flow id required", http.StatusBadRequest)
 		return

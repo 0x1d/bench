@@ -388,11 +388,11 @@ func TestHandleTriggerUpdate_404(t *testing.T) {
 	writeFlowHandlerTestConfig(t, flowsDir)
 
 	updatedTrigger := model.TriggerEntry{
-		ID:        "nonexistent",
-		Label:     "Nonexistent",
-		Flow:      "flow",
-		Type:      model.TriggerTypeWebhook,
-		Config:    model.TriggerConfig{Pipeline: "pipeline.test"},
+		ID:     "nonexistent",
+		Label:  "Nonexistent",
+		Flow:   "flow",
+		Type:   model.TriggerTypeWebhook,
+		Config: model.TriggerConfig{Pipeline: "pipeline.test"},
 	}
 	body, _ := json.Marshal(updatedTrigger)
 
@@ -564,15 +564,18 @@ func TestRegisterRoutes_TriggerHTTPMethods(t *testing.T) {
 	mux := http.NewServeMux()
 	RegisterRoutes(mux)
 
-	// Test DELETE /api/flows/{flowId}/triggers/{triggerId}
-	req := httptest.NewRequest(http.MethodDelete, "/api/flows/flow/triggers/webhook1", nil)
-	req.SetPathValue("flowId", "flow")
-	req.SetPathValue("triggerId", "webhook1")
+	req := httptest.NewRequest(http.MethodGet, "/api/flows/flow/triggers/webhook1/webhook", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
-	// May return 404 if trigger was already deleted by previous test
-	if rec.Code != http.StatusNoContent && rec.Code != http.StatusNotFound {
-		t.Errorf("DELETE /api/flows/flow/triggers/webhook1: unexpected status %d", rec.Code)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/flows/flow/triggers/webhook1/webhook: expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodDelete, "/api/flows/flow/triggers/webhook1", nil)
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNoContent {
+		t.Errorf("DELETE /api/flows/flow/triggers/webhook1: expected 204, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 

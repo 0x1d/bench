@@ -53,6 +53,8 @@ agent:
   workingDirectory: /workspace
   agent: cursor
 
+# Optional metadata for Flowpipe trigger blocks stored in flow .fp files.
+# UI/API trigger CRUD updates the .fp trigger blocks, not this section.
 flowpipe_triggers:
   triggers:
     - id: daily-report-webhook

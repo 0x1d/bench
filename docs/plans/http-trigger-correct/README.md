@@ -14,6 +14,7 @@ updated: 2026-05-14
 |----------|-------------|
 | [plan.md](./plan.md) | Full design document |
 | [TASKS.md](./TASKS.md) | Task index and status |
+| [REVIEW.md](./REVIEW.md) | Implementation review, gaps, and recommended fixes |
 | [specs/](./specs/) | Task specs |
 
 ## Current Status
@@ -22,7 +23,7 @@ updated: 2026-05-14
 |-------|--------|-------------|
 | 1 | DONE | Remove webhook type, correct HTTP trigger model, HCL, API, UI, tests |
 
-**Next up**: Phase 1 — Remove webhook type, correct HTTP model
+**Next up**: Address items in [REVIEW.md](./REVIEW.md) before merge
 
 ## How to Use This Plan
 

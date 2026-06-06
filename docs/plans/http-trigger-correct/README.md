@@ -23,7 +23,7 @@ updated: 2026-05-14
 |-------|--------|-------------|
 | 1 | DONE | Remove webhook type, correct HTTP trigger model, HCL, API, UI, tests |
 
-**Next up**: Address items in [REVIEW.md](./REVIEW.md) before merge
+**Review fixes applied** — see [REVIEW.md](./REVIEW.md) for resolved items
 
 ## How to Use This Plan
 

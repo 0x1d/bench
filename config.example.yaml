@@ -57,7 +57,7 @@ flowpipe_triggers:
   triggers:
     - id: daily-report-http
       label: Daily Report HTTP Trigger
-      flow: daily_report
+      module: daily_report
       type: http
       config:
         description: "Trigger daily report via HTTP webhook"
@@ -68,7 +68,7 @@ flowpipe_triggers:
         executionMode: asynchronous
     - id: hourly-check-schedule
       label: Hourly Check
-      flow: hourly_check
+      module: hourly_check
       type: schedule
       config:
         description: "Run hourly checks"

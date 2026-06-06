@@ -101,10 +101,10 @@ type WorkspaceEntry struct {
 type TriggerType string
 
 const (
-	TriggerTypeSchedule       TriggerType = "schedule"
-	TriggerTypeAlert          TriggerType = "alert"
-	TriggerTypeHTTP           TriggerType = "http"
-	TriggerTypeNotification   TriggerType = "notification"
+	TriggerTypeSchedule     TriggerType = "schedule"
+	TriggerTypeAlert        TriggerType = "alert"
+	TriggerTypeHTTP         TriggerType = "http"
+	TriggerTypeNotification TriggerType = "notification"
 )
 
 // HTTPConfig holds configuration for HTTP triggers (Flowpipe's inbound webhook receiver).
@@ -143,11 +143,11 @@ type NotificationConfig struct {
 
 // TriggerConfig holds type-specific configuration for a trigger.
 type TriggerConfig struct {
-	Description  string            `yaml:"description,omitempty" json:"description,omitempty"`
-	Pipeline     string            `yaml:"pipeline,omitempty" json:"pipeline,omitempty"`
-	Schedule     *ScheduleConfig   `yaml:"schedule,omitempty" json:"schedule,omitempty"`
-	Alert        *AlertConfig      `yaml:"alert,omitempty" json:"alert,omitempty"`
-	HTTP         *HTTPConfig       `yaml:"http,omitempty" json:"http,omitempty"`
+	Description  string              `yaml:"description,omitempty" json:"description,omitempty"`
+	Pipeline     string              `yaml:"pipeline,omitempty" json:"pipeline,omitempty"`
+	Schedule     *ScheduleConfig     `yaml:"schedule,omitempty" json:"schedule,omitempty"`
+	Alert        *AlertConfig        `yaml:"alert,omitempty" json:"alert,omitempty"`
+	HTTP         *HTTPConfig         `yaml:"http,omitempty" json:"http,omitempty"`
 	Notification *NotificationConfig `yaml:"notification,omitempty" json:"notification,omitempty"`
 }
 
@@ -159,6 +159,27 @@ type TriggerEntry struct {
 	Module    string        `yaml:"module" json:"module"`
 	Type      TriggerType   `yaml:"type" json:"type"`
 	Config    TriggerConfig `yaml:"config" json:"config"`
+}
+
+// UnmarshalYAML supports legacy trigger fields during migration:
+// flow → module, type webhook → http.
+func (t *TriggerEntry) UnmarshalYAML(value *yaml.Node) error {
+	type rawTriggerEntry TriggerEntry
+	var raw struct {
+		rawTriggerEntry `yaml:",inline"`
+		Flow            string `yaml:"flow"`
+	}
+	if err := value.Decode(&raw); err != nil {
+		return err
+	}
+	*t = TriggerEntry(raw.rawTriggerEntry)
+	if t.Module == "" && raw.Flow != "" {
+		t.Module = raw.Flow
+	}
+	if t.Type == "webhook" {
+		t.Type = TriggerTypeHTTP
+	}
+	return nil
 }
 
 // ResourcesConfig is the `resources` section of config.yaml (filesystem, databases, REST, schemas).
@@ -196,10 +217,10 @@ type FlowpipeTriggersConfig struct {
 
 // Config is the top-level config structure.
 type Config struct {
-	Resources        ResourcesConfig       `yaml:"resources"`
-	Flows            *FlowsConfig          `yaml:"flows,omitempty"`
-	Infrastructure   *InfrastructureConfig `yaml:"infrastructure,omitempty"`
-	Agent            *AgentConfig          `yaml:"agent,omitempty"`
+	Resources        ResourcesConfig         `yaml:"resources"`
+	Flows            *FlowsConfig            `yaml:"flows,omitempty"`
+	Infrastructure   *InfrastructureConfig   `yaml:"infrastructure,omitempty"`
+	Agent            *AgentConfig            `yaml:"agent,omitempty"`
 	FlowpipeTriggers *FlowpipeTriggersConfig `yaml:"flowpipe_triggers,omitempty"`
 }
 
@@ -433,10 +454,10 @@ func validateConfig(cfg Config) error {
 			}
 			// Validate trigger type
 			validTriggerTypes := map[TriggerType]bool{
-				TriggerTypeSchedule:       true,
-				TriggerTypeAlert:          true,
-				TriggerTypeHTTP:           true,
-				TriggerTypeNotification:   true,
+				TriggerTypeSchedule:     true,
+				TriggerTypeAlert:        true,
+				TriggerTypeHTTP:         true,
+				TriggerTypeNotification: true,
 			}
 			if !validTriggerTypes[t.Type] {
 				return fmt.Errorf("flowpipe_triggers.triggers[%d].type must be one of: schedule, alert, http, notification", i)

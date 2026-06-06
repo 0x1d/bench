@@ -126,7 +126,7 @@ export function FlowTriggersList({ flowId, module, pipelineRef, workspace }: Flo
   const testMutation = useMutation({
     mutationFn: async (trigger: TriggerState) => testTrigger(trigger.module, trigger.id),
     onSuccess: (result) => {
-      toast.success(result.message || 'Trigger test completed');
+      toast.success(result.status ? `Trigger test: ${result.status}` : 'Trigger test completed');
     },
     onError: (err) => {
       toast.error(err instanceof Error ? err.message : 'Failed to test trigger');

@@ -356,7 +356,7 @@ func TestCreateTrigger(t *testing.T) {
 
 	// Test error cases
 	t.Run("nil trigger", func(t *testing.T) {
-		err := s.CreateTrigger(nil)
+		err := s.CreateTrigger(nil, false)
 		if err == nil || !strings.Contains(err.Error(), "trigger is nil") {
 			t.Errorf("Expected 'trigger is nil' error, got: %v", err)
 		}
@@ -365,7 +365,7 @@ func TestCreateTrigger(t *testing.T) {
 	t.Run("empty id", func(t *testing.T) {
 		trig := *trigger
 		trig.ID = ""
-		err := s.CreateTrigger(&trig)
+		err := s.CreateTrigger(&trig, false)
 		if err == nil || !strings.Contains(err.Error(), "trigger id is required") {
 			t.Errorf("Expected 'trigger id is required' error, got: %v", err)
 		}
@@ -374,7 +374,7 @@ func TestCreateTrigger(t *testing.T) {
 	t.Run("empty flow", func(t *testing.T) {
 		trig := *trigger
 		trig.Module = ""
-		err := s.CreateTrigger(&trig)
+		err := s.CreateTrigger(&trig, false)
 		if err == nil || !strings.Contains(err.Error(), "trigger flow is required") {
 			t.Errorf("Expected 'trigger flow is required' error, got: %v", err)
 		}
@@ -383,7 +383,7 @@ func TestCreateTrigger(t *testing.T) {
 	t.Run("empty type", func(t *testing.T) {
 		trig := *trigger
 		trig.Type = ""
-		err := s.CreateTrigger(&trig)
+		err := s.CreateTrigger(&trig, false)
 		if err == nil || !strings.Contains(err.Error(), "trigger type is required") {
 			t.Errorf("Expected 'trigger type is required' error, got: %v", err)
 		}
@@ -392,7 +392,7 @@ func TestCreateTrigger(t *testing.T) {
 	t.Run("empty pipeline", func(t *testing.T) {
 		trig := *trigger
 		trig.Config.Pipeline = ""
-		err := s.CreateTrigger(&trig)
+		err := s.CreateTrigger(&trig, false)
 		if err == nil || !strings.Contains(err.Error(), "trigger config.pipeline is required") {
 			t.Errorf("Expected 'pipeline is required' error, got: %v", err)
 		}
@@ -600,13 +600,47 @@ func TestParseTriggerBlock(t *testing.T) {
 			},
 		},
 		{
-			name:    "http trigger with args",
+			name:    "http trigger with quoted args",
 			typeStr: "http",
 			id:      "http_with_args",
 			block:   `pipeline = pipeline.http_callback args = { body = "self.request_body" } execution_mode = "asynchronous"`,
 			checks: func(t *testing.T, state model.TriggerState) {
 				if state.Type != model.TriggerTypeHTTP {
 					t.Errorf("Expected http type, got %s", state.Type)
+				}
+				if state.Config.HTTP == nil || state.Config.HTTP.Args["body"] != "self.request_body" {
+					t.Errorf("Expected args.body='self.request_body', got %#v", state.Config.HTTP)
+				}
+			},
+		},
+		{
+			name:    "http trigger with unquoted args",
+			typeStr: "http",
+			id:      "http_unquoted_args",
+			block:   "pipeline = pipeline.http_callback\n  args = {\n    body    = self.request_body\n    headers = self.request_headers\n  }\n  execution_mode = \"asynchronous\"",
+			checks: func(t *testing.T, state model.TriggerState) {
+				if state.Config.HTTP == nil {
+					t.Fatal("Expected HTTP config to be set")
+				}
+				if state.Config.HTTP.Args["body"] != "self.request_body" {
+					t.Errorf("Expected args.body='self.request_body', got %q", state.Config.HTTP.Args["body"])
+				}
+				if state.Config.HTTP.Args["headers"] != "self.request_headers" {
+					t.Errorf("Expected args.headers='self.request_headers', got %q", state.Config.HTTP.Args["headers"])
+				}
+				if state.Config.HTTP.ExecutionMode != "asynchronous" {
+					t.Errorf("Expected execution_mode='asynchronous', got %q", state.Config.HTTP.ExecutionMode)
+				}
+			},
+		},
+		{
+			name:    "webhook trigger migrated to http",
+			typeStr: "webhook",
+			id:      "legacy_webhook",
+			block:   `pipeline = pipeline.legacy args = { body = self.request_body }`,
+			checks: func(t *testing.T, state model.TriggerState) {
+				if state.Type != model.TriggerTypeHTTP {
+					t.Errorf("Expected http type after webhook migration, got %s", state.Type)
 				}
 			},
 		},
@@ -643,7 +677,7 @@ trigger "http" "my_http" {
 
 trigger "schedule" "daily" {
   pipeline = pipeline.daily_report
-  cron     = "0 9 * * *"
+  schedule = "0 9 * * *"
 }
 `
 
@@ -890,27 +924,53 @@ func TestTriggerConfig_Validation(t *testing.T) {
 // TestTriggerTypesEdgeCases tests edge cases for different trigger types
 func TestTriggerTypesEdgeCases(t *testing.T) {
 	tests := []struct {
-		name     string
-		typeStr  model.TriggerType
-		block    string
-		hasField string
+		name    string
+		typeStr string
+		block   string
+		check   func(t *testing.T, state model.TriggerState)
 	}{
-		{"alert with condition", model.TriggerTypeAlert, `condition = "event.payload.value > 100"`, "condition"},
-		{"notification with channel", model.TriggerTypeNotification, `channel = "#alerts"`, "channel"},
-		{"notification with conditions", model.TriggerTypeNotification, `conditions  = ["error", "warning"]`, "conditions"},
-		{"http with url", model.TriggerTypeHTTP, `url = "https://example.com"`, "url"},
-		{"http with method", model.TriggerTypeHTTP, `method = "POST"`, "method"},
-		{"http with body", model.TriggerTypeHTTP, `body =`, "body"},
-		{"schedule with cron", model.TriggerTypeSchedule, `cron = "0 * * * *"`, "cron"},
-		{"schedule with timezone", model.TriggerTypeSchedule, `timezone = "America/New_York"`, "timezone"},
+		{
+			name:    "alert with condition",
+			typeStr: "alert",
+			block:   `pipeline = pipeline.notify condition = "event.payload.value > 100"`,
+			check: func(t *testing.T, state model.TriggerState) {
+				if state.Config.Alert == nil || state.Config.Alert.Condition != "event.payload.value > 100" {
+					t.Errorf("expected alert condition, got %#v", state.Config.Alert)
+				}
+			},
+		},
+		{
+			name:    "http with unquoted args",
+			typeStr: "http",
+			block:   `pipeline = pipeline.callback args = { body = self.request_body } execution_mode = "synchronous"`,
+			check: func(t *testing.T, state model.TriggerState) {
+				if state.Config.HTTP == nil || state.Config.HTTP.Args["body"] != "self.request_body" {
+					t.Errorf("expected http args, got %#v", state.Config.HTTP)
+				}
+				if state.Config.HTTP.ExecutionMode != "synchronous" {
+					t.Errorf("expected synchronous execution mode, got %q", state.Config.HTTP.ExecutionMode)
+				}
+			},
+		},
+		{
+			name:    "schedule with cron",
+			typeStr: "schedule",
+			block:   `pipeline = pipeline.hourly schedule = "0 * * * *" timezone = "America/New_York"`,
+			check: func(t *testing.T, state model.TriggerState) {
+				if state.Config.Schedule == nil || state.Config.Schedule.Cron != "0 * * * *" {
+					t.Errorf("expected schedule cron, got %#v", state.Config.Schedule)
+				}
+				if state.Config.Schedule.Timezone != "America/New_York" {
+					t.Errorf("expected timezone America/New_York, got %q", state.Config.Schedule.Timezone)
+				}
+			},
+		},
 	}
 
 	for _, tt := range tests {
-		t.Run(string(tt.typeStr), func(t *testing.T) {
-			// Check that we have the required trigger type constant
-			if string(tt.typeStr) == "" {
-				t.Errorf("Trigger type constant is empty")
-			}
+		t.Run(tt.name, func(t *testing.T) {
+			state := ParseTriggerBlock(tt.typeStr, "edge_case", tt.block)
+			tt.check(t, state)
 		})
 	}
 }

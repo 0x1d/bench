@@ -25,7 +25,8 @@ var (
 )
 
 // CreateTrigger adds a new trigger to a module's mod.fp file.
-func (s *Service) CreateTrigger(trigger *model.TriggerEntry) error {
+// When upsert is false, returns an error if the trigger already exists.
+func (s *Service) CreateTrigger(trigger *model.TriggerEntry, upsert bool) error {
 	if trigger == nil {
 		return fmt.Errorf("trigger is nil")
 	}
@@ -58,7 +59,7 @@ func (s *Service) CreateTrigger(trigger *model.TriggerEntry) error {
 			foundCount++
 		}
 	}
-	if foundCount > 1 {
+	if !upsert && foundCount >= 1 {
 		return fmt.Errorf("trigger %q already exists in module %q", trigger.ID, trigger.Module)
 	}
 
@@ -222,7 +223,7 @@ func (s *Service) UpdateTrigger(trigger *model.TriggerEntry) error {
 	}
 
 	// Delete the old trigger block and add the new one
-	return s.CreateTrigger(trigger)
+	return s.CreateTrigger(trigger, true)
 }
 
 // DeleteTrigger removes a trigger from a module's mod.fp file.
@@ -539,6 +540,9 @@ func parseTriggerBlocks(content, moduleName string) []model.TriggerState {
 		}
 		// m[2]:m[3] = trigger type, m[4]:m[5] = trigger ID
 		triggerType := content[m[2]:m[3]]
+		if triggerType == "webhook" {
+			triggerType = "http"
+		}
 		triggerID := content[m[4]:m[5]]
 
 		// Find the opening brace position
@@ -586,6 +590,9 @@ func ParseTriggerBlock(triggerType, triggerID, blockContent string) model.Trigge
 }
 
 func parseTriggerBlockContent(triggerType, triggerID, blockContent, moduleName string) model.TriggerState {
+	if triggerType == "webhook" {
+		triggerType = "http"
+	}
 	state := model.TriggerState{
 		Type:    model.TriggerType(triggerType),
 		Module:  moduleName,
@@ -666,8 +673,8 @@ func parseTriggerBlockContent(triggerType, triggerID, blockContent, moduleName s
 func parseHCLArgs(blockContent string) map[string]string {
 	args := make(map[string]string)
 
-	// Find "args = {" using regex
-	argsRe := regexp.MustCompile(`(?m)^[\s]*args\s*=\s*\{`)
+	// Find "args = {" (inline or on its own line)
+	argsRe := regexp.MustCompile(`args\s*=\s*\{`)
 	loc := argsRe.FindStringIndex(blockContent)
 	if loc == nil {
 		return args
@@ -704,10 +711,14 @@ func parseHCLArgs(blockContent string) map[string]string {
 	}
 
 	inner := blockContent[openBrace+1 : closeBrace]
-	// Parse key = "value" pairs
-	kvRe := regexp.MustCompile(`(\w+)\s*=\s*"((?:[^"\\]|\\.)*)"`)
+	// Parse key = "value" (quoted) or key = identifier (unquoted, e.g. self.request_body)
+	kvRe := regexp.MustCompile(`(\w+)\s*=\s*(?:"((?:[^"\\]|\\.)*)"|([\w.]+))`)
 	for _, m := range kvRe.FindAllStringSubmatch(inner, -1) {
-		args[m[1]] = unescapeHCLString(m[2])
+		if m[2] != "" {
+			args[m[1]] = unescapeHCLString(m[2])
+		} else if m[3] != "" {
+			args[m[1]] = m[3]
+		}
 	}
 	return args
 }
@@ -745,11 +756,11 @@ func triggerEntryToModelConfig(cfg *config.TriggerConfig) model.TriggerConfig {
 	}
 	if cfg.Notification != nil {
 		mcfg.Notification = &model.NotificationConfig{
-			Description:  cfg.Notification.Description,
-			Pipeline:     cfg.Notification.Pipeline,
-			Source:       cfg.Notification.Source,
-			Channel:      cfg.Notification.Channel,
-			Conditions:   []string{},
+			Description: cfg.Notification.Description,
+			Pipeline:    cfg.Notification.Pipeline,
+			Source:      cfg.Notification.Source,
+			Channel:     cfg.Notification.Channel,
+			Conditions:  []string{},
 		}
 	}
 	return mcfg
@@ -851,11 +862,11 @@ func configTriggerEntryFromModel(trigger *model.TriggerEntry) config.TriggerConf
 	case model.TriggerTypeNotification:
 		if trigger.Config.Notification != nil {
 			tc.Notification = &config.NotificationConfig{
-				Description:  trigger.Config.Notification.Description,
-				Pipeline:     trigger.Config.Notification.Pipeline,
-				Source:       trigger.Config.Notification.Source,
-				Channel:      trigger.Config.Notification.Channel,
-				Conditions:   strings.Join(trigger.Config.Notification.Conditions, "\n"),
+				Description: trigger.Config.Notification.Description,
+				Pipeline:    trigger.Config.Notification.Pipeline,
+				Source:      trigger.Config.Notification.Source,
+				Channel:     trigger.Config.Notification.Channel,
+				Conditions:  strings.Join(trigger.Config.Notification.Conditions, "\n"),
 			}
 		}
 	}

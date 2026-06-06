@@ -303,6 +303,44 @@ flowpipe_triggers:
 	}
 }
 
+func TestValidateConfig_Triggers_LegacyWebhookType(t *testing.T) {
+	cfg := mustUnmarshal(t, `
+flowpipe_triggers:
+  triggers:
+    - id: legacy-webhook
+      module: daily_report
+      type: webhook
+      config:
+        description: "Legacy webhook trigger"
+        pipeline: pipeline.daily_report
+`)
+	if err := validateConfig(cfg); err != nil {
+		t.Fatalf("expected legacy webhook type to migrate to http, got %v", err)
+	}
+	if cfg.FlowpipeTriggers.Triggers[0].Type != TriggerTypeHTTP {
+		t.Fatalf("expected migrated type http, got %q", cfg.FlowpipeTriggers.Triggers[0].Type)
+	}
+}
+
+func TestValidateConfig_Triggers_LegacyFlowField(t *testing.T) {
+	cfg := mustUnmarshal(t, `
+flowpipe_triggers:
+  triggers:
+    - id: legacy-flow
+      flow: daily_report
+      type: http
+      config:
+        description: "Legacy flow field"
+        pipeline: pipeline.daily_report
+`)
+	if err := validateConfig(cfg); err != nil {
+		t.Fatalf("expected legacy flow field to migrate to module, got %v", err)
+	}
+	if cfg.FlowpipeTriggers.Triggers[0].Module != "daily_report" {
+		t.Fatalf("expected module daily_report, got %q", cfg.FlowpipeTriggers.Triggers[0].Module)
+	}
+}
+
 func TestValidateConfig_Triggers_Complete(t *testing.T) {
 	cfg := mustUnmarshal(t, `
 flowpipe_triggers:

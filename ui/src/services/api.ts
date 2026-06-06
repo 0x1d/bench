@@ -1118,9 +1118,8 @@ export interface TriggerTestRequest {
 }
 
 export interface TriggerTestResponse {
-  success: boolean;
-  message: string;
-  output?: Record<string, unknown>;
+  executedAt: string;
+  status: string;
 }
 
 export interface WebhookUrlResponse {

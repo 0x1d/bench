@@ -83,10 +83,10 @@ func HandleFlowHCLSchema(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(struct {
-		StepTypes     []string            `json:"stepTypes"`
+		StepTypes      []string            `json:"stepTypes"`
 		StepAttributes map[string][]string `json:"stepAttributes"`
 	}{
-		StepTypes:     hclgen.StepTypes(),
+		StepTypes:      hclgen.StepTypes(),
 		StepAttributes: hclgen.StepAttributes(),
 	})
 }
@@ -789,16 +789,25 @@ func normalizeTriggerConfig(t *model.TriggerEntry, rawBody []byte) error {
 		}
 		c.Schedule.Timezone = v
 	}
-	// args: map[string]string from UI
+	// args: map[string]string from UI (type-gated to avoid cross-type pollution)
 	if args, ok := flat["args"].(map[string]any); ok && len(args) > 0 {
-		if c.Schedule == nil {
-			c.Schedule = &model.ScheduleConfig{}
-		}
-		c.Schedule.Args = make(map[string]string)
+		argsMap := make(map[string]string)
 		for k, v := range args {
 			if s, ok := v.(string); ok {
-				c.Schedule.Args[k] = s
+				argsMap[k] = s
 			}
+		}
+		switch t.Type {
+		case model.TriggerTypeSchedule:
+			if c.Schedule == nil {
+				c.Schedule = &model.ScheduleConfig{}
+			}
+			c.Schedule.Args = argsMap
+		case model.TriggerTypeHTTP:
+			if c.HTTP == nil {
+				c.HTTP = &model.HTTPConfig{}
+			}
+			c.HTTP.Args = argsMap
 		}
 	}
 
@@ -825,18 +834,6 @@ func normalizeTriggerConfig(t *model.TriggerEntry, rawBody []byte) error {
 	}
 
 	// HTTP fields
-	if v, ok := flat["args"].(map[string]any); ok && len(v) > 0 {
-		if c.HTTP == nil {
-			c.HTTP = &model.HTTPConfig{}
-		}
-		args := make(map[string]string)
-		for k, val := range v {
-			if s, ok := val.(string); ok {
-				args[k] = s
-			}
-		}
-		c.HTTP.Args = args
-	}
 	if v, ok := flat["executionMode"].(string); ok && v != "" {
 		if c.HTTP == nil {
 			c.HTTP = &model.HTTPConfig{}
@@ -896,7 +893,7 @@ func HandleTriggerCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := triggerService.CreateTrigger(&trigger); err != nil {
+	if err := triggerService.CreateTrigger(&trigger, false); err != nil {
 		if strings.Contains(err.Error(), "already exists") {
 			http.Error(w, err.Error(), http.StatusConflict)
 			return
@@ -1071,6 +1068,10 @@ func HandleTriggerWebhookURL(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	if trigger.Type != model.TriggerTypeHTTP {
+		http.Error(w, "webhook URL is only available for http triggers", http.StatusBadRequest)
+		return
+	}
 
 	workspace := trigger.Workspace
 	if workspace == "" {
@@ -1113,8 +1114,17 @@ func HandleRootTriggerUpdate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "trigger id required", http.StatusBadRequest)
 		return
 	}
+	rawBody, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "failed to read request body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
 	var trigger model.TriggerEntry
-	if err := json.NewDecoder(r.Body).Decode(&trigger); err != nil {
+	if err := json.Unmarshal(rawBody, &trigger); err != nil {
+		http.Error(w, "invalid request body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := normalizeTriggerConfig(&trigger, rawBody); err != nil {
 		http.Error(w, "invalid request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -1190,6 +1200,10 @@ func HandleRootTriggerWebhookURL(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if trigger.Type != model.TriggerTypeHTTP {
+		http.Error(w, "webhook URL is only available for http triggers", http.StatusBadRequest)
 		return
 	}
 	workspace := trigger.Workspace

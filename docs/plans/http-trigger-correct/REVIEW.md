@@ -195,7 +195,7 @@ Only errors when count **> 1** (data corruption). A normal duplicate (`foundCoun
 | UI form + list | Done |
 | Migration for existing webhooks | **Not done** |
 | Tests | Pass, but **miss real HTTP args case** |
-| Ready to merge? | **Not yet** |
+| Ready to merge? | **Yes** (review fixes applied) |
 
 ---
 

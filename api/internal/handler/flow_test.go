@@ -263,7 +263,10 @@ func TestHandleTriggerGet_200(t *testing.T) {
 		t.Fatalf("expected id http1, got %s", trigger.ID)
 	}
 	if trigger.Type != model.TriggerTypeHTTP {
-		t.Fatalf("expected type webhook, got %s", trigger.Type)
+		t.Fatalf("expected type http, got %s", trigger.Type)
+	}
+	if trigger.Config.HTTP == nil || trigger.Config.HTTP.Args["body"] != "self.request_body" {
+		t.Fatalf("expected HTTP args with unquoted body=self.request_body, got %#v", trigger.Config.HTTP)
 	}
 }
 
@@ -476,6 +479,21 @@ func TestHandleTriggerTest_200(t *testing.T) {
 	// We expect either 502 (Flowpipe not available) or 400 (pipeline not found)
 	if rec.Code != http.StatusBadGateway && rec.Code != http.StatusBadRequest {
 		t.Logf("unexpected status: %d (Flowpipe may not be available)", rec.Code)
+	}
+}
+
+func TestHandleTriggerWebhookURL_400_nonHTTP(t *testing.T) {
+	flowsDir := createTestFlowsDirWithTriggers(t)
+	writeFlowHandlerTestConfig(t, flowsDir)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/flows/mod/triggers/schedule1/webhook", nil)
+	req.SetPathValue("moduleId", "mod")
+	req.SetPathValue("triggerId", "schedule1")
+	rec := httptest.NewRecorder()
+	HandleTriggerWebhookURL(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for non-http trigger, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 

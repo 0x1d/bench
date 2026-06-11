@@ -18,7 +18,23 @@ import (
 func main() {
 	listen := os.Getenv("BENCH_LISTEN_ADDR")
 	if listen == "" {
-		listen = ":8080"
+		if port := os.Getenv("PORT"); port != "" {
+			if port[0] == ':' {
+				listen = port
+			} else {
+				listen = ":" + port
+			}
+		} else {
+			listen = ":8080"
+		}
+	}
+
+	apiToken := os.Getenv("API_TOKEN")
+	if apiToken == "" {
+		apiToken = os.Getenv("BENCH_API_TOKEN")
+	}
+	if apiToken == "" {
+		log.Fatal("API_TOKEN is required")
 	}
 
 	if _, _, err := config.ReadConfig(); err != nil {
@@ -48,10 +64,7 @@ func main() {
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
-	var h http.Handler = mux
-	if token := os.Getenv("BENCH_API_TOKEN"); token != "" {
-		h = middleware.RequireAPIToken(token, h)
-	}
+	var h http.Handler = middleware.RequireAPIToken(apiToken, mux)
 	h = middleware.CORS(h)
 	h = middleware.Logger(h)
 

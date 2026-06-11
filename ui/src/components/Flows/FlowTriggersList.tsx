@@ -11,6 +11,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { TriggerForm } from '@/components/resource-config/trigger-form';
+import { TriggerWebhookUrl } from '@/components/trigger-webhook-url';
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { cn } from '@/lib/utils';
 import {
@@ -352,6 +353,13 @@ export function FlowTriggersList({ flowId, module, pipelineRef, workspace }: Flo
                         <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
                           {trigger.label}
                         </p>
+                      )}
+                      {trigger.type === 'http' && (
+                        <TriggerWebhookUrl
+                          module={trigger.module}
+                          triggerId={trigger.id}
+                          className="mt-1"
+                        />
                       )}
                       <div className="mt-1 flex items-center gap-2 text-[10px] text-muted-foreground">
                         <span

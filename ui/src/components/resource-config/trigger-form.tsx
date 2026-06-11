@@ -10,6 +10,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import type { TriggerEntry, TriggerType } from '@/services/api';
+import { TriggerWebhookUrl } from '@/components/trigger-webhook-url';
 import type { Dispatch, SetStateAction } from 'react';
 
 const TRIGGER_TYPES: { value: TriggerType; label: string }[] = [
@@ -159,6 +160,13 @@ export function TriggerForm({
           onChange={updateConfig}
           availablePipelines={availablePipelines}
         />
+      )}
+
+      {draft.type === 'http' && draft.id && draft.module && (
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">Webhook URL</Label>
+          <TriggerWebhookUrl module={draft.module} triggerId={draft.id} />
+        </div>
       )}
 
       {draft.type === 'notification' && (

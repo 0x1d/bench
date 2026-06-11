@@ -22,6 +22,7 @@ var (
 	// triggerBlockRe matches "trigger "type" "id" {" and captures type, id.
 	// The body is extracted separately using balanced brace matching.
 	triggerBlockRe = regexp.MustCompile(`(?m)^trigger\s+"(\w+)"\s+"([^"]+)"\s*\{`)
+	modNameRe      = regexp.MustCompile(`mod\s+"([^"]+)"`)
 )
 
 // CreateTrigger adds a new trigger to a module's mod.fp file.
@@ -325,109 +326,324 @@ func removeTriggerBlock(content, triggerID string) string {
 	return strings.Join(result, "\n")
 }
 
-// TestTrigger simulates trigger execution by calling Flowpipe API to run the pipeline.
+// TestTrigger simulates trigger execution via the Flowpipe API.
 func (s *Service) TestTrigger(moduleID, triggerID string, payload map[string]any) (*model.TriggerTestResponse, error) {
-	// Get the trigger to find the pipeline reference
 	trigger, err := s.GetTrigger(moduleID, triggerID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get trigger: %w", err)
 	}
 
-	// Get the pipeline reference from trigger config
-	pipelineRef := trigger.Config.Pipeline
-	if pipelineRef == "" {
-		return nil, fmt.Errorf("trigger has no pipeline reference")
+	flowpipeURL := s.flowpipeURLForTrigger(trigger)
+	if trigger.Type == model.TriggerTypeHTTP {
+		return s.testHTTPTrigger(flowpipeURL, moduleID, trigger, payload)
+	}
+	return s.testNonHTTPTrigger(flowpipeURL, moduleID, trigger, payload)
+}
+
+func (s *Service) testHTTPTrigger(flowpipeURL, moduleID string, trigger *model.TriggerState, payload map[string]any) (*model.TriggerTestResponse, error) {
+	webhookURL, err := s.resolveFlowpipeWebhookURL(flowpipeURL, moduleID, trigger)
+	if err != nil {
+		return nil, err
 	}
 
-	// Ensure pipeline reference has "pipeline." prefix
-	if !strings.HasPrefix(pipelineRef, "pipeline.") {
-		pipelineRef = "pipeline." + strings.TrimPrefix(pipelineRef, "pipeline.")
-	}
-
-	// Get the workspace to determine Flowpipe URL
-	defaultWorkspace := "default"
-	if trigger.Workspace != "" {
-		defaultWorkspace = trigger.Workspace
-	}
-	ws := config.WorkspaceByID(defaultWorkspace)
-	if ws == nil && defaultWorkspace != "default" {
-		return nil, fmt.Errorf("workspace not found: %s", defaultWorkspace)
-	}
-
-	flowpipeURL := "http://localhost:7103"
-	if ws != nil && ws.FlowpipeURL != "" {
-		flowpipeURL = ws.FlowpipeURL
-	}
-
-	// Build the run request
-	runRequest := map[string]any{}
-	if payload != nil {
-		runRequest["args"] = payload
-	}
-
-	// For HTTP triggers, generate a test payload
-	triggerType := trigger.Type
-	if triggerType == model.TriggerTypeHTTP && payload == nil {
-		runRequest["args"] = map[string]any{
-			"event": map[string]any{
-				"timestamp": time.Now().Unix(),
-				"trigger":   triggerID,
-				"module":    moduleID,
-			},
+	body := payload
+	if body == nil {
+		body = map[string]any{
+			"test":      true,
+			"trigger":   trigger.ID,
+			"module":    moduleID,
+			"timestamp": time.Now().Unix(),
 		}
 	}
-
-	// Serialize request body
-	bodyBytes, err := json.Marshal(runRequest)
+	bodyBytes, err := json.Marshal(body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	// Create HTTP client
-	client := &http.Client{Timeout: 30 * time.Second}
-
-	// Call Flowpipe API
-	url := fmt.Sprintf("%s/api/v0/pipeline/%s/run", flowpipeURL, pipelineRef)
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(bodyBytes))
+	respBody, statusCode, err := s.postFlowpipe(flowpipeURL, webhookURL, bodyBytes)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, err
+	}
+	if statusCode < 200 || statusCode >= 300 {
+		return nil, fmt.Errorf("Flowpipe API error: status %d, body: %s", statusCode, string(respBody))
+	}
+
+	return parseTriggerTestResponse(respBody), nil
+}
+
+func (s *Service) testNonHTTPTrigger(flowpipeURL, moduleID string, trigger *model.TriggerState, payload map[string]any) (*model.TriggerTestResponse, error) {
+	candidateRefs, err := s.flowpipeTriggerCandidateRefs(moduleID, trigger)
+	if err != nil {
+		return nil, err
+	}
+
+	body := map[string]any{"command": "run"}
+	if payload != nil {
+		body["args"] = payload
+	}
+	bodyBytes, err := json.Marshal(body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	base := strings.TrimSuffix(flowpipeURL, "/")
+	for _, ref := range candidateRefs {
+		url := fmt.Sprintf("%s/api/v0/trigger/%s/command", base, ref)
+		respBody, statusCode, err := s.postFlowpipe(flowpipeURL, url, bodyBytes)
+		if err != nil {
+			return nil, err
+		}
+		if statusCode >= 200 && statusCode < 300 {
+			return parseTriggerTestResponse(respBody), nil
+		}
+	}
+
+	// Fall back to direct pipeline execution when the trigger is not registered in Flowpipe yet.
+	pipelineRef := trigger.Config.Pipeline
+	if pipelineRef == "" {
+		return nil, fmt.Errorf("trigger %q not found in Flowpipe", trigger.ID)
+	}
+
+	pipelineID := pipelineIDFromRef(pipelineRef)
+	url := fmt.Sprintf("%s/api/v0/pipeline/%s/command", base, pipelineID)
+	runBody := map[string]any{"command": "run"}
+	if payload != nil {
+		runBody["args"] = payload
+	}
+	bodyBytes, err = json.Marshal(runBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	respBody, statusCode, err := s.postFlowpipe(flowpipeURL, url, bodyBytes)
+	if err != nil {
+		return nil, err
+	}
+	if statusCode < 200 || statusCode >= 300 {
+		return nil, fmt.Errorf("Flowpipe API error: status %d, body: %s", statusCode, string(respBody))
+	}
+
+	return parseTriggerTestResponse(respBody), nil
+}
+
+// WebhookURL returns the Flowpipe webhook URL for an HTTP trigger.
+func (s *Service) WebhookURL(moduleID, triggerID string) (string, error) {
+	trigger, err := s.GetTrigger(moduleID, triggerID)
+	if err != nil {
+		return "", fmt.Errorf("failed to get trigger: %w", err)
+	}
+	if trigger.Type != model.TriggerTypeHTTP {
+		return "", fmt.Errorf("webhook URL is only available for http triggers")
+	}
+	return s.resolveFlowpipeWebhookURL(s.flowpipeURLForTrigger(trigger), moduleID, trigger)
+}
+
+func (s *Service) resolveFlowpipeWebhookURL(flowpipeURL, moduleID string, trigger *model.TriggerState) (string, error) {
+	candidateRefs, err := s.flowpipeTriggerCandidateRefs(moduleID, trigger)
+	if err != nil {
+		return "", err
+	}
+	return findFlowpipeTriggerURL(flowpipeURL, trigger.ID, candidateRefs)
+}
+
+func (s *Service) flowpipeTriggerCandidateRefs(moduleID string, trigger *model.TriggerState) ([]string, error) {
+	refs := make([]string, 0, 3)
+	if rootMod, err := s.readRootModName(); err == nil && rootMod != "" {
+		refs = append(refs, flowpipeTriggerRef(rootMod, string(trigger.Type), trigger.ID))
+	}
+	if localMod, err := s.readModName(moduleID); err == nil && localMod != "" {
+		ref := flowpipeTriggerRef(localMod, string(trigger.Type), trigger.ID)
+		if len(refs) == 0 || refs[len(refs)-1] != ref {
+			refs = append(refs, ref)
+		}
+	}
+	refs = append(refs, trigger.ID)
+	return refs, nil
+}
+
+func (s *Service) readRootModName() (string, error) {
+	return s.readModName(".")
+}
+
+func (s *Service) flowpipeURLForTrigger(trigger *model.TriggerState) string {
+	workspace := trigger.Workspace
+	if workspace == "" {
+		workspace = "default"
+	}
+	ws := config.WorkspaceByID(workspace)
+	flowpipeURL := "http://localhost:7103"
+	if ws != nil && ws.FlowpipeURL != "" {
+		flowpipeURL = ws.FlowpipeURL
+	}
+	return strings.TrimSuffix(flowpipeURL, "/")
+}
+
+func (s *Service) readModName(moduleID string) (string, error) {
+	dir := s.moduleFlowDir(moduleID)
+	if dir == "" {
+		return "", fmt.Errorf("module %q not found", moduleID)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "mod.fp"))
+	if err != nil {
+		return "", fmt.Errorf("read mod.fp: %w", err)
+	}
+	match := modNameRe.FindSubmatch(data)
+	if len(match) < 2 {
+		return "", fmt.Errorf("mod name not found in %s", filepath.Join(dir, "mod.fp"))
+	}
+	return string(match[1]), nil
+}
+
+func flowpipeTriggerRef(modName, triggerType, triggerID string) string {
+	return fmt.Sprintf("%s.trigger.%s.%s", modName, triggerType, triggerID)
+}
+
+func pipelineIDFromRef(pipelineRef string) string {
+	return strings.TrimPrefix(strings.TrimSpace(pipelineRef), "pipeline.")
+}
+
+type flowpipeTriggerInfo struct {
+	Name string `json:"name"`
+	URL  string `json:"url"`
+	Type string `json:"type"`
+}
+
+type flowpipeTriggerListResponse struct {
+	Items []flowpipeTriggerInfo `json:"items"`
+}
+
+func findFlowpipeTriggerURL(flowpipeURL, triggerID string, candidateRefs []string) (string, error) {
+	for _, ref := range candidateRefs {
+		if info, err := getFlowpipeTriggerInfo(flowpipeURL, ref); err == nil && info.URL != "" {
+			return info.URL, nil
+		}
+	}
+
+	items, err := listFlowpipeTriggers(flowpipeURL)
+	if err != nil {
+		return "", fmt.Errorf("lookup trigger in Flowpipe: %w", err)
+	}
+
+	for _, item := range items {
+		if item.URL == "" {
+			continue
+		}
+		if flowpipeTriggerIDFromName(item.Name) == triggerID {
+			return item.URL, nil
+		}
+	}
+
+	return "", fmt.Errorf("trigger %q not found in Flowpipe (is the server running?)", triggerID)
+}
+
+func flowpipeTriggerIDFromName(name string) string {
+	if i := strings.LastIndex(name, "."); i >= 0 && i < len(name)-1 {
+		return name[i+1:]
+	}
+	return name
+}
+
+func listFlowpipeTriggers(flowpipeURL string) ([]flowpipeTriggerInfo, error) {
+	client := &http.Client{Timeout: 10 * time.Second}
+	url := fmt.Sprintf("%s/api/v0/trigger", strings.TrimSuffix(flowpipeURL, "/"))
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("flowpipe trigger list failed: status %d", resp.StatusCode)
+	}
+
+	var listed flowpipeTriggerListResponse
+	if err := json.Unmarshal(body, &listed); err != nil {
+		return nil, err
+	}
+	return listed.Items, nil
+}
+
+func getFlowpipeTriggerInfo(flowpipeURL, triggerRef string) (*flowpipeTriggerInfo, error) {
+	client := &http.Client{Timeout: 10 * time.Second}
+	url := fmt.Sprintf("%s/api/v0/trigger/%s", strings.TrimSuffix(flowpipeURL, "/"), triggerRef)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("flowpipe trigger lookup failed: status %d", resp.StatusCode)
+	}
+
+	var info flowpipeTriggerInfo
+	if err := json.Unmarshal(body, &info); err != nil {
+		return nil, err
+	}
+	return &info, nil
+}
+
+func (s *Service) postFlowpipe(_ string, url string, body []byte) ([]byte, int, error) {
+	client := &http.Client{Timeout: 30 * time.Second}
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(body))
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to Flowpipe: %w", err)
+		return nil, 0, fmt.Errorf("failed to connect to Flowpipe: %w", err)
 	}
 	defer resp.Body.Close()
 
-	// Read response
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
+		return nil, resp.StatusCode, fmt.Errorf("failed to read response: %w", err)
 	}
+	return respBody, resp.StatusCode, nil
+}
 
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("Flowpipe API error: status %d, body: %s", resp.StatusCode, string(respBody))
-	}
-
-	// Parse response for execution ID
+func parseTriggerTestResponse(respBody []byte) *model.TriggerTestResponse {
 	var execResp map[string]any
 	if err := json.Unmarshal(respBody, &execResp); err != nil {
 		return &model.TriggerTestResponse{
 			ExecutedAt: time.Now(),
 			Status:     "pending",
-		}, nil
+		}
 	}
 
 	execStatus := "pending"
 	if status, ok := execResp["status"].(string); ok {
 		execStatus = status
+	} else if flowpipe, ok := execResp["flowpipe"].(map[string]any); ok {
+		if status, ok := flowpipe["status"].(string); ok {
+			execStatus = status
+		}
 	}
 
 	return &model.TriggerTestResponse{
 		ExecutedAt: time.Now(),
 		Status:     execStatus,
-	}, nil
+	}
 }
 
 // ListTriggers returns all triggers found in module directories.

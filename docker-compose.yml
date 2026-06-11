@@ -7,7 +7,7 @@ services:
       POSTGRES_PASSWORD: bench
       POSTGRES_DB: bench
     ports:
-      - "5432:5432"
+      - "5431:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
@@ -37,6 +37,43 @@ services:
       - AGENT=${AGENT:-cursor}
     stop_signal: SIGKILL
     tty: true
+
+  api:
+    profiles:
+      - docker
+    restart: unless-stopped
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    ports:
+      - "8081:8080"
+    environment:
+      API_TOKEN: ${API_TOKEN}
+      BENCH_CONFIG: /config/config.yaml
+      BENCH_DB_MAIN_URL: postgresql://bench:bench@postgres:5432/bench
+      BENCH_FLOWPIPE_URL: http://flowpipe:7103
+      BENCH_AGENT_URL: http://agent:3001
+      BENCH_ALLOW_INTERNAL_REST: ${BENCH_ALLOW_INTERNAL_REST:-true}
+    volumes:
+      - ./config.yaml:/config/config.yaml:ro
+      - ./workspace:/workspace
+    depends_on:
+      - postgres
+      - flowpipe
+
+  ui:
+    profiles:
+      - docker
+    restart: unless-stopped
+    build:
+      context: ./ui
+      dockerfile: Dockerfile
+    ports:
+      - "5173:80"
+    environment:
+      API_TOKEN: ${API_TOKEN}
+    depends_on:
+      - api
 
 volumes:
   postgres_data: {}

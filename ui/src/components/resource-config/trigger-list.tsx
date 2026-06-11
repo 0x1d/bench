@@ -8,6 +8,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import type { TriggerState, TriggerType } from '@/services/api';
+import { TriggerWebhookUrl } from '@/components/trigger-webhook-url';
 import { cn } from '@/lib/utils';
 
 interface TriggerListProps {
@@ -137,13 +138,14 @@ export function TriggerList({
               <th className="px-4 py-3 text-left font-medium">Type</th>
               <th className="px-4 py-3 text-left font-medium">Workspace</th>
               <th className="px-4 py-3 text-left font-medium">Status</th>
+              <th className="px-4 py-3 text-left font-medium">Webhook</th>
               <th className="w-32 px-2 py-3" />
             </tr>
           </thead>
           <tbody>
             {filteredTriggers.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                <td colSpan={8} className="px-4 py-8 text-center text-sm text-muted-foreground">
                   No triggers match the selected filters.
                 </td>
               </tr>
@@ -176,6 +178,13 @@ export function TriggerList({
                     >
                       {trigger.status || 'ready'}
                     </span>
+                  </td>
+                  <td className="max-w-xs px-4 py-2">
+                    {trigger.type === 'http' ? (
+                      <TriggerWebhookUrl module={trigger.module} triggerId={trigger.id} />
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
                   </td>
                   <td className="px-2 py-2">
                     <div className="flex items-center justify-end gap-1">

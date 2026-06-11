@@ -14,9 +14,26 @@ import (
 )
 
 func writeFlowHandlerTestConfig(t *testing.T, flowsDir string) {
+	writeFlowHandlerTestConfigWithFlowpipe(t, flowsDir, "")
+}
+
+func writeFlowHandlerTestConfigWithFlowpipe(t *testing.T, flowsDir, flowpipeURL string) {
 	t.Helper()
 	cfgPath := filepath.Join(t.TempDir(), "config.yaml")
-	cfg := fmt.Sprintf("resources:\n  filesystem: []\n  databases: []\n  rest: []\nflows:\n  path: %s\n", flowsDir)
+	flowpipeLine := ""
+	if flowpipeURL != "" {
+		flowpipeLine = fmt.Sprintf("      flowpipeUrl: %s\n", flowpipeURL)
+	}
+	cfg := fmt.Sprintf(`resources:
+  filesystem: []
+  databases: []
+  rest: []
+flows:
+  path: %s
+  workspaces:
+    - id: default
+      label: Default
+%s`, flowsDir, flowpipeLine)
 	if err := os.WriteFile(cfgPath, []byte(cfg), 0644); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
@@ -105,6 +122,14 @@ func createTestFlowsDirWithTriggers(t *testing.T) string {
 	modDir := filepath.Join(flowsDir, "mod")
 	if err := os.MkdirAll(modDir, 0755); err != nil {
 		t.Fatalf("mkdir mod: %v", err)
+	}
+
+	// Create root mod.fp so Flowpipe trigger refs use the root mod name.
+	if err := os.WriteFile(filepath.Join(flowsDir, "mod.fp"), []byte(`mod "test" {
+  title = "Test Root"
+}
+`), 0644); err != nil {
+		t.Fatalf("write root mod.fp: %v", err)
 	}
 
 	// Create mod.fp with embedded triggers
@@ -499,7 +524,32 @@ func TestHandleTriggerWebhookURL_400_nonHTTP(t *testing.T) {
 
 func TestHandleTriggerWebhookURL_200(t *testing.T) {
 	flowsDir := createTestFlowsDirWithTriggers(t)
-	writeFlowHandlerTestConfig(t, flowsDir)
+
+	flowpipe := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v0/trigger/test.trigger.http.http1":
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"name": "test.trigger.http.http1",
+				"url":  "http://mock-flowpipe/api/latest/hook/http1/salt",
+				"type": "http",
+			})
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v0/trigger":
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"items": []map[string]any{{
+					"name": "test.trigger.http.http1",
+					"url":  "http://mock-flowpipe/api/latest/hook/http1/salt",
+					"type": "http",
+				}},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer flowpipe.Close()
+
+	writeFlowHandlerTestConfigWithFlowpipe(t, flowsDir, flowpipe.URL)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/flows/mod/triggers/http1/webhook", nil)
 	req.SetPathValue("moduleId", "mod")
@@ -517,11 +567,8 @@ func TestHandleTriggerWebhookURL_200(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatal(err)
 	}
-	if resp.URL == "" {
-		t.Fatalf("expected non-empty webhook URL")
-	}
-	if len(resp.URL) < 10 {
-		t.Fatalf("unexpected webhook URL format: %s", resp.URL)
+	if resp.URL != "http://mock-flowpipe/api/latest/hook/http1/salt" {
+		t.Fatalf("unexpected webhook URL: %s", resp.URL)
 	}
 }
 

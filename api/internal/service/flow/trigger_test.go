@@ -727,6 +727,49 @@ func TestTriggerTypeConstants(t *testing.T) {
 	}
 }
 
+// TestPipelineIDFromRef tests pipeline reference normalization for Flowpipe API calls.
+func TestPipelineIDFromRef(t *testing.T) {
+	tests := []struct {
+		in   string
+		want string
+	}{
+		{"pipeline.sometest", "sometest"},
+		{"sometest", "sometest"},
+		{"pipeline.test_http", "test_http"},
+	}
+	for _, tt := range tests {
+		if got := pipelineIDFromRef(tt.in); got != tt.want {
+			t.Errorf("pipelineIDFromRef(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
+}
+
+// TestFlowpipeTriggerIDFromName tests trigger ID extraction from Flowpipe trigger names.
+func TestFlowpipeTriggerIDFromName(t *testing.T) {
+	tests := []struct {
+		name string
+		want string
+	}{
+		{"bench.trigger.http.w3bh00k", "w3bh00k"},
+		{"examples.trigger.http.my_hook", "my_hook"},
+		{"simple", "simple"},
+	}
+	for _, tt := range tests {
+		if got := flowpipeTriggerIDFromName(tt.name); got != tt.want {
+			t.Errorf("flowpipeTriggerIDFromName(%q) = %q, want %q", tt.name, got, tt.want)
+		}
+	}
+}
+
+// TestFlowpipeTriggerRef tests Flowpipe trigger name construction.
+func TestFlowpipeTriggerRef(t *testing.T) {
+	got := flowpipeTriggerRef("bench", "http", "sometest")
+	want := "bench.trigger.http.sometest"
+	if got != want {
+		t.Fatalf("flowpipeTriggerRef() = %q, want %q", got, want)
+	}
+}
+
 // TestService_Init tests the Service type initialization
 func TestService_Init(t *testing.T) {
 	s := NewService()

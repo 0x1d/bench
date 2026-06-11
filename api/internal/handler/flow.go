@@ -3,7 +3,6 @@ package handler
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -1058,28 +1057,19 @@ func HandleTriggerWebhookURL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get the trigger to find its workspace
-	trigger, err := triggerService.GetTrigger(moduleID, triggerID)
+	webhookURL, err := triggerService.WebhookURL(moduleID, triggerID)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			http.Error(w, err.Error(), http.StatusNotFound)
 			return
 		}
+		if strings.Contains(err.Error(), "only available for http") {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if trigger.Type != model.TriggerTypeHTTP {
-		http.Error(w, "webhook URL is only available for http triggers", http.StatusBadRequest)
-		return
-	}
-
-	workspace := trigger.Workspace
-	if workspace == "" {
-		workspace = "default"
-	}
-
-	flowpipeURL := strings.TrimSuffix(config.FlowpipeURLForWorkspace(workspace), "/")
-	webhookURL := fmt.Sprintf("%s/api/v0/webhook/%s", flowpipeURL, triggerID)
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(struct {
@@ -1193,25 +1183,21 @@ func HandleRootTriggerWebhookURL(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "trigger id required", http.StatusBadRequest)
 		return
 	}
-	trigger, err := triggerService.GetTrigger(".", triggerID)
+
+	webhookURL, err := triggerService.WebhookURL(".", triggerID)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			http.Error(w, err.Error(), http.StatusNotFound)
 			return
 		}
+		if strings.Contains(err.Error(), "only available for http") {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if trigger.Type != model.TriggerTypeHTTP {
-		http.Error(w, "webhook URL is only available for http triggers", http.StatusBadRequest)
-		return
-	}
-	workspace := trigger.Workspace
-	if workspace == "" {
-		workspace = "default"
-	}
-	flowpipeURL := strings.TrimSuffix(config.FlowpipeURLForWorkspace(workspace), "/")
-	webhookURL := fmt.Sprintf("%s/api/v0/webhook/%s", flowpipeURL, triggerID)
+
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(struct {
 		URL string `json:"url"`

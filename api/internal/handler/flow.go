@@ -28,51 +28,6 @@ func defaultDatabaseIDForFlowRun() string {
 	return dbs[0].ID
 }
 
-func collectRequiredConnectionParamIDs(module string, f *model.Flow, defaultDBID string, visited map[string]bool) map[string]bool {
-	required := make(map[string]bool)
-	if f == nil {
-		return required
-	}
-	flowKey := module + ":" + f.ID
-	if visited[flowKey] {
-		return required
-	}
-	visited[flowKey] = true
-
-	for _, step := range f.Steps {
-		if strings.EqualFold(step.Type, "query") {
-			dbID, _ := step.Config["databaseId"].(string)
-			dbID = strings.TrimSpace(dbID)
-			if dbID == "" {
-				dbID = defaultDBID
-			}
-			if dbID != "" {
-				required[dbID] = true
-			}
-			continue
-		}
-		if !strings.EqualFold(step.Type, "pipeline") {
-			continue
-		}
-		ref, _ := step.Config["pipelineRef"].(string)
-		ref = strings.TrimSpace(ref)
-		if ref == "" {
-			continue
-		}
-		child, err := flowSvc.GetInModule(module, ref)
-		if err != nil && module != "." {
-			child, err = flowSvc.GetInModule(".", ref)
-		}
-		if err != nil {
-			continue
-		}
-		for dbID := range collectRequiredConnectionParamIDs(module, child, defaultDBID, visited) {
-			required[dbID] = true
-		}
-	}
-	return required
-}
-
 // HandleFlowHCLSchema returns the HCL schema for flow expression autocomplete.
 // Schema aligns with hclgen step types and attributes.
 func HandleFlowHCLSchema(w http.ResponseWriter, r *http.Request) {
@@ -449,7 +404,7 @@ func HandleFlowRun(w http.ResponseWriter, r *http.Request) {
 
 	// Build the set of params this pipeline actually defines (Flowpipe rejects unknown params).
 	allowedParams := make(map[string]bool)
-	requiredConnIDs := collectRequiredConnectionParamIDs(module, f, defaultDatabaseIDForFlowRun(), map[string]bool{})
+	requiredConnIDs := flowSvc.RequiredConnectionParamIDs(module, f)
 	for _, step := range f.Steps {
 		if strings.EqualFold(step.Type, "input") {
 			if params, ok := step.Config["params"].([]any); ok {

@@ -301,7 +301,7 @@ func TestBuildTriggerHCLBlock(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			hcl, err := BuildTriggerHCLBlock(tt.trigger)
+			hcl, err := BuildTriggerHCLBlock(tt.trigger, nil)
 			if err != nil {
 				t.Fatalf("BuildTriggerHCLBlock failed: %v", err)
 			}
@@ -830,7 +830,7 @@ func TestBuildTriggerHCLBlock_PipelineRefHandling(t *testing.T) {
 				},
 			}
 
-			hcl, err := BuildTriggerHCLBlock(trigger)
+			hcl, err := BuildTriggerHCLBlock(trigger, nil)
 			if err != nil {
 				t.Fatalf("BuildTriggerHCLBlock failed: %v", err)
 			}
@@ -860,7 +860,7 @@ func TestBuildTriggerHCLBlock_NoExtraWhitespace(t *testing.T) {
 		},
 	}
 
-	hcl, err := BuildTriggerHCLBlock(trigger)
+	hcl, err := BuildTriggerHCLBlock(trigger, nil)
 	if err != nil {
 		t.Fatalf("BuildTriggerHCLBlock failed: %v", err)
 	}
@@ -961,6 +961,41 @@ func TestTriggerConfig_Validation(t *testing.T) {
 				t.Errorf("Expected error but got valid")
 			}
 		})
+	}
+}
+
+// TestEnrichTriggerMetadataPreservesHCLConfig verifies config.yaml metadata does not
+// overwrite HCL-parsed execution settings such as execution_mode.
+func TestEnrichTriggerMetadataPreservesHCLConfig(t *testing.T) {
+	state := model.TriggerState{
+		ID:    "w3bh00k",
+		Label: "HCL Label",
+		Config: model.TriggerConfig{
+			HTTP: &model.HTTPConfig{
+				ExecutionMode: "asynchronous",
+			},
+		},
+	}
+	entry := &config.TriggerEntry{
+		Label:     "YAML Label",
+		Workspace: "default",
+		Config: config.TriggerConfig{
+			HTTP: &config.HTTPConfig{
+				ExecutionMode: "synchronous",
+			},
+		},
+	}
+
+	enrichTriggerMetadata(&state, entry)
+
+	if state.Label != "YAML Label" {
+		t.Errorf("expected label from config.yaml, got %q", state.Label)
+	}
+	if state.Workspace != "default" {
+		t.Errorf("expected workspace from config.yaml, got %q", state.Workspace)
+	}
+	if state.Config.HTTP == nil || state.Config.HTTP.ExecutionMode != "asynchronous" {
+		t.Errorf("expected HCL execution mode preserved, got %#v", state.Config.HTTP)
 	}
 }
 

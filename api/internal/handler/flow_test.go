@@ -26,7 +26,12 @@ func writeFlowHandlerTestConfigWithFlowpipe(t *testing.T, flowsDir, flowpipeURL 
 	}
 	cfg := fmt.Sprintf(`resources:
   filesystem: []
-  databases: []
+  databases:
+    - id: local
+      label: Local
+      url: postgresql://bench:bench@localhost:5432/bench
+      enabled: true
+      default: true
   rest: []
 flows:
   path: %s
@@ -58,7 +63,7 @@ func TestCollectRequiredConnectionParamIDs_IncludesDefaultDBForQuerySteps(t *tes
 		},
 	}
 
-	required := collectRequiredConnectionParamIDs(".", flow, "local", map[string]bool{})
+	required := flowSvc.RequiredConnectionParamIDs(".", flow)
 	if !required["local"] {
 		t.Fatalf("expected required conn param to include default DB id, got: %#v", required)
 	}
@@ -105,7 +110,7 @@ func TestCollectRequiredConnectionParamIDs_NestedPipelineUsesDefaultDB(t *testin
 		},
 	}
 
-	required := collectRequiredConnectionParamIDs(".", parent, "local", map[string]bool{})
+	required := flowSvc.RequiredConnectionParamIDs(".", parent)
 	if !required["local"] {
 		t.Fatalf("expected nested pipeline to require default DB conn param, got: %#v", required)
 	}

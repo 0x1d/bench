@@ -211,6 +211,28 @@ func TestGenerateHCL_CommonStepAttributes(t *testing.T) {
 	t.Logf("HCL:\n%s", hcl)
 }
 
+func TestFlowpipeConnectionHostPort(t *testing.T) {
+	tests := []struct {
+		host     string
+		port     int
+		wantHost string
+		wantPort int
+	}{
+		{"localhost", 5431, "postgres", 5432},
+		{"127.0.0.1", 5432, "postgres", 5432},
+		{"postgres", 5431, "postgres", 5432},
+		{"postgres", 5432, "postgres", 5432},
+		{"db.example.com", 5433, "db.example.com", 5433},
+	}
+	for _, tt := range tests {
+		host, port := flowpipeConnectionHostPort(tt.host, tt.port)
+		if host != tt.wantHost || port != tt.wantPort {
+			t.Errorf("flowpipeConnectionHostPort(%q, %d) = (%q, %d), want (%q, %d)",
+				tt.host, tt.port, host, port, tt.wantHost, tt.wantPort)
+		}
+	}
+}
+
 func TestSyncFromJSON(t *testing.T) {
 	wd, _ := os.Getwd()
 	configPath := filepath.Join(wd, "..", "..", "..", "..", "config.yaml")

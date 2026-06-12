@@ -255,6 +255,34 @@ func parsePostgresURL(s string) (host string, port int, username, password, db, 
 	return host, port, username, password, db, sslmode
 }
 
+// flowpipeConnectionHostPort maps database URLs for Bench API (host) to Flowpipe-in-Docker endpoints.
+// Flowpipe connects to the postgres service on the container network (port 5432), not the host-mapped port.
+func flowpipeConnectionHostPort(host string, port int) (string, int) {
+	switch host {
+	case "localhost", "127.0.0.1", "host.docker.internal":
+		return "postgres", 5432
+	case "postgres":
+		if port == 0 || port == 5431 {
+			return "postgres", 5432
+		}
+		return "postgres", port
+	default:
+		if port == 0 {
+			return host, 5432
+		}
+		return host, port
+	}
+}
+
+// RefreshConnectionsFPC regenerates workspace/flows/connections.fpc from config database URLs.
+func (s *Service) RefreshConnectionsFPC() error {
+	dir := flowsBasePath()
+	if dir == "" {
+		return nil
+	}
+	return s.updateConnectionsFPC(dir)
+}
+
 func (s *Service) updateConnectionsFPC(dir string) error {
 	dbs, err := config.DatabasesWithError()
 	if err != nil || len(dbs) == 0 {
@@ -293,13 +321,9 @@ func (s *Service) updateConnectionsFPC(dir string) error {
 
 		if urlToParse != "" {
 			host, port, username, password, db, sslmode := parsePostgresURL(urlToParse)
-			// Flowpipe runs inside Docker: replace localhost with Docker service name
-			isLocal := host == "localhost" || host == "127.0.0.1"
-			if isLocal {
-				host = "postgres"
-				if sslmode == "" {
-					sslmode = "disable"
-				}
+			host, port = flowpipeConnectionHostPort(host, port)
+			if sslmode == "" && (host == "postgres" || host == "localhost") {
+				sslmode = "disable"
 			}
 			if host != "" || username != "" || db != "" {
 				b.WriteString(fmt.Sprintf("connection \"postgres\" %q {\n", d.ID))
@@ -363,12 +387,13 @@ func (s *Service) ensureDir(dir string) error {
 	return nil
 }
 
-// touchRootMod re-writes the root mod.fp to trigger Flowpipe's file watcher.
+// touchRootMod refreshes Flowpipe connection config and re-writes root mod.fp for the file watcher.
 func (s *Service) touchRootMod() {
 	base := flowsBasePath()
 	if base == "" {
 		return
 	}
+	_ = s.updateConnectionsFPC(base)
 	rootMod := filepath.Join(base, "mod.fp")
 	if data, err := os.ReadFile(rootMod); err == nil {
 		_ = os.WriteFile(rootMod, data, 0644)

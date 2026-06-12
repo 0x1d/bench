@@ -13,6 +13,7 @@ import (
 	"github.com/0x1d/bench/api/internal/db"
 	"github.com/0x1d/bench/api/internal/handler"
 	"github.com/0x1d/bench/api/internal/middleware"
+	"github.com/0x1d/bench/api/internal/service/flow"
 )
 
 func main() {
@@ -60,6 +61,12 @@ func main() {
 		log.Fatalf("db: %v", err)
 	}
 	defer db.Close()
+
+	if dir := config.FlowsPath(); dir != "" {
+		if err := flow.NewService().RefreshConnectionsFPC(); err != nil {
+			log.Printf("flowpipe connections warning: %v", err)
+		}
+	}
 
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)

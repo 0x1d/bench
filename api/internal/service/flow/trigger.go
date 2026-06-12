@@ -65,7 +65,7 @@ func (s *Service) CreateTrigger(trigger *model.TriggerEntry, upsert bool) error 
 	}
 
 	// Generate HCL trigger block
-	hclBlock, err := buildTriggerHCLBlock(trigger)
+	hclBlock, err := s.buildTriggerHCLBlock(trigger)
 	if err != nil {
 		return fmt.Errorf("invalid trigger config: %w", err)
 	}
@@ -103,8 +103,13 @@ func (s *Service) CreateTrigger(trigger *model.TriggerEntry, upsert bool) error 
 	return nil
 }
 
+// buildTriggerHCLBlock wrapper for internal use.
+func (s *Service) buildTriggerHCLBlock(trigger *model.TriggerEntry) (string, error) {
+	return BuildTriggerHCLBlock(trigger, s)
+}
+
 // BuildTriggerHCLBlock generates HCL for a trigger block.
-func BuildTriggerHCLBlock(trigger *model.TriggerEntry) (string, error) {
+func BuildTriggerHCLBlock(trigger *model.TriggerEntry, svc *Service) (string, error) {
 	var b strings.Builder
 
 	b.WriteString(fmt.Sprintf("trigger %q %q {\n", trigger.Type, trigger.ID))
@@ -152,17 +157,20 @@ func BuildTriggerHCLBlock(trigger *model.TriggerEntry) (string, error) {
 			}
 		}
 	case model.TriggerTypeHTTP:
+		httpArgs := mergeHTTPTriggerArgs(svc, trigger)
+		if len(httpArgs) > 0 {
+			b.WriteString("  args = {\n")
+			for k, v := range httpArgs {
+				b.WriteString(fmt.Sprintf("    %-20s = %s\n", k, formatTriggerArgValue(v)))
+			}
+			b.WriteString("  }\n")
+		}
+		execMode := ""
 		if trigger.Config.HTTP != nil {
-			if len(trigger.Config.HTTP.Args) > 0 {
-				b.WriteString("  args = {\n")
-				for k, v := range trigger.Config.HTTP.Args {
-					b.WriteString(fmt.Sprintf("    %-20s = %s\n", k, v))
-				}
-				b.WriteString("  }\n")
-			}
-			if trigger.Config.HTTP.ExecutionMode != "" {
-				b.WriteString(fmt.Sprintf("  execution_mode = %q\n", trigger.Config.HTTP.ExecutionMode))
-			}
+			execMode = trigger.Config.HTTP.ExecutionMode
+		}
+		if execMode != "" {
+			b.WriteString(fmt.Sprintf("  execution_mode = %q\n", execMode))
 		}
 	case model.TriggerTypeNotification:
 		if trigger.Config.Notification != nil {
@@ -190,9 +198,47 @@ func BuildTriggerHCLBlock(trigger *model.TriggerEntry) (string, error) {
 	return b.String(), nil
 }
 
-// buildTriggerHCLBlock wrapper for internal use.
-func buildTriggerHCLBlock(trigger *model.TriggerEntry) (string, error) {
-	return BuildTriggerHCLBlock(trigger)
+func mergeHTTPTriggerArgs(svc *Service, trigger *model.TriggerEntry) map[string]string {
+	args := make(map[string]string)
+	if trigger.Config.HTTP != nil {
+		for k, v := range trigger.Config.HTTP.Args {
+			args[k] = v
+		}
+	}
+	if svc == nil {
+		return args
+	}
+
+	pipelineID := pipelineIDFromRef(trigger.Config.Pipeline)
+	if pipelineID == "" {
+		return args
+	}
+	moduleID := trigger.Module
+	if moduleID == "" {
+		moduleID = "."
+	}
+	flow, err := svc.GetInModule(moduleID, pipelineID)
+	if err != nil && moduleID != "." {
+		flow, err = svc.GetInModule(".", pipelineID)
+	}
+	if err != nil || flow == nil {
+		return args
+	}
+	for dbID := range svc.RequiredConnectionParamIDs(moduleID, flow) {
+		key := "conn_" + dbID
+		if _, ok := args[key]; !ok {
+			args[key] = dbID
+		}
+	}
+	return args
+}
+
+func formatTriggerArgValue(v string) string {
+	if strings.Contains(v, "self.") || strings.HasPrefix(v, "param.") ||
+		strings.HasPrefix(v, "connection.") || strings.HasPrefix(v, "notifier.") {
+		return v
+	}
+	return fmt.Sprintf("%q", v)
 }
 
 // UpdateTrigger updates an existing trigger in a module's mod.fp file.
@@ -368,7 +414,7 @@ func (s *Service) testHTTPTrigger(flowpipeURL, moduleID string, trigger *model.T
 		return nil, fmt.Errorf("Flowpipe API error: status %d, body: %s", statusCode, string(respBody))
 	}
 
-	return parseTriggerTestResponse(respBody), nil
+	return parseTriggerTestResponse(respBody)
 }
 
 func (s *Service) testNonHTTPTrigger(flowpipeURL, moduleID string, trigger *model.TriggerState, payload map[string]any) (*model.TriggerTestResponse, error) {
@@ -394,7 +440,7 @@ func (s *Service) testNonHTTPTrigger(flowpipeURL, moduleID string, trigger *mode
 			return nil, err
 		}
 		if statusCode >= 200 && statusCode < 300 {
-			return parseTriggerTestResponse(respBody), nil
+			return parseTriggerTestResponse(respBody)
 		}
 	}
 
@@ -423,7 +469,7 @@ func (s *Service) testNonHTTPTrigger(flowpipeURL, moduleID string, trigger *mode
 		return nil, fmt.Errorf("Flowpipe API error: status %d, body: %s", statusCode, string(respBody))
 	}
 
-	return parseTriggerTestResponse(respBody), nil
+	return parseTriggerTestResponse(respBody)
 }
 
 // WebhookURL returns the Flowpipe webhook URL for an HTTP trigger.
@@ -622,28 +668,70 @@ func (s *Service) postFlowpipe(_ string, url string, body []byte) ([]byte, int, 
 	return respBody, resp.StatusCode, nil
 }
 
-func parseTriggerTestResponse(respBody []byte) *model.TriggerTestResponse {
+func parseTriggerTestResponse(respBody []byte) (*model.TriggerTestResponse, error) {
 	var execResp map[string]any
 	if err := json.Unmarshal(respBody, &execResp); err != nil {
 		return &model.TriggerTestResponse{
 			ExecutedAt: time.Now(),
 			Status:     "pending",
-		}
+		}, nil
 	}
 
 	execStatus := "pending"
-	if status, ok := execResp["status"].(string); ok {
-		execStatus = status
-	} else if flowpipe, ok := execResp["flowpipe"].(map[string]any); ok {
+	if flowpipe, ok := execResp["flowpipe"].(map[string]any); ok {
 		if status, ok := flowpipe["status"].(string); ok {
 			execStatus = status
 		}
+	} else if status, ok := execResp["status"].(string); ok {
+		execStatus = status
 	}
 
-	return &model.TriggerTestResponse{
+	resp := &model.TriggerTestResponse{
 		ExecutedAt: time.Now(),
 		Status:     execStatus,
 	}
+
+	if execStatus == "failed" || execStatus == "error" {
+		return resp, fmt.Errorf("trigger execution failed: %s", flowpipeErrorDetail(execResp))
+	}
+
+	return resp, nil
+}
+
+func flowpipeErrorDetail(body map[string]any) string {
+	for _, key := range []string{"errors", "results"} {
+		raw, ok := body[key]
+		if !ok {
+			continue
+		}
+		if block, ok := raw.(map[string]any); ok {
+			if errs, ok := block["errors"].([]any); ok && len(errs) > 0 {
+				raw = errs
+			}
+		}
+		if errs, ok := raw.([]any); ok && len(errs) > 0 {
+			if first, ok := errs[0].(map[string]any); ok {
+				if errObj, ok := first["error"].(map[string]any); ok {
+					if detail, ok := errObj["detail"].(string); ok && detail != "" {
+						return detail
+					}
+				}
+				if step, ok := first["step"].(string); ok {
+					return step
+				}
+			}
+		}
+	}
+	return execStatusFromBody(body)
+}
+
+func execStatusFromBody(body map[string]any) string {
+	if flowpipe, ok := body["flowpipe"].(map[string]any); ok {
+		if status, ok := flowpipe["status"].(string); ok {
+			return status
+		}
+	}
+	return "unknown error"
 }
 
 // ListTriggers returns all triggers found in module directories.
@@ -695,13 +783,10 @@ func (s *Service) ListTriggers() ([]model.TriggerState, error) {
 		mu.Unlock()
 	}
 
-	// Enrich with config.yaml data
+	// Enrich with config.yaml metadata (label, workspace). HCL in mod.fp is the
+	// source of truth for execution config such as execution_mode and args.
 	for i := range triggers {
-		if entry := config.TriggerByID(triggers[i].ID); entry != nil {
-			triggers[i].Label = entry.Label
-			triggers[i].Workspace = entry.Workspace
-			triggers[i].Config = triggerEntryToModelConfig(&entry.Config)
-		}
+		enrichTriggerMetadata(&triggers[i], config.TriggerByID(triggers[i].ID))
 	}
 
 	return triggers, nil
@@ -727,12 +812,7 @@ func (s *Service) GetTrigger(moduleID, triggerID string) (*model.TriggerState, e
 	parsedTriggers := parseTriggerBlocks(string(data), moduleID)
 	for i := range parsedTriggers {
 		if parsedTriggers[i].ID == triggerID {
-			// Enrich with config.yaml data
-			if entry := config.TriggerByID(triggerID); entry != nil {
-				parsedTriggers[i].Label = entry.Label
-				parsedTriggers[i].Workspace = entry.Workspace
-				parsedTriggers[i].Config = triggerEntryToModelConfig(&entry.Config)
-			}
+			enrichTriggerMetadata(&parsedTriggers[i], config.TriggerByID(triggerID))
 			return &parsedTriggers[i], nil
 		}
 	}
@@ -937,6 +1017,18 @@ func parseHCLArgs(blockContent string) map[string]string {
 		}
 	}
 	return args
+}
+
+// enrichTriggerMetadata overlays label and workspace from config.yaml without
+// replacing HCL-parsed config, which is the source of truth for Flowpipe execution.
+func enrichTriggerMetadata(state *model.TriggerState, entry *config.TriggerEntry) {
+	if entry == nil {
+		return
+	}
+	if entry.Label != "" {
+		state.Label = entry.Label
+	}
+	state.Workspace = entry.Workspace
 }
 
 // triggerEntryToModelConfig converts config.TriggerConfig to model.TriggerConfig.

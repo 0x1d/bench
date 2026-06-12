@@ -1,12 +1,13 @@
 ---
 created: 2026-06-05
+updated: 2026-06-11
 branch: feat/http-trigger-correct
-commits_reviewed: d194f36..fd8e4f3
+commits_reviewed: d194f36..52ada75
 ---
 
 # HTTP Trigger Correct — Implementation Review
 
-Review of `feat/http-trigger-correct` (4 commits ahead of `main` at time of review).
+Review of `feat/http-trigger-correct`. **All high/medium bugs below are resolved** as of `52ada75` (see [Update log](#update-log-2026-06-11)).
 
 ## Branch Summary
 
@@ -33,12 +34,12 @@ The plan (`TASKS.md`) marks **Phase 1 as DONE** (all 5 tasks). The core goal is 
 | `HTTPConfig` → `{ pipeline, args, executionMode }` | Done |
 | HCL generation → `trigger "http"` with `args`, `execution_mode` | Done |
 | Triggers in `mod.fp` (not separate file) | Done |
-| `normalizeTriggerConfig()` for flat UI JSON | Done (with bugs — see below) |
+| `normalizeTriggerConfig()` for flat UI JSON | Done |
 | Webhook URL endpoint on `http` triggers | Done |
 | UI form: pipeline, args editor, execution mode | Done |
 | Copy webhook URL button for `http` type | Done |
 | Default new trigger type `'http'` | Done |
-| Tests updated for HTTP model | Done (gaps in coverage — see below) |
+| Tests updated for HTTP model | Done |
 
 ### Architecture
 
@@ -53,134 +54,92 @@ flowchart LR
   CFG --> API
 ```
 
-The weak link is **Parse → UI** for HTTP args: generated HCL is correct for Flowpipe, but Bench cannot reliably read it back.
+HCL round-trip for HTTP args is fixed (`parseHCLArgs` handles unquoted `self.*` references; handler test `TestHandleTriggerGet_200` asserts args survive list/get).
 
 ---
 
 ## Gaps (Planned but Missing or Incomplete)
 
-### 1. No migration path for legacy `webhook` data
+### 1. Legacy `webhook` migration — **done**
 
-The plan specifies:
+- `TriggerEntry.UnmarshalYAML` remaps `type: webhook` → `http` and `flow` → `module`
+- `parseTriggerBlocks` treats `trigger "webhook"` as `http` (`trigger_test.go` covers this)
 
-- Treating `type: webhook` in config as `http`
-- Parsing `trigger "webhook"` blocks during transition
+### 2. `config.example.yaml` uses `module:` — **done**
 
-**Neither is implemented.** Config validation rejects unknown types; the parser only handles `"http"`, not `"webhook"`. Existing deployments with webhook triggers will break until manually migrated.
-
-### 2. `config.example.yaml` still uses `flow:` instead of `module:`
-
-Tests and the model use `module`, but the example still has:
-
-```yaml
-flow: daily_report   # should be module: daily_report
-```
-
-Copying the example will fail validation (`module is required`).
+Example triggers use `module: daily_report` / `module: hourly_check`.
 
 ### 3. Method blocks unsupported (documented as future)
 
 `method "post" { ... }` blocks are not generated, parsed into config, or editable in the UI. Hand-edited method blocks may survive in `.fp` files but will not round-trip through Bench.
 
-### 4. Documentation inconsistency
+### 4. Documentation inconsistency — **mostly done**
 
-- `README.md` still says "Next up: Phase 1" while tasks are DONE
-- `docs/plans/README.md` lists the plan as `READY` vs `DONE` in `TASKS.md`
-- Several spec checklists still have unchecked boxes despite implementation
+Plan README and `docs/plans/README.md` mark Phase 1 DONE. Spec checklists may still have unchecked boxes (cosmetic).
 
 ### 5. No end-to-end smoke validation
 
-Unit tests pass, but there is no evidence of a live Flowpipe round-trip (create HTTP trigger → receive webhook → pipeline runs).
+Unit tests pass; live Flowpipe round-trip is recommended before merge but not blocking.
 
 ---
 
-## Bugs
+## Update log (2026-06-11)
+
+All PR #34 review comments addressed:
+
+| Item | Fix |
+|------|-----|
+| HTTP args round-trip | `parseHCLArgs` matches quoted and unquoted values; `TestHandleTriggerGet_200` + `TestParseTriggerBlock/http_trigger_with_unquoted_args` |
+| Args normalization type-gating | `normalizeTriggerConfig` switch on `t.Type` (`685b41d`) |
+| Root trigger update normalization | `HandleRootTriggerUpdate` calls `normalizeTriggerConfig` |
+| Trigger test response contract | UI `TriggerTestResponse` uses `executedAt`/`status`; toast shows `result.status` |
+| Webhook URL type check | `WebhookURL` returns error for non-HTTP triggers; handler maps to 400 |
+| Duplicate create detection | `!upsert && foundCount >= 1` returns 409 |
+| `config.example.yaml` | Uses `module:` not `flow:` |
+| Legacy webhook migration | YAML unmarshaling + HCL parser treat `webhook` as `http` |
+| Execution mode stuck in UI | `enrichTriggerMetadata` no longer overwrites HCL config from yaml (`52ada75`) |
+| Flowpipe Docker DB + conn args | `flowpipeConnectionHostPort`, `mergeHTTPTriggerArgs`, webhook test via POST (`52ada75`) |
+
+---
+
+## Bugs (historical — all resolved)
+
+<details>
+<summary>Original bug write-up (for reference)</summary>
 
 ### High impact
 
-#### 1. HTTP `args` parsing does not match HCL generation (round-trip broken)
+#### 1. HTTP `args` parsing does not match HCL generation
 
-**Generation** (`api/internal/service/flow/trigger.go`) writes unquoted references:
-
-```go
-b.WriteString(fmt.Sprintf("    %-20s = %s\n", k, v))
-// e.g. body = self.request_body
-```
-
-**Parsing** (`parseHCLArgs`) only matches quoted values:
-
-```go
-kvRe := regexp.MustCompile(`(\w+)\s*=\s*"((?:[^"\\]|\\.)*)"`)
-```
-
-So `body = self.request_body` in `mod.fp` (including test fixtures) will not parse back. Listing or editing an HTTP trigger in the UI will show empty args even though they exist in the file.
-
-**Fix:** Extend `parseHCLArgs` to also match unquoted identifiers/expressions (e.g. `self.request_body`). Add a test using the exact HCL from `createTestFlowsDirWithTriggers` in `flow_test.go`.
+**Generation** writes unquoted references (`body = self.request_body`). **Parsing** originally only matched quoted values. **Fixed** in `685b41d`.
 
 #### 2. `normalizeTriggerConfig` puts HTTP `args` into `Schedule.Args`
 
-In `api/internal/handler/flow.go`, the args block at lines ~792–803 runs before HTTP handling and is **not type-gated**:
-
-```go
-if args, ok := flat["args"].(map[string]any); ok && len(args) > 0 {
-    if c.Schedule == nil {
-        c.Schedule = &model.ScheduleConfig{}
-    }
-    c.Schedule.Args = ...
-}
-```
-
-HTTP triggers with args also get a spurious `config.schedule.args` entry.
-
-**Fix:** Gate args assignment on `t.Type` (schedule vs http).
+Args block was not type-gated. **Fixed** with switch on `t.Type`.
 
 #### 3. `HandleRootTriggerUpdate` skips `normalizeTriggerConfig`
 
-`HandleTriggerUpdate` calls `normalizeTriggerConfig`; `HandleRootTriggerUpdate` does not. Root-module trigger edits can miss `args` / `executionMode` when the UI sends flat keys.
-
-**Fix:** Mirror create/update handler pattern for root handlers.
+Root-module edits could lose flat keys. **Fixed**.
 
 #### 4. UI/API contract mismatch for test trigger response
 
-| API returns (`model.TriggerTestResponse`) | UI expects (`TriggerTestResponse` in `api.ts`) |
-|-------------------------------------------|------------------------------------------------|
-| `{ executedAt, status }`                  | `{ success, message, output }`                 |
-
-The test button works at the HTTP level, but success toasts use `result.message`, which is always undefined.
-
-**Fix:** Align types — either update API response shape or map in UI.
+UI expected `{ success, message, output }`. **Fixed** — UI aligned to `{ executedAt, status }`.
 
 ### Medium impact
 
-#### 5. `CreateTrigger` duplicate detection is ineffective
+#### 5. `CreateTrigger` duplicate detection
 
-```go
-if foundCount > 1 {
-    return fmt.Errorf("trigger %q already exists ...")
-}
-```
+`foundCount > 1` only caught corruption. **Fixed** — `foundCount >= 1` when not upserting.
 
-Only errors when count **> 1** (data corruption). A normal duplicate (`foundCount == 1`) silently upserts instead of returning 409, despite the handler expecting a conflict response.
+#### 6. Webhook URL endpoint type check
 
-**Fix:** Use `foundCount >= 1` for create-only path, or document create as intentional upsert.
-
-#### 6. Webhook URL endpoint does not check trigger type
-
-`HandleTriggerWebhookURL` returns a URL for any trigger (e.g. schedule). The UI restricts the button to `http`, but the API does not.
-
-**Fix:** Return 400 if `trigger.Type != TriggerTypeHTTP`.
+**Fixed** in `WebhookURL` service layer.
 
 #### 7. Stale / weak tests
 
-- `flow_test.go:266` — error message still says "expected type webhook" (assertion is correct)
-- `TestTriggerTypesEdgeCases` references old `url`/`method`/`body` fields but does not assert behavior
-- `TestParseTriggerBlock/http_trigger_with_args` uses **quoted** `self.request_body`, masking the real parse bug
-- `TestHCLRegex` sample schedule block uses `cron =` while production code uses `schedule =`
+Added unquoted-args tests; remaining items are cosmetic.
 
-### Low impact
-
-- `config_test.go` — odd indentation in `TestSchemaEntries_ReadConfigError` (cosmetic)
-- `.qwen/settings.json` edits are unrelated to the feature
+</details>
 
 ---
 
@@ -188,28 +147,22 @@ Only errors when count **> 1** (data corruption). A normal duplicate (`foundCoun
 
 | Area | Status |
 |------|--------|
-| Type consolidation (`webhook` → `http`) | Done in code |
+| Type consolidation (`webhook` → `http`) | Done |
 | Model + HCL generation | Done |
-| HCL parsing (HTTP args) | **Broken round-trip** |
-| Config normalization | **Bug for HTTP args** |
+| HCL parsing (HTTP args) | Done |
+| Config normalization | Done |
 | UI form + list | Done |
-| Migration for existing webhooks | **Not done** |
-| Tests | Pass, but **miss real HTTP args case** |
-| Ready to merge? | **Yes** (review fixes applied) |
+| Migration for existing webhooks | Done |
+| Tests | Pass with unquoted-args coverage |
+| Ready to merge? | **Yes** — pending optional live Flowpipe smoke test |
 
 ---
 
-## Recommended Fix Order
+## Recommended follow-ups (optional)
 
-1. **Fix `parseHCLArgs`** — handle unquoted `self.*` references; add regression test with unquoted args from `mod.fp` fixtures
-2. **Gate `args` in `normalizeTriggerConfig`** by `t.Type` (schedule vs http)
-3. **Add `normalizeTriggerConfig` to `HandleRootTriggerUpdate`**
-4. **Align `TriggerTestResponse`** between API and UI
-5. **Fix `config.example.yaml`** — `flow` → `module`
-6. **Add webhook→http migration** — config type remap + parse `trigger "webhook"` as `http`
-7. **Tighten duplicate-create logic** and webhook URL type check
-8. **Update plan docs** — README status, spec checklists, `docs/plans/README.md` state
-9. **Run dev smoke test** against a live Flowpipe instance before merge
+1. Run dev smoke test against a live Flowpipe instance
+2. Method block support (`method "post" { ... }`) — future work
+3. Clean up cosmetic spec checklist items
 
 ---
 

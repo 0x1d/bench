@@ -1,0 +1,28 @@
+{
+  "id": "e2e_simple",
+  "name": "E2E Simple",
+  "description": "Minimal flow for HTTP trigger E2E (no params)",
+  "steps": [
+    {
+      "id": "step_message_1",
+      "type": "message",
+      "label": "done",
+      "config": {
+        "notifier": "default",
+        "text": "E2E simple trigger ran"
+      },
+      "position": { "x": 0, "y": 0 }
+    },
+    {
+      "id": "step_output_1",
+      "type": "output",
+      "label": "Output",
+      "config": {
+        "outputs": [{ "name": "result", "value": "step.message.done" }]
+      },
+      "dependsOn": ["step_message_1"],
+      "position": { "x": 0, "y": 80 }
+    }
+  ],
+  "edges": [{ "id": "e1", "source": "step_message_1", "target": "step_output_1" }]
+}

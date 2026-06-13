@@ -8,6 +8,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import type { TriggerState, TriggerType } from '@/services/api';
+import { TriggerWebhookUrl } from '@/components/trigger-webhook-url';
 import { cn } from '@/lib/utils';
 
 interface TriggerListProps {
@@ -25,7 +26,6 @@ interface TriggerListProps {
 }
 
 const TRIGGER_TYPE_COLORS: Record<TriggerType, string> = {
-  webhook: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
   schedule: 'bg-green-500/20 text-green-400 border-green-500/30',
   alert: 'bg-red-500/20 text-red-400 border-red-500/30',
   http: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
@@ -50,7 +50,7 @@ export function TriggerList({
 }: TriggerListProps) {
   // Get unique workspaces for filter dropdown
   const workspaces = Array.from(new Set(triggers.map((t) => t.workspace).filter(Boolean)));
-  const triggerTypes: TriggerType[] = ['webhook', 'schedule', 'alert', 'http', 'notification'];
+  const triggerTypes: TriggerType[] = ['schedule', 'alert', 'http', 'notification'];
 
   const filteredTriggers = triggers.filter((t) => {
     if (filters?.type && filters.type !== 'all' && t.type !== filters.type) return false;
@@ -88,9 +88,9 @@ export function TriggerList({
               })
             }
           >
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Filter by type" />
-            </SelectTrigger>
+            <SelectTrigger className="w-45">
+                          <SelectValue placeholder="Filter by type" />
+                        </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All types</SelectItem>
               {triggerTypes.map((t) => (
@@ -111,9 +111,9 @@ export function TriggerList({
                 })
               }
             >
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Filter by workspace" />
-              </SelectTrigger>
+              <SelectTrigger className="w-45">
+                              <SelectValue placeholder="Filter by workspace" />
+                            </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All workspaces</SelectItem>
                 {workspaces.map((w) => (
@@ -134,17 +134,18 @@ export function TriggerList({
             <tr className="border-b border-border bg-muted/30">
               <th className="px-4 py-3 text-left font-medium">ID</th>
               <th className="px-4 py-3 text-left font-medium">Label</th>
-              <th className="px-4 py-3 text-left font-medium">Flow</th>
+              <th className="px-4 py-3 text-left font-medium">Module</th>
               <th className="px-4 py-3 text-left font-medium">Type</th>
               <th className="px-4 py-3 text-left font-medium">Workspace</th>
               <th className="px-4 py-3 text-left font-medium">Status</th>
+              <th className="px-4 py-3 text-left font-medium">Webhook</th>
               <th className="w-32 px-2 py-3" />
             </tr>
           </thead>
           <tbody>
             {filteredTriggers.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                <td colSpan={8} className="px-4 py-8 text-center text-sm text-muted-foreground">
                   No triggers match the selected filters.
                 </td>
               </tr>
@@ -156,7 +157,7 @@ export function TriggerList({
                 >
                   <td className="px-4 py-2 font-mono text-xs">{trigger.id}</td>
                   <td className="px-4 py-2">{trigger.label || '—'}</td>
-                  <td className="px-4 py-2 font-mono text-xs">{trigger.flow}</td>
+                  <td className="px-4 py-2 font-mono text-xs">{trigger.module}</td>
                   <td className="px-4 py-2">
                     <span
                       className={cn(
@@ -178,9 +179,16 @@ export function TriggerList({
                       {trigger.status || 'ready'}
                     </span>
                   </td>
+                  <td className="max-w-xs px-4 py-2">
+                    {trigger.type === 'http' ? (
+                      <TriggerWebhookUrl module={trigger.module} triggerId={trigger.id} />
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                  </td>
                   <td className="px-2 py-2">
                     <div className="flex items-center justify-end gap-1">
-                      {onWebhook && trigger.type === 'webhook' && (
+                      {onWebhook && trigger.type === 'http' && (
                         <Button
                           variant="ghost"
                           size="icon-xs"

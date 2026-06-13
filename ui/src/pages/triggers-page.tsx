@@ -6,7 +6,10 @@ import { Button } from '@/components/ui/button';
 import { ContextPanel } from '@/components/context-panel';
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { BENCH_CLOSE_PANEL_EVENT } from '@/lib/bench-close-panel';
+import { cn } from '@/lib/utils';
 import { TriggerForm } from '@/components/resource-config/trigger-form';
+import { formatTriggerTestToast } from '@/lib/trigger-test-toast';
+import { validateHttpTriggerDraft } from '@/lib/trigger-validation';
 import { TriggerList } from '@/components/resource-config/trigger-list';
 import {
   fetchTriggerList,
@@ -15,6 +18,7 @@ import {
   deleteTrigger,
   testTrigger,
   getTriggerWebhookUrl,
+  fetchFlowEntries,
   type TriggerState,
   type TriggerEntry,
   type TriggerType,
@@ -36,8 +40,8 @@ export function TriggersPage() {
   const [triggerDraft, setTriggerDraft] = useState<TriggerEntry>({
     id: '',
     label: '',
-    flow: '',
-    type: 'webhook',
+    module: '',
+    type: 'http',
     config: {},
   });
 
@@ -57,9 +61,28 @@ export function TriggersPage() {
     queryFn: () => fetchTriggerList(),
   });
 
+  // Fetch modules (root + subdirectories)
+  const { data: rootEntries } = useQuery({
+    queryKey: ['flows', 'entries', ''],
+    queryFn: () => fetchFlowEntries(''),
+  });
+
+  const modules = ['.', ...(rootEntries?.entries ?? [])
+    .filter((e) => e.type === 'module')
+    .map((e) => e.name)];
+
+  // Fetch pipelines from root module for the PipelineRefInput
+  const { data: rootFlows } = useQuery({
+    queryKey: ['flows', ''],
+    queryFn: () => fetchFlowEntries(''),
+  });
+  const availablePipelines = (rootFlows?.entries ?? [])
+    .filter((e) => e.type === 'flow')
+    .map((e) => ({ id: `pipeline.${e.path}`, name: e.name !== e.path ? e.name : undefined }));
+
   // Create mutation
   const createMutation = useMutation({
-    mutationFn: async (entry: TriggerEntry) => createTrigger(entry.flow, entry),
+    mutationFn: async (entry: TriggerEntry) => createTrigger(entry),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['triggers'] });
       closePanel();
@@ -72,8 +95,15 @@ export function TriggersPage() {
 
   // Update mutation
   const updateMutation = useMutation({
-    mutationFn: async ({ entry, flowId }: { entry: TriggerEntry; flowId: string }) =>
-      updateTrigger(flowId, entry.id, entry),
+    mutationFn: async ({
+      entry,
+      moduleId,
+      originalId,
+    }: {
+      entry: TriggerEntry;
+      moduleId: string;
+      originalId: string;
+    }) => updateTrigger(moduleId, originalId, entry),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['triggers'] });
       closePanel();
@@ -86,7 +116,7 @@ export function TriggersPage() {
 
   // Delete mutation
   const deleteMutation = useMutation({
-    mutationFn: async (trigger: TriggerState) => deleteTrigger(trigger.flow, trigger.id),
+    mutationFn: async (trigger: TriggerState) => deleteTrigger(trigger.module, trigger.id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['triggers'] });
       setTriggerToDelete(null);
@@ -99,9 +129,9 @@ export function TriggersPage() {
 
   // Test mutation
   const testMutation = useMutation({
-    mutationFn: async (trigger: TriggerState) => testTrigger(trigger.flow, trigger.id),
+    mutationFn: async (trigger: TriggerState) => testTrigger(trigger.module, trigger.id),
     onSuccess: (result) => {
-      toast.success(result.message || 'Trigger test completed');
+      toast.success(formatTriggerTestToast(result));
     },
     onError: (err) => {
       toast.error(err instanceof Error ? err.message : 'Failed to test trigger');
@@ -111,7 +141,7 @@ export function TriggersPage() {
   // Webhook URL mutation
   const webhookMutation = useMutation({
     mutationFn: async (trigger: TriggerState) =>
-      getTriggerWebhookUrl(trigger.flow, trigger.id),
+      getTriggerWebhookUrl(trigger.module, trigger.id),
     onSuccess: (result) => {
       navigator.clipboard.writeText(result.url).then(() => {
         toast.success('Webhook URL copied to clipboard');
@@ -142,8 +172,8 @@ export function TriggersPage() {
     setTriggerDraft({
       id: '',
       label: '',
-      flow: '',
-      type: 'webhook',
+      module: '',
+      type: 'http',
       config: {},
     });
     setPanelError(null);
@@ -155,7 +185,7 @@ export function TriggersPage() {
     setTriggerDraft({
       id: trigger.id,
       label: trigger.label || '',
-      flow: trigger.flow,
+      module: trigger.module,
       type: trigger.type,
       workspace: trigger.workspace,
       config: trigger.config || {},
@@ -180,15 +210,29 @@ export function TriggersPage() {
       setPanelError('Trigger ID is required.');
       return;
     }
-    if (!triggerDraft.flow.trim()) {
-      setPanelError('Flow is required.');
+    if (!triggerDraft.module.trim()) {
+      setPanelError('Module is required.');
       return;
+    }
+
+    if (triggerDraft.type === 'http') {
+      const pipeline = (triggerDraft.config?.pipeline as string) || '';
+      const args = (triggerDraft.config?.args as Record<string, string>) || undefined;
+      const httpErr = await validateHttpTriggerDraft(triggerDraft.module, pipeline, args);
+      if (httpErr) {
+        setPanelError(httpErr);
+        return;
+      }
     }
 
     if (panelMode === 'add') {
       createMutation.mutate(triggerDraft);
     } else if (panelMode === 'edit' && editingTrigger) {
-      updateMutation.mutate({ entry: triggerDraft, flowId: editingTrigger.flow });
+      updateMutation.mutate({
+        entry: triggerDraft,
+        moduleId: editingTrigger.module,
+        originalId: editingTrigger.id,
+      });
     }
   };
 
@@ -211,7 +255,12 @@ export function TriggersPage() {
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4">
-        <TriggerForm draft={triggerDraft} onChange={setTriggerDraft} />
+        <TriggerForm
+          draft={triggerDraft}
+          onChange={setTriggerDraft}
+          modules={modules}
+          availablePipelines={availablePipelines}
+        />
         {panelError && <p className="mt-3 text-sm text-destructive">{panelError}</p>}
       </div>
 
@@ -236,7 +285,12 @@ export function TriggersPage() {
 
   return (
     <div className="flex w-full min-h-0 flex-1 overflow-hidden">
-      <div className="min-h-0 min-w-0 w-full flex-1 overflow-auto p-4 md:p-6">
+      <div
+        className={cn(
+          'min-h-0 min-w-0 flex-1 overflow-auto p-4 md:p-6',
+          panelOpen && 'max-lg:pointer-events-none max-lg:overflow-hidden'
+        )}
+      >
         <div className="flex w-full min-h-0 flex-1 flex-col gap-4">
           {/* Header */}
           <div className="flex items-center justify-between">

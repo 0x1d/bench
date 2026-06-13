@@ -54,15 +54,21 @@ func RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/flows/module", HandleFlowUpdateModule)
 	mux.HandleFunc("POST /api/flows/modules", HandleFlowCreateModule)
 	mux.HandleFunc("GET /api/flows", HandleFlowList)
-	// Trigger routes - must be registered before /{id} routes to avoid ambiguous patterns
-	// Note: Use query params for filtering by flow instead of ambiguous path patterns
+	// Trigger routes - must be registered before /{moduleId} routes to avoid ambiguous patterns
+	// Note: POST /api/flows/triggers creates triggers (module from body); GET lists all triggers
+	// Root module triggers use /api/flows/triggers/root/{triggerId}/* to avoid path conflicts
 	mux.HandleFunc("GET /api/flows/triggers", HandleTriggersList)
-	mux.HandleFunc("GET /api/flows/{id}/triggers/{triggerId}", HandleTriggerGet)
-	mux.HandleFunc("POST /api/flows/{id}/triggers", HandleTriggerCreate)
-	mux.HandleFunc("PUT /api/flows/{id}/triggers/{triggerId}", HandleTriggerUpdate)
-	mux.HandleFunc("DELETE /api/flows/{id}/triggers/{triggerId}", HandleTriggerDelete)
-	mux.HandleFunc("POST /api/flows/{id}/triggers/{triggerId}/test", HandleTriggerTest)
-	mux.HandleFunc("GET /api/flows/{id}/triggers/{triggerId}/webhook", HandleTriggerWebhookURL)
+	mux.HandleFunc("POST /api/flows/triggers", HandleTriggerCreate)
+	mux.HandleFunc("GET /api/flows/triggers/root/{triggerId}", HandleRootTriggerGet)
+	mux.HandleFunc("PUT /api/flows/triggers/root/{triggerId}", HandleRootTriggerUpdate)
+	mux.HandleFunc("DELETE /api/flows/triggers/root/{triggerId}", HandleRootTriggerDelete)
+	mux.HandleFunc("POST /api/flows/triggers/root/{triggerId}/test", HandleRootTriggerTest)
+	mux.HandleFunc("GET /api/flows/triggers/root/{triggerId}/webhook", HandleRootTriggerWebhookURL)
+	mux.HandleFunc("GET /api/flows/{moduleId}/triggers/{triggerId}", HandleTriggerGet)
+	mux.HandleFunc("PUT /api/flows/{moduleId}/triggers/{triggerId}", HandleTriggerUpdate)
+	mux.HandleFunc("DELETE /api/flows/{moduleId}/triggers/{triggerId}", HandleTriggerDelete)
+	mux.HandleFunc("POST /api/flows/{moduleId}/triggers/{triggerId}/test", HandleTriggerTest)
+	mux.HandleFunc("GET /api/flows/{moduleId}/triggers/{triggerId}/webhook", HandleTriggerWebhookURL)
 	mux.HandleFunc("GET /api/flows/{id}", HandleFlowGet)
 	mux.HandleFunc("POST /api/flows", HandleFlowCreate)
 	mux.HandleFunc("PUT /api/flows/{id}", HandleFlowUpdate)

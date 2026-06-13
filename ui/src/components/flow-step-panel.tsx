@@ -166,6 +166,8 @@ export function FlowStepPanel() {
         {!moduleEditPath && flowPanelMode === 'triggers' && flow && (
           <FlowTriggersList
             flowId={flow.id}
+            module={flowModule ?? '.'}
+            pipelineRef={`pipeline.${flow.id}`}
             workspace={flowWorkspace ?? undefined}
           />
         )}

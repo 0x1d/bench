@@ -1114,7 +1114,7 @@ export function ConfigurationPage() {
                       >
                         <td className="px-4 py-2 font-mono">{entry.id}</td>
                         <td className="px-4 py-2">{entry.label || '—'}</td>
-                        <td className="px-4 py-2 font-mono truncate max-w-[200px]">{entry.baseUrl}</td>
+                        <td className="px-4 py-2 font-mono truncate max-w-50">{entry.baseUrl}</td>
                         <td className="px-4 py-2 font-mono">{entry.schemaId?.trim() || '—'}</td>
                         <td className="px-4 py-2 font-mono">{entry.openapiSpec || '—'}</td>
                         <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>

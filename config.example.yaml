@@ -53,18 +53,22 @@ agent:
   workingDirectory: /workspace
   agent: cursor
 
-flowpipe_triggers:
+flowpipe:
   triggers:
-    - id: daily-report-webhook
-      label: Daily Report Webhook
-      flow: daily_report
-      type: webhook
+    - id: daily-report-http
+      label: Daily Report HTTP Trigger
+      module: daily_report
+      type: http
       config:
-        description: "Trigger daily report via webhook"
+        description: "Trigger daily report via HTTP webhook"
         pipeline: pipeline.daily_report
+        args:
+          body: self.request_body
+          headers: self.request_headers
+        executionMode: asynchronous
     - id: hourly-check-schedule
       label: Hourly Check
-      flow: hourly_check
+      module: hourly_check
       type: schedule
       config:
         description: "Run hourly checks"

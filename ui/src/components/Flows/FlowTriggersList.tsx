@@ -11,10 +11,14 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { TriggerForm } from '@/components/resource-config/trigger-form';
+import { validateHttpTriggerDraft } from '@/lib/trigger-validation';
+import { formatTriggerTestToast } from '@/lib/trigger-test-toast';
+import { TriggerWebhookUrl } from '@/components/trigger-webhook-url';
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { cn } from '@/lib/utils';
 import {
   fetchTriggerList,
+  fetchFlowEntries,
   createTrigger,
   updateTrigger,
   deleteTrigger,
@@ -26,12 +30,16 @@ import {
 } from '@/services/api';
 
 interface FlowTriggersListProps {
+  /** Flow ID for display purposes */
   flowId: string;
+  /** Module path where triggers are stored (e.g., "local", ".", "") */
+  module: string;
+  /** Pipeline reference to pre-fill in the form (e.g., "pipeline.sometest") */
+  pipelineRef?: string;
   workspace?: string;
 }
 
 const TRIGGER_TYPE_COLORS: Record<TriggerType, string> = {
-  webhook: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
   schedule: 'bg-green-500/20 text-green-400 border-green-500/30',
   alert: 'bg-red-500/20 text-red-400 border-red-500/30',
   http: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
@@ -44,7 +52,7 @@ const STATUS_COLORS: Record<string, string> = {
   paused: 'bg-gray-500/20 text-gray-400',
 };
 
-export function FlowTriggersList({ flowId, workspace }: FlowTriggersListProps) {
+export function FlowTriggersList({ flowId, module, pipelineRef, workspace }: FlowTriggersListProps) {
   const queryClient = useQueryClient();
   const [editingTrigger, setEditingTrigger] = useState<TriggerState | null>(null);
   const [triggerToDelete, setTriggerToDelete] = useState<TriggerState | null>(null);
@@ -55,8 +63,8 @@ export function FlowTriggersList({ flowId, workspace }: FlowTriggersListProps) {
   const [triggerDraft, setTriggerDraft] = useState<TriggerEntry>({
     id: '',
     label: '',
-    flow: flowId,
-    type: 'webhook',
+    module: module,
+    type: 'http',
     config: {},
   });
 
@@ -65,14 +73,23 @@ export function FlowTriggersList({ flowId, workspace }: FlowTriggersListProps) {
     isLoading,
     error: queryError,
   } = useQuery({
-    queryKey: ['triggers', flowId],
-    queryFn: () => fetchTriggerList(workspace, flowId),
+    queryKey: ['triggers', module],
+    queryFn: () => fetchTriggerList(workspace, module),
   });
 
+  // Fetch available pipelines from the module
+  const { data: moduleEntries } = useQuery({
+    queryKey: ['flows', 'entries', module],
+    queryFn: () => fetchFlowEntries(module),
+  });
+  const availablePipelines = (moduleEntries?.entries ?? [])
+    .filter((e) => e.type === 'flow')
+    .map((e) => ({ id: `pipeline.${e.path}`, name: e.name !== e.path ? e.name : undefined }));
+
   const createMutation = useMutation({
-    mutationFn: async (entry: TriggerEntry) => createTrigger(entry.flow, entry),
+    mutationFn: async (entry: TriggerEntry) => createTrigger(entry),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['triggers', flowId] });
+      queryClient.invalidateQueries({ queryKey: ['triggers', module] });
       setAddMode(false);
       setFormError(null);
       resetDraft();
@@ -84,10 +101,17 @@ export function FlowTriggersList({ flowId, workspace }: FlowTriggersListProps) {
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ entry, flowId }: { entry: TriggerEntry; flowId: string }) =>
-      updateTrigger(flowId, entry.id, entry),
+    mutationFn: async ({
+      entry,
+      moduleId,
+      originalId,
+    }: {
+      entry: TriggerEntry;
+      moduleId: string;
+      originalId: string;
+    }) => updateTrigger(moduleId, originalId, entry),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['triggers', flowId] });
+      queryClient.invalidateQueries({ queryKey: ['triggers', module] });
       setEditingTrigger(null);
       setFormError(null);
       toast.success('Trigger updated');
@@ -98,9 +122,9 @@ export function FlowTriggersList({ flowId, workspace }: FlowTriggersListProps) {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: async (trigger: TriggerState) => deleteTrigger(trigger.flow, trigger.id),
+    mutationFn: async (trigger: TriggerState) => deleteTrigger(trigger.module, trigger.id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['triggers', flowId] });
+      queryClient.invalidateQueries({ queryKey: ['triggers', module] });
       setTriggerToDelete(null);
       toast.success('Trigger deleted');
     },
@@ -110,9 +134,9 @@ export function FlowTriggersList({ flowId, workspace }: FlowTriggersListProps) {
   });
 
   const testMutation = useMutation({
-    mutationFn: async (trigger: TriggerState) => testTrigger(trigger.flow, trigger.id),
+    mutationFn: async (trigger: TriggerState) => testTrigger(trigger.module, trigger.id),
     onSuccess: (result) => {
-      toast.success(result.message || 'Trigger test completed');
+      toast.success(formatTriggerTestToast(result));
     },
     onError: (err) => {
       toast.error(err instanceof Error ? err.message : 'Failed to test trigger');
@@ -121,7 +145,7 @@ export function FlowTriggersList({ flowId, workspace }: FlowTriggersListProps) {
 
   const webhookMutation = useMutation({
     mutationFn: async (trigger: TriggerState) =>
-      getTriggerWebhookUrl(trigger.flow, trigger.id),
+      getTriggerWebhookUrl(trigger.module, trigger.id),
     onSuccess: (result) => {
       navigator.clipboard.writeText(result.url).then(() => {
         toast.success('Webhook URL copied to clipboard');
@@ -139,12 +163,16 @@ export function FlowTriggersList({ flowId, workspace }: FlowTriggersListProps) {
   };
 
   const resetDraft = () => {
+    const config: Record<string, unknown> = {};
+    if (pipelineRef) {
+      config.pipeline = pipelineRef;
+    }
     setTriggerDraft({
       id: '',
       label: '',
-      flow: flowId,
-      type: 'webhook',
-      config: {},
+      module: module,
+      type: 'http',
+      config,
     });
   };
 
@@ -159,7 +187,7 @@ export function FlowTriggersList({ flowId, workspace }: FlowTriggersListProps) {
     setTriggerDraft({
       id: trigger.id,
       label: trigger.label || '',
-      flow: trigger.flow,
+      module: trigger.module,
       type: trigger.type,
       workspace: trigger.workspace,
       config: trigger.config || {},
@@ -167,7 +195,7 @@ export function FlowTriggersList({ flowId, workspace }: FlowTriggersListProps) {
     setFormError(null);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setFormError(null);
 
     if (!triggerDraft.id.trim()) {
@@ -175,10 +203,24 @@ export function FlowTriggersList({ flowId, workspace }: FlowTriggersListProps) {
       return;
     }
 
+    if (triggerDraft.type === 'http') {
+      const pipeline = (triggerDraft.config?.pipeline as string) || '';
+      const args = (triggerDraft.config?.args as Record<string, string>) || undefined;
+      const httpErr = await validateHttpTriggerDraft(triggerDraft.module, pipeline, args);
+      if (httpErr) {
+        setFormError(httpErr);
+        return;
+      }
+    }
+
     if (addMode) {
       createMutation.mutate(triggerDraft);
     } else if (editingTrigger) {
-      updateMutation.mutate({ entry: triggerDraft, flowId: editingTrigger.flow });
+      updateMutation.mutate({
+        entry: triggerDraft,
+        moduleId: editingTrigger.module,
+        originalId: editingTrigger.id,
+      });
     }
   };
 
@@ -199,7 +241,6 @@ export function FlowTriggersList({ flowId, workspace }: FlowTriggersListProps) {
   );
 
   const triggerTypes: TriggerType[] = [
-    'webhook',
     'schedule',
     'alert',
     'http',
@@ -215,7 +256,10 @@ export function FlowTriggersList({ flowId, workspace }: FlowTriggersListProps) {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Zap className="size-4 text-primary" />
-          <h3 className="text-sm font-medium">Triggers</h3>
+          <h3 className="text-sm font-medium">
+            Triggers
+            {flowId && <span className="text-muted-foreground font-normal"> · {flowId}</span>}
+          </h3>
           {triggers.length > 0 && (
             <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
               {triggers.length}
@@ -238,6 +282,8 @@ export function FlowTriggersList({ flowId, workspace }: FlowTriggersListProps) {
           <TriggerForm
             draft={triggerDraft}
             onChange={setTriggerDraft}
+            modules={module ? [module] : []}
+            availablePipelines={availablePipelines}
           />
           {formError && <p className="text-xs text-destructive">{formError}</p>}
           <div className="flex gap-2">
@@ -331,6 +377,13 @@ export function FlowTriggersList({ flowId, workspace }: FlowTriggersListProps) {
                           {trigger.label}
                         </p>
                       )}
+                      {trigger.type === 'http' && (
+                        <TriggerWebhookUrl
+                          module={trigger.module}
+                          triggerId={trigger.id}
+                          className="mt-1"
+                        />
+                      )}
                       <div className="mt-1 flex items-center gap-2 text-[10px] text-muted-foreground">
                         <span
                           className={cn(
@@ -351,7 +404,7 @@ export function FlowTriggersList({ flowId, workspace }: FlowTriggersListProps) {
 
                     {/* Actions */}
                     <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-                      {trigger.type === 'webhook' && (
+                      {trigger.type === 'http' && (
                         <Button
                           variant="ghost"
                           size="icon-xs"

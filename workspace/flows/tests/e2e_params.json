@@ -1,0 +1,41 @@
+{
+  "id": "e2e_params",
+  "name": "E2E Params",
+  "description": "Flow with param for HTTP trigger E2E",
+  "steps": [
+    {
+      "id": "step_input_1",
+      "type": "input",
+      "label": "Input",
+      "config": {
+        "params": [{ "name": "greeting", "type": "string", "default": "Hello" }]
+      },
+      "position": { "x": 0, "y": 0 }
+    },
+    {
+      "id": "step_message_1",
+      "type": "message",
+      "label": "say",
+      "config": {
+        "notifier": "default",
+        "text": "E2E params: ${param.greeting}"
+      },
+      "dependsOn": ["step_input_1"],
+      "position": { "x": 0, "y": 80 }
+    },
+    {
+      "id": "step_output_1",
+      "type": "output",
+      "label": "Output",
+      "config": {
+        "outputs": [{ "name": "result", "value": "step.message.say" }]
+      },
+      "dependsOn": ["step_message_1"],
+      "position": { "x": 0, "y": 160 }
+    }
+  ],
+  "edges": [
+    { "id": "e1", "source": "step_input_1", "target": "step_message_1" },
+    { "id": "e2", "source": "step_message_1", "target": "step_output_1" }
+  ]
+}

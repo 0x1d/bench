@@ -101,25 +101,27 @@ type WorkspaceEntry struct {
 type TriggerType string
 
 const (
-	TriggerTypeWebhook        TriggerType = "webhook"
-	TriggerTypeSchedule       TriggerType = "schedule"
-	TriggerTypeAlert          TriggerType = "alert"
-	TriggerTypeHTTP           TriggerType = "http"
-	TriggerTypeNotification   TriggerType = "notification"
+	TriggerTypeSchedule     TriggerType = "schedule"
+	TriggerTypeAlert        TriggerType = "alert"
+	TriggerTypeHTTP         TriggerType = "http"
+	TriggerTypeNotification TriggerType = "notification"
 )
 
-// WebhookConfig holds configuration for webhook triggers.
-type WebhookConfig struct {
-	Description string `yaml:"description,omitempty" json:"description,omitempty"`
-	Pipeline    string `yaml:"pipeline" json:"pipeline"`
+// HTTPConfig holds configuration for HTTP triggers (Flowpipe's inbound webhook receiver).
+type HTTPConfig struct {
+	Description   string            `yaml:"description,omitempty" json:"description,omitempty"`
+	Pipeline      string            `yaml:"pipeline" json:"pipeline"`
+	Args          map[string]string `yaml:"args,omitempty" json:"args,omitempty"`
+	ExecutionMode string            `yaml:"executionMode,omitempty" json:"executionMode,omitempty"`
 }
 
 // ScheduleConfig holds configuration for schedule triggers.
 type ScheduleConfig struct {
-	Description string `yaml:"description,omitempty" json:"description,omitempty"`
-	Pipeline    string `yaml:"pipeline" json:"pipeline"`
-	Cron        string `yaml:"cron,omitempty" json:"cron,omitempty"`
-	Timezone    string `yaml:"timezone,omitempty" json:"timezone,omitempty"`
+	Description string            `yaml:"description,omitempty" json:"description,omitempty"`
+	Pipeline    string            `yaml:"pipeline" json:"pipeline"`
+	Cron        string            `yaml:"cron,omitempty" json:"cron,omitempty"`
+	Timezone    string            `yaml:"timezone,omitempty" json:"timezone,omitempty"`
+	Args        map[string]string `yaml:"args,omitempty" json:"args,omitempty"`
 }
 
 // AlertConfig holds configuration for alert triggers.
@@ -128,15 +130,6 @@ type AlertConfig struct {
 	Pipeline    string `yaml:"pipeline" json:"pipeline"`
 	Source      string `yaml:"source,omitempty" json:"source,omitempty"`
 	Condition   string `yaml:"condition,omitempty" json:"condition,omitempty"`
-}
-
-// HTTPConfig holds configuration for HTTP triggers.
-type HTTPConfig struct {
-	Description string `yaml:"description,omitempty" json:"description,omitempty"`
-	Pipeline    string `yaml:"pipeline" json:"pipeline"`
-	URL         string `yaml:"url,omitempty" json:"url,omitempty"`
-	Method      string `yaml:"method,omitempty" json:"method,omitempty"`
-	Body        string `yaml:"body,omitempty" json:"body,omitempty"`
 }
 
 // NotificationConfig holds configuration for notification triggers.
@@ -150,23 +143,43 @@ type NotificationConfig struct {
 
 // TriggerConfig holds type-specific configuration for a trigger.
 type TriggerConfig struct {
-	Description  string            `yaml:"description,omitempty" json:"description,omitempty"`
-	Pipeline     string            `yaml:"pipeline,omitempty" json:"pipeline,omitempty"`
-	Webhook      *WebhookConfig    `yaml:"webhook,omitempty" json:"webhook,omitempty"`
-	Schedule     *ScheduleConfig   `yaml:"schedule,omitempty" json:"schedule,omitempty"`
-	Alert        *AlertConfig      `yaml:"alert,omitempty" json:"alert,omitempty"`
-	HTTP         *HTTPConfig       `yaml:"http,omitempty" json:"http,omitempty"`
+	Description  string              `yaml:"description,omitempty" json:"description,omitempty"`
+	Pipeline     string              `yaml:"pipeline,omitempty" json:"pipeline,omitempty"`
+	Schedule     *ScheduleConfig     `yaml:"schedule,omitempty" json:"schedule,omitempty"`
+	Alert        *AlertConfig        `yaml:"alert,omitempty" json:"alert,omitempty"`
+	HTTP         *HTTPConfig         `yaml:"http,omitempty" json:"http,omitempty"`
 	Notification *NotificationConfig `yaml:"notification,omitempty" json:"notification,omitempty"`
 }
 
-// TriggerEntry represents a configured trigger in config.yaml (flowpipe_triggers[]).
+// TriggerEntry represents a configured trigger in config.yaml (flowpipe.triggers[]).
 type TriggerEntry struct {
-	ID        string       `yaml:"id" json:"id"`
-	Label     string       `yaml:"label,omitempty" json:"label,omitempty"`
-	Workspace string       `yaml:"workspace,omitempty" json:"workspace,omitempty"`
-	Flow      string       `yaml:"flow" json:"flow"`
-	Type      TriggerType  `yaml:"type" json:"type"`
+	ID        string        `yaml:"id" json:"id"`
+	Label     string        `yaml:"label,omitempty" json:"label,omitempty"`
+	Workspace string        `yaml:"workspace,omitempty" json:"workspace,omitempty"`
+	Module    string        `yaml:"module" json:"module"`
+	Type      TriggerType   `yaml:"type" json:"type"`
 	Config    TriggerConfig `yaml:"config" json:"config"`
+}
+
+// UnmarshalYAML supports legacy trigger fields during migration:
+// flow → module, type webhook → http.
+func (t *TriggerEntry) UnmarshalYAML(value *yaml.Node) error {
+	type rawTriggerEntry TriggerEntry
+	var raw struct {
+		rawTriggerEntry `yaml:",inline"`
+		Flow            string `yaml:"flow"`
+	}
+	if err := value.Decode(&raw); err != nil {
+		return err
+	}
+	*t = TriggerEntry(raw.rawTriggerEntry)
+	if t.Module == "" && raw.Flow != "" {
+		t.Module = raw.Flow
+	}
+	if t.Type == "webhook" {
+		t.Type = TriggerTypeHTTP
+	}
+	return nil
 }
 
 // ResourcesConfig is the `resources` section of config.yaml (filesystem, databases, REST, schemas).
@@ -197,8 +210,8 @@ type AgentConfig struct {
 	Model            string `yaml:"model,omitempty"`
 }
 
-// FlowpipeTriggersConfig holds Flowpipe trigger configurations.
-type FlowpipeTriggersConfig struct {
+// FlowpipeConfig holds Flowpipe-related configuration (trigger metadata).
+type FlowpipeConfig struct {
 	Triggers []TriggerEntry `yaml:"triggers,omitempty"`
 }
 
@@ -208,7 +221,7 @@ type Config struct {
 	Flows            *FlowsConfig          `yaml:"flows,omitempty"`
 	Infrastructure   *InfrastructureConfig `yaml:"infrastructure,omitempty"`
 	Agent            *AgentConfig          `yaml:"agent,omitempty"`
-	FlowpipeTriggers *FlowpipeTriggersConfig `yaml:"flowpipe_triggers,omitempty"`
+	Flowpipe         *FlowpipeConfig       `yaml:"flowpipe,omitempty"`
 }
 
 // FindConfigPath returns the path to config.yaml, or empty if none exists.
@@ -285,6 +298,14 @@ func parseConfig(data []byte) (Config, error) {
 	var cfg Config
 	if err := yaml.Unmarshal(expanded, &cfg); err != nil {
 		return Config{}, err
+	}
+	if cfg.Flowpipe == nil {
+		var legacy struct {
+			Flowpipe *FlowpipeConfig `yaml:"flowpipe_triggers"`
+		}
+		if err := yaml.Unmarshal(expanded, &legacy); err == nil && legacy.Flowpipe != nil {
+			cfg.Flowpipe = legacy.Flowpipe
+		}
 	}
 	if err := validateConfig(cfg); err != nil {
 		return Config{}, err
@@ -423,32 +444,31 @@ func validateConfig(cfg Config) error {
 	}
 
 	// Validate flowpipe triggers if configured
-	if cfg.FlowpipeTriggers != nil {
+	if cfg.Flowpipe != nil {
 		seenTrigger := map[string]struct{}{}
-		for i, t := range cfg.FlowpipeTriggers.Triggers {
+		for i, t := range cfg.Flowpipe.Triggers {
 			if t.ID == "" {
-				return fmt.Errorf("flowpipe_triggers.triggers[%d].id is required", i)
+				return fmt.Errorf("flowpipe.triggers[%d].id is required", i)
 			}
 			if _, ok := seenTrigger[t.ID]; ok {
-				return fmt.Errorf("flowpipe_triggers.triggers contains duplicate id %q", t.ID)
+				return fmt.Errorf("flowpipe.triggers contains duplicate id %q", t.ID)
 			}
 			seenTrigger[t.ID] = struct{}{}
-			if t.Flow == "" {
-				return fmt.Errorf("flowpipe_triggers.triggers[%d].flow is required", i)
+			if t.Module == "" {
+				return fmt.Errorf("flowpipe.triggers[%d].module is required", i)
 			}
 			if t.Type == "" {
-				return fmt.Errorf("flowpipe_triggers.triggers[%d].type is required", i)
+				return fmt.Errorf("flowpipe.triggers[%d].type is required", i)
 			}
 			// Validate trigger type
 			validTriggerTypes := map[TriggerType]bool{
-				TriggerTypeWebhook:        true,
-				TriggerTypeSchedule:       true,
-				TriggerTypeAlert:          true,
-				TriggerTypeHTTP:           true,
-				TriggerTypeNotification:   true,
+				TriggerTypeSchedule:     true,
+				TriggerTypeAlert:        true,
+				TriggerTypeHTTP:         true,
+				TriggerTypeNotification: true,
 			}
 			if !validTriggerTypes[t.Type] {
-				return fmt.Errorf("flowpipe_triggers.triggers[%d].type must be one of: webhook, schedule, alert, http, notification", i)
+				return fmt.Errorf("flowpipe.triggers[%d].type must be one of: schedule, alert, http, notification", i)
 			}
 		}
 	}
@@ -684,12 +704,12 @@ func TriggerEntriesWithError() ([]TriggerEntry, error) {
 	if err != nil {
 		return nil, err
 	}
-	if cfg.FlowpipeTriggers == nil {
+	if cfg.Flowpipe == nil {
 		return []TriggerEntry{}, nil
 	}
-	out := make([]TriggerEntry, 0, len(cfg.FlowpipeTriggers.Triggers))
-	for _, e := range cfg.FlowpipeTriggers.Triggers {
-		if e.ID == "" || e.Flow == "" {
+	out := make([]TriggerEntry, 0, len(cfg.Flowpipe.Triggers))
+	for _, e := range cfg.Flowpipe.Triggers {
+		if e.ID == "" || e.Module == "" {
 			continue
 		}
 		if e.Label == "" {
@@ -769,6 +789,18 @@ func SaveConfig(data []byte) error {
 	path := FindConfigPath()
 	if path == "" {
 		path = ConfigWritePath()
+	}
+	return os.WriteFile(path, data, 0644)
+}
+
+// SaveConfigStruct marshals a Config struct to YAML and saves it.
+func SaveConfigStruct(cfg *Config, path string) error {
+	data, err := yaml.Marshal(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+	if _, err := parseConfig(data); err != nil {
+		return err
 	}
 	return os.WriteFile(path, data, 0644)
 }

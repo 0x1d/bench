@@ -245,6 +245,128 @@ All endpoints require the `X-API-Token` header. Base path: `/api/flows`.
 - `dependsOn` relationships are emitted as Flowpipe `depends_on` references for non-input dependencies.
 - `edges` are persisted for editor visualization; execution ordering is derived from `dependsOn`.
 
+### Triggers
+
+Triggers automate pipeline execution in response to inbound HTTP requests. Bench supports the Flowpipe `trigger "http"` type, which acts as an inbound webhook receiver — Flowpipe generates a unique hook URL and executes the configured pipeline when the URL is posted to.
+
+**Trigger fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | Unique trigger identifier (used in HCL and hook URL) |
+| `label` | string | Display name |
+| `module` | string | Module path (`.` for root module) |
+| `workspace` | string | Workspace id (default `default`) |
+| `type` | string | Trigger type — currently `http` |
+| `config.pipeline` | string | Flowpipe pipeline reference, e.g. `pipeline.my_pipeline` |
+| `config.args` | object | Args mapping passed to the pipeline. Values may reference Flowpipe `self.*` attributes (e.g. `self.request_body`, `self.request_headers`) |
+| `config.executionMode` | string | `"asynchronous"` (default) or `"synchronous"`. Sync mode returns pipeline output inline; async returns only execution IDs. |
+| `config.description` | string | Optional description (written to HCL) |
+
+Triggers are stored in the module's `mod.fp` and in `config.yaml`. HCL is generated as:
+
+```hcl
+trigger "http" "my_trigger" {
+  pipeline = pipeline.my_pipeline
+  args = {
+    payload = self.request_body
+  }
+  execution_mode = "synchronous"
+}
+```
+
+**Trigger API endpoints:**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/flows/triggers` | List all triggers across all modules |
+| POST | `/api/flows/triggers` | Create a trigger (module specified in body) |
+| GET | `/api/flows/{moduleId}/triggers/{triggerId}` | Get a trigger |
+| PUT | `/api/flows/{moduleId}/triggers/{triggerId}` | Update a trigger |
+| DELETE | `/api/flows/{moduleId}/triggers/{triggerId}` | Delete a trigger |
+| POST | `/api/flows/{moduleId}/triggers/{triggerId}/test` | Fire trigger via Bench (proxies to Flowpipe hook) |
+| GET | `/api/flows/{moduleId}/triggers/{triggerId}/webhook` | Get the Flowpipe-generated webhook URL |
+
+Root-module triggers (where `moduleId` is `.`) use a separate path prefix to avoid routing conflicts:
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/flows/triggers/root/{triggerId}` | Get a root-module trigger |
+| PUT | `/api/flows/triggers/root/{triggerId}` | Update a root-module trigger |
+| DELETE | `/api/flows/triggers/root/{triggerId}` | Delete a root-module trigger |
+| POST | `/api/flows/triggers/root/{triggerId}/test` | Test a root-module trigger |
+| GET | `/api/flows/triggers/root/{triggerId}/webhook` | Get webhook URL for a root-module trigger |
+
+**Request body (POST/PUT trigger):**
+
+```json
+{
+  "id": "my_trigger",
+  "label": "My Trigger",
+  "module": "my_module",
+  "workspace": "default",
+  "type": "http",
+  "config": {
+    "pipeline": "pipeline.my_pipeline",
+    "args": {
+      "payload": "self.request_body"
+    },
+    "executionMode": "asynchronous"
+  }
+}
+```
+
+**Response (GET trigger list):**
+
+```json
+{
+  "triggers": [
+    {
+      "id": "my_trigger",
+      "label": "My Trigger",
+      "module": "my_module",
+      "type": "http",
+      "workspace": "default",
+      "enabled": true,
+      "config": {
+        "pipeline": "pipeline.my_pipeline",
+        "args": { "payload": "self.request_body" },
+        "executionMode": "asynchronous"
+      }
+    }
+  ]
+}
+```
+
+**Response (GET webhook URL):**
+
+```json
+{ "url": "https://flowpipe.example.com/api/latest/hook/my_trigger/abc123salt" }
+```
+
+**Response (POST test):**
+
+```json
+{
+  "executedAt": "2026-06-13T10:00:00Z",
+  "status": "finished",
+  "executionId": "exec_abc123",
+  "pipelineExecutionId": "pexec_abc123"
+}
+```
+
+For async triggers the status will be `"started"` or `"pending"` and pipeline output will not be included inline; use the execution ID with `GET /api/flows/executions/{execId}` to poll for results.
+
+**Trigger errors:**
+
+| Condition | Status | Message |
+|-----------|--------|---------|
+| Trigger not found | 404 | `trigger not found` |
+| Trigger ID already exists | 409 | `trigger already exists` |
+| Webhook URL on non-HTTP trigger | 400 | `webhook URL only available for http triggers` |
+| Missing required pipeline params | 400 | validation error listing missing params |
+| Unknown arg keys | 400 | validation error listing unknown keys |
+
 ## File Layout
 
 The flows directory contains:

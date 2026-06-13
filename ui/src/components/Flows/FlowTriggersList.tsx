@@ -11,6 +11,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { TriggerForm } from '@/components/resource-config/trigger-form';
+import { validateHttpTriggerDraft } from '@/lib/trigger-validation';
+import { formatTriggerTestToast } from '@/lib/trigger-test-toast';
 import { TriggerWebhookUrl } from '@/components/trigger-webhook-url';
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { cn } from '@/lib/utils';
@@ -99,8 +101,15 @@ export function FlowTriggersList({ flowId, module, pipelineRef, workspace }: Flo
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ entry, moduleId }: { entry: TriggerEntry; moduleId: string }) =>
-      updateTrigger(moduleId, entry.id, entry),
+    mutationFn: async ({
+      entry,
+      moduleId,
+      originalId,
+    }: {
+      entry: TriggerEntry;
+      moduleId: string;
+      originalId: string;
+    }) => updateTrigger(moduleId, originalId, entry),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['triggers', module] });
       setEditingTrigger(null);
@@ -127,7 +136,7 @@ export function FlowTriggersList({ flowId, module, pipelineRef, workspace }: Flo
   const testMutation = useMutation({
     mutationFn: async (trigger: TriggerState) => testTrigger(trigger.module, trigger.id),
     onSuccess: (result) => {
-      toast.success(result.status ? `Trigger test: ${result.status}` : 'Trigger test completed');
+      toast.success(formatTriggerTestToast(result));
     },
     onError: (err) => {
       toast.error(err instanceof Error ? err.message : 'Failed to test trigger');
@@ -186,7 +195,7 @@ export function FlowTriggersList({ flowId, module, pipelineRef, workspace }: Flo
     setFormError(null);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setFormError(null);
 
     if (!triggerDraft.id.trim()) {
@@ -194,10 +203,24 @@ export function FlowTriggersList({ flowId, module, pipelineRef, workspace }: Flo
       return;
     }
 
+    if (triggerDraft.type === 'http') {
+      const pipeline = (triggerDraft.config?.pipeline as string) || '';
+      const args = (triggerDraft.config?.args as Record<string, string>) || undefined;
+      const httpErr = await validateHttpTriggerDraft(triggerDraft.module, pipeline, args);
+      if (httpErr) {
+        setFormError(httpErr);
+        return;
+      }
+    }
+
     if (addMode) {
       createMutation.mutate(triggerDraft);
     } else if (editingTrigger) {
-      updateMutation.mutate({ entry: triggerDraft, moduleId: editingTrigger.module });
+      updateMutation.mutate({
+        entry: triggerDraft,
+        moduleId: editingTrigger.module,
+        originalId: editingTrigger.id,
+      });
     }
   };
 

@@ -3,6 +3,7 @@ package handler
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -896,7 +897,9 @@ func HandleTriggerUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	trigger.ID = triggerID
+	if trigger.ID == "" {
+		trigger.ID = triggerID
+	}
 
 	// Extract module ID from URL if not in body
 	if trigger.Module == "" {
@@ -908,7 +911,7 @@ func HandleTriggerUpdate(w http.ResponseWriter, r *http.Request) {
 		trigger.Module = moduleID
 	}
 
-	if err := triggerService.UpdateTrigger(&trigger); err != nil {
+	if err := triggerService.UpdateTrigger(triggerID, &trigger); err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			http.Error(w, err.Error(), http.StatusNotFound)
 			return
@@ -974,7 +977,7 @@ func HandleTriggerTest(w http.ResponseWriter, r *http.Request) {
 	var testReq struct {
 		Payload map[string]any `json:"payload,omitempty"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&testReq); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&testReq); err != nil && !errors.Is(err, io.EOF) {
 		http.Error(w, "invalid request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -1073,11 +1076,13 @@ func HandleRootTriggerUpdate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	trigger.ID = triggerID
+	if trigger.ID == "" {
+		trigger.ID = triggerID
+	}
 	if trigger.Module == "" {
 		trigger.Module = "."
 	}
-	if err := triggerService.UpdateTrigger(&trigger); err != nil {
+	if err := triggerService.UpdateTrigger(triggerID, &trigger); err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			http.Error(w, err.Error(), http.StatusNotFound)
 			return
@@ -1115,7 +1120,7 @@ func HandleRootTriggerTest(w http.ResponseWriter, r *http.Request) {
 	var testReq struct {
 		Payload map[string]any `json:"payload,omitempty"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&testReq); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&testReq); err != nil && !errors.Is(err, io.EOF) {
 		http.Error(w, "invalid request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}

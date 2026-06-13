@@ -1120,6 +1120,8 @@ export interface TriggerTestRequest {
 export interface TriggerTestResponse {
   executedAt: string;
   status: string;
+  executionId?: string;
+  pipelineExecutionId?: string;
 }
 
 export interface WebhookUrlResponse {
@@ -1175,11 +1177,11 @@ export async function createTrigger(
 
 export async function updateTrigger(
   moduleId: string,
-  triggerId: string,
+  originalTriggerId: string,
   entry: TriggerEntry
 ): Promise<TriggerResponse> {
   const response = await fetch(
-    `${API_BASE}/flows/${encodeURIComponent(moduleId)}/triggers/${encodeURIComponent(triggerId)}`,
+    `${API_BASE}/flows/${encodeURIComponent(moduleId)}/triggers/${encodeURIComponent(originalTriggerId)}`,
     {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },

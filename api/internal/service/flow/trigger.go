@@ -43,6 +43,9 @@ func (s *Service) CreateTrigger(trigger *model.TriggerEntry, upsert bool) error 
 	if trigger.Config.Pipeline == "" {
 		return fmt.Errorf("trigger config.pipeline is required")
 	}
+	if err := s.ValidateTriggerEntry(trigger); err != nil {
+		return err
+	}
 
 	dir := s.moduleFlowDir(trigger.Module)
 	if dir == "" {
@@ -242,7 +245,8 @@ func formatTriggerArgValue(v string) string {
 }
 
 // UpdateTrigger updates an existing trigger in a module's mod.fp file.
-func (s *Service) UpdateTrigger(trigger *model.TriggerEntry) error {
+// originalID is the trigger ID before the update (from the request URL); trigger.ID is the new ID.
+func (s *Service) UpdateTrigger(originalID string, trigger *model.TriggerEntry) error {
 	if trigger == nil {
 		return fmt.Errorf("trigger is nil")
 	}
@@ -252,25 +256,75 @@ func (s *Service) UpdateTrigger(trigger *model.TriggerEntry) error {
 	if trigger.Module == "" {
 		return fmt.Errorf("trigger module is required")
 	}
+	if originalID == "" {
+		originalID = trigger.ID
+	}
 
-	// Check if trigger exists before updating
 	triggers, err := s.ListTriggers()
 	if err != nil {
 		return err
 	}
 	found := false
 	for _, t := range triggers {
-		if t.Module == trigger.Module && t.ID == trigger.ID {
+		if t.Module == trigger.Module && t.ID == originalID {
 			found = true
 			break
 		}
 	}
 	if !found {
-		return fmt.Errorf("trigger %q not found in module %q", trigger.ID, trigger.Module)
+		return fmt.Errorf("trigger %q not found in module %q", originalID, trigger.Module)
+	}
+	if originalID != trigger.ID {
+		for _, t := range triggers {
+			if t.Module == trigger.Module && t.ID == trigger.ID {
+				return fmt.Errorf("trigger %q already exists in module %q", trigger.ID, trigger.Module)
+			}
+		}
+	}
+	if err := s.ValidateTriggerEntry(trigger); err != nil {
+		return err
 	}
 
-	// Delete the old trigger block and add the new one
-	return s.CreateTrigger(trigger, true)
+	dir := s.moduleFlowDir(trigger.Module)
+	if dir == "" {
+		return fmt.Errorf("module %q not found", trigger.Module)
+	}
+
+	hclBlock, err := s.buildTriggerHCLBlock(trigger)
+	if err != nil {
+		return fmt.Errorf("invalid trigger config: %w", err)
+	}
+
+	modPath := filepath.Join(dir, "mod.fp")
+	data, err := os.ReadFile(modPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("trigger %q not found in module %q", originalID, trigger.Module)
+		}
+		return err
+	}
+
+	content := removeTriggerBlock(string(data), originalID)
+	if content != "" && !strings.HasSuffix(strings.TrimSpace(content), "\n") {
+		content += "\n"
+	}
+	content += hclBlock + "\n"
+
+	if err := hclgen.WriteFileAtomically(modPath, []byte(content), 0644); err != nil {
+		return err
+	}
+
+	if originalID != trigger.ID {
+		if err := removeTriggerFromConfig(originalID); err != nil {
+			return fmt.Errorf("failed to remove old trigger metadata: %w", err)
+		}
+	}
+	if err := saveTriggerToConfig(trigger); err != nil {
+		return fmt.Errorf("failed to save trigger metadata: %w", err)
+	}
+
+	s.touchRootMod()
+	return nil
 }
 
 // DeleteTrigger removes a trigger from a module's mod.fp file.
@@ -406,7 +460,7 @@ func (s *Service) testHTTPTrigger(flowpipeURL, moduleID string, trigger *model.T
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	respBody, statusCode, err := s.postFlowpipe(flowpipeURL, webhookURL, bodyBytes)
+	respBody, statusCode, headers, err := s.postFlowpipe(flowpipeURL, webhookURL, bodyBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -414,7 +468,7 @@ func (s *Service) testHTTPTrigger(flowpipeURL, moduleID string, trigger *model.T
 		return nil, fmt.Errorf("Flowpipe API error: status %d, body: %s", statusCode, string(respBody))
 	}
 
-	return parseTriggerTestResponse(respBody)
+	return parseTriggerTestResponse(respBody, headers)
 }
 
 func (s *Service) testNonHTTPTrigger(flowpipeURL, moduleID string, trigger *model.TriggerState, payload map[string]any) (*model.TriggerTestResponse, error) {
@@ -435,12 +489,12 @@ func (s *Service) testNonHTTPTrigger(flowpipeURL, moduleID string, trigger *mode
 	base := strings.TrimSuffix(flowpipeURL, "/")
 	for _, ref := range candidateRefs {
 		url := fmt.Sprintf("%s/api/v0/trigger/%s/command", base, ref)
-		respBody, statusCode, err := s.postFlowpipe(flowpipeURL, url, bodyBytes)
+		respBody, statusCode, headers, err := s.postFlowpipe(flowpipeURL, url, bodyBytes)
 		if err != nil {
 			return nil, err
 		}
 		if statusCode >= 200 && statusCode < 300 {
-			return parseTriggerTestResponse(respBody)
+			return parseTriggerTestResponse(respBody, headers)
 		}
 	}
 
@@ -461,7 +515,7 @@ func (s *Service) testNonHTTPTrigger(flowpipeURL, moduleID string, trigger *mode
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	respBody, statusCode, err := s.postFlowpipe(flowpipeURL, url, bodyBytes)
+	respBody, statusCode, headers, err := s.postFlowpipe(flowpipeURL, url, bodyBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -469,7 +523,7 @@ func (s *Service) testNonHTTPTrigger(flowpipeURL, moduleID string, trigger *mode
 		return nil, fmt.Errorf("Flowpipe API error: status %d, body: %s", statusCode, string(respBody))
 	}
 
-	return parseTriggerTestResponse(respBody)
+	return parseTriggerTestResponse(respBody, headers)
 }
 
 // WebhookURL returns the Flowpipe webhook URL for an HTTP trigger.
@@ -647,28 +701,28 @@ func getFlowpipeTriggerInfo(flowpipeURL, triggerRef string) (*flowpipeTriggerInf
 	return &info, nil
 }
 
-func (s *Service) postFlowpipe(_ string, url string, body []byte) ([]byte, int, error) {
+func (s *Service) postFlowpipe(_ string, url string, body []byte) ([]byte, int, http.Header, error) {
 	client := &http.Client{Timeout: 30 * time.Second}
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(body))
 	if err != nil {
-		return nil, 0, fmt.Errorf("failed to create request: %w", err)
+		return nil, 0, nil, fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, 0, fmt.Errorf("failed to connect to Flowpipe: %w", err)
+		return nil, 0, nil, fmt.Errorf("failed to connect to Flowpipe: %w", err)
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, resp.StatusCode, fmt.Errorf("failed to read response: %w", err)
+		return nil, resp.StatusCode, resp.Header, fmt.Errorf("failed to read response: %w", err)
 	}
-	return respBody, resp.StatusCode, nil
+	return respBody, resp.StatusCode, resp.Header, nil
 }
 
-func parseTriggerTestResponse(respBody []byte) (*model.TriggerTestResponse, error) {
+func parseTriggerTestResponse(respBody []byte, headers http.Header) (*model.TriggerTestResponse, error) {
 	var execResp map[string]any
 	if err := json.Unmarshal(respBody, &execResp); err != nil {
 		return &model.TriggerTestResponse{
@@ -678,17 +732,33 @@ func parseTriggerTestResponse(respBody []byte) (*model.TriggerTestResponse, erro
 	}
 
 	execStatus := "pending"
+	var executionID, pipelineExecutionID string
 	if flowpipe, ok := execResp["flowpipe"].(map[string]any); ok {
 		if status, ok := flowpipe["status"].(string); ok {
 			execStatus = status
+		}
+		if id, ok := flowpipe["execution_id"].(string); ok {
+			executionID = id
+		}
+		if id, ok := flowpipe["pipeline_execution_id"].(string); ok {
+			pipelineExecutionID = id
 		}
 	} else if status, ok := execResp["status"].(string); ok {
 		execStatus = status
 	}
 
+	if executionID == "" && headers != nil {
+		executionID = headers.Get("Flowpipe-Execution-Id")
+	}
+	if pipelineExecutionID == "" && headers != nil {
+		pipelineExecutionID = headers.Get("Flowpipe-Pipeline-Execution-Id")
+	}
+
 	resp := &model.TriggerTestResponse{
-		ExecutedAt: time.Now(),
-		Status:     execStatus,
+		ExecutedAt:          time.Now(),
+		Status:              execStatus,
+		ExecutionID:         executionID,
+		PipelineExecutionID: pipelineExecutionID,
 	}
 
 	if execStatus == "failed" || execStatus == "error" {
@@ -1081,24 +1151,24 @@ func saveTriggerToConfig(trigger *model.TriggerEntry) error {
 		return nil // skip silently - config may not exist
 	}
 
-	if cfg.FlowpipeTriggers == nil {
-		cfg.FlowpipeTriggers = &config.FlowpipeTriggersConfig{}
+	if cfg.Flowpipe == nil {
+		cfg.Flowpipe = &config.FlowpipeConfig{}
 	}
 
 	// Check if trigger already exists, update if so
-	for i, t := range cfg.FlowpipeTriggers.Triggers {
+	for i, t := range cfg.Flowpipe.Triggers {
 		if t.ID == trigger.ID {
-			cfg.FlowpipeTriggers.Triggers[i].Label = trigger.Label
-			cfg.FlowpipeTriggers.Triggers[i].Workspace = trigger.Workspace
-			cfg.FlowpipeTriggers.Triggers[i].Module = trigger.Module
-			cfg.FlowpipeTriggers.Triggers[i].Type = config.TriggerType(trigger.Type)
-			cfg.FlowpipeTriggers.Triggers[i].Config = configTriggerEntryFromModel(trigger)
+			cfg.Flowpipe.Triggers[i].Label = trigger.Label
+			cfg.Flowpipe.Triggers[i].Workspace = trigger.Workspace
+			cfg.Flowpipe.Triggers[i].Module = trigger.Module
+			cfg.Flowpipe.Triggers[i].Type = config.TriggerType(trigger.Type)
+			cfg.Flowpipe.Triggers[i].Config = configTriggerEntryFromModel(trigger)
 			return config.SaveConfigStruct(cfg, configPath)
 		}
 	}
 
 	// Add new entry
-	cfg.FlowpipeTriggers.Triggers = append(cfg.FlowpipeTriggers.Triggers, config.TriggerEntry{
+	cfg.Flowpipe.Triggers = append(cfg.Flowpipe.Triggers, config.TriggerEntry{
 		ID:        trigger.ID,
 		Label:     trigger.Label,
 		Workspace: trigger.Workspace,
@@ -1117,14 +1187,14 @@ func removeTriggerFromConfig(triggerID string) error {
 		return nil // skip silently
 	}
 
-	if cfg.FlowpipeTriggers == nil {
+	if cfg.Flowpipe == nil {
 		return nil
 	}
 
-	triggers := cfg.FlowpipeTriggers.Triggers
+	triggers := cfg.Flowpipe.Triggers
 	for i, t := range triggers {
 		if t.ID == triggerID {
-			cfg.FlowpipeTriggers.Triggers = append(triggers[:i], triggers[i+1:]...)
+			cfg.Flowpipe.Triggers = append(triggers[:i], triggers[i+1:]...)
 			return config.SaveConfigStruct(cfg, configPath)
 		}
 	}

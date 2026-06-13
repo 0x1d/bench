@@ -88,6 +88,7 @@ func (c TriggerConfig) MarshalJSON() ([]byte, error) {
 		if len(c.Schedule.Args) > 0 {
 			m["args"] = c.Schedule.Args
 		}
+		delete(m, "schedule")
 	}
 	if c.Alert != nil {
 		if c.Alert.Source != "" {
@@ -99,6 +100,7 @@ func (c TriggerConfig) MarshalJSON() ([]byte, error) {
 		if c.Alert.Pipeline != "" {
 			m["pipeline"] = c.Alert.Pipeline
 		}
+		delete(m, "alert")
 	}
 	if c.HTTP != nil {
 		if len(c.HTTP.Args) > 0 {
@@ -110,6 +112,7 @@ func (c TriggerConfig) MarshalJSON() ([]byte, error) {
 		if c.HTTP.Pipeline != "" {
 			m["pipeline"] = c.HTTP.Pipeline
 		}
+		delete(m, "http")
 	}
 	if c.Notification != nil {
 		if c.Notification.Source != "" {
@@ -124,12 +127,13 @@ func (c TriggerConfig) MarshalJSON() ([]byte, error) {
 		if c.Notification.Pipeline != "" {
 			m["pipeline"] = c.Notification.Pipeline
 		}
+		delete(m, "notification")
 	}
 
 	return json.Marshal(m)
 }
 
-// TriggerEntry represents a configured trigger in config.yaml (flowpipe_triggers[]).
+// TriggerEntry represents a configured trigger in config.yaml (flowpipe.triggers[]).
 type TriggerEntry struct {
 	ID        string        `yaml:"id" json:"id"`
 	Label     string        `yaml:"label,omitempty" json:"label,omitempty"`
@@ -165,6 +169,8 @@ type TriggerWebhookURLResponse struct {
 
 // TriggerTestResponse represents the response for testing a trigger.
 type TriggerTestResponse struct {
-	ExecutedAt time.Time `json:"executedAt"`
-	Status     string    `json:"status"`
+	ExecutedAt          time.Time `json:"executedAt"`
+	Status              string    `json:"status"`
+	ExecutionID         string    `json:"executionId,omitempty"`
+	PipelineExecutionID string    `json:"pipelineExecutionId,omitempty"`
 }

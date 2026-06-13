@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -10,6 +11,13 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import type { TriggerEntry, TriggerType } from '@/services/api';
+import { fetchFlow } from '@/services/api';
+import {
+  formatHttpTriggerArgError,
+  pipelineIdFromRef,
+  pipelineParamSpecs,
+  validateHttpTriggerArgs,
+} from '@/lib/trigger-validation';
 import { TriggerWebhookUrl } from '@/components/trigger-webhook-url';
 import type { Dispatch, SetStateAction } from 'react';
 
@@ -159,6 +167,7 @@ export function TriggerForm({
           config={draft.config}
           onChange={updateConfig}
           availablePipelines={availablePipelines}
+          module={draft.module}
         />
       )}
 
@@ -402,12 +411,26 @@ function HttpConfigFields({
   config,
   onChange,
   availablePipelines,
+  module,
 }: {
   config: Record<string, unknown>;
   onChange: (key: string, value: unknown) => void;
   availablePipelines: { id: string; name?: string }[];
+  module?: string;
 }) {
   const args = (config.args as Record<string, string>) || {};
+  const pipelineRef = (config.pipeline as string) || '';
+  const pipelineId = pipelineIdFromRef(pipelineRef);
+
+  const { data: pipelineFlow } = useQuery({
+    queryKey: ['flow', module || '.', pipelineId],
+    queryFn: () => fetchFlow(pipelineId, module || '.'),
+    enabled: Boolean(pipelineId && module),
+  });
+
+  const paramSpecs = pipelineParamSpecs(pipelineFlow);
+  const argValidation = validateHttpTriggerArgs(pipelineFlow, args);
+  const argError = formatHttpTriggerArgError(argValidation, paramSpecs);
 
   const addArg = () => {
     onChange('args', { ...args, '': 'self.request_body' });
@@ -458,6 +481,20 @@ function HttpConfigFields({
           <code className="text-xs">self.request_body</code> or{' '}
           <code className="text-xs">self.request_headers</code> to pass request data.
         </p>
+        {paramSpecs.length > 0 && (
+          <p className="text-xs text-muted-foreground">
+            Pipeline params:{' '}
+            <span className="font-mono">
+              {paramSpecs
+                .map((p) => `${p.name}${p.required ? '*' : ''}`)
+                .join(', ')}
+            </span>
+            <span className="ml-1">(* required, no default)</span>
+          </p>
+        )}
+        {argError && (
+          <p className="text-xs text-destructive">{argError}</p>
+        )}
         {Object.entries(args).map(([key, value], idx) => (
           <div key={idx} className="flex gap-2 items-start">
             <Input

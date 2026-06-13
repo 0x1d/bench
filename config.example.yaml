@@ -53,7 +53,7 @@ agent:
   workingDirectory: /workspace
   agent: cursor
 
-flowpipe_triggers:
+flowpipe:
   triggers:
     - id: daily-report-http
       label: Daily Report HTTP Trigger

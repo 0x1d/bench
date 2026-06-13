@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/0x1d/bench/api/internal/model"
@@ -161,7 +162,39 @@ trigger "schedule" "schedule1" {
 		t.Fatalf("write mod.fp: %v", err)
 	}
 
+	testPipelineJSON := `{
+		"id": "test_pipeline",
+		"name": "Test Pipeline",
+		"steps": [
+			{
+				"id": "step_message_1",
+				"type": "message",
+				"label": "msg",
+				"config": {"notifier": "default", "text": "test"}
+			}
+		],
+		"edges": []
+	}`
+	if err := writeHandlerTestFlow(modDir, "test_pipeline", testPipelineJSON); err != nil {
+		t.Fatalf("write test_pipeline: %v", err)
+	}
+
 	return flowsDir
+}
+
+func writeHandlerTestFlow(dir, id, jsonContent string) error {
+	fpContent := `pipeline "` + id + `" {
+  title = "Test"
+  step "message" "msg" {
+    notifier = notifier.default
+    text     = "test"
+  }
+}
+`
+	if err := os.WriteFile(filepath.Join(dir, id+".fp"), []byte(fpContent), 0644); err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(dir, id+".json"), []byte(jsonContent), 0644)
 }
 
 // === API Integration Tests for Triggers ===
@@ -285,8 +318,9 @@ func TestHandleTriggerGet_200(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
+	body := rec.Body.Bytes()
 	var trigger model.TriggerState
-	if err := json.NewDecoder(rec.Body).Decode(&trigger); err != nil {
+	if err := json.Unmarshal(body, &trigger); err != nil {
 		t.Fatal(err)
 	}
 	if trigger.ID != "http1" {
@@ -295,8 +329,15 @@ func TestHandleTriggerGet_200(t *testing.T) {
 	if trigger.Type != model.TriggerTypeHTTP {
 		t.Fatalf("expected type http, got %s", trigger.Type)
 	}
-	if trigger.Config.HTTP == nil || trigger.Config.HTTP.Args["body"] != "self.request_body" {
-		t.Fatalf("expected HTTP args with unquoted body=self.request_body, got %#v", trigger.Config.HTTP)
+
+	var raw map[string]any
+	if err := json.Unmarshal(body, &raw); err != nil {
+		t.Fatal(err)
+	}
+	config, _ := raw["config"].(map[string]any)
+	args, _ := config["args"].(map[string]any)
+	if args["body"] != "self.request_body" {
+		t.Fatalf("expected flat args.body=self.request_body, got %#v", config)
 	}
 }
 
@@ -425,6 +466,80 @@ func TestHandleTriggerUpdate_200(t *testing.T) {
 	}
 }
 
+func TestHandleTriggerUpdate_renameID(t *testing.T) {
+	flowsDir := createTestFlowsDirWithTriggers(t)
+	writeFlowHandlerTestConfig(t, flowsDir)
+
+	originalID := "rename_me_" + t.Name()
+	newID := originalID + "_renamed"
+
+	newTrigger := model.TriggerEntry{
+		ID:     originalID,
+		Label:  "Rename Me",
+		Module: "mod",
+		Type:   model.TriggerTypeHTTP,
+		Config: model.TriggerConfig{
+			Pipeline: "pipeline.test_pipeline",
+		},
+	}
+	body, _ := json.Marshal(newTrigger)
+	req := httptest.NewRequest(http.MethodPost, "/api/flows/mod/triggers", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	HandleTriggerCreate(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("failed to create trigger: got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	renamedTrigger := model.TriggerEntry{
+		ID:     newID,
+		Label:  "Renamed Trigger",
+		Module: "mod",
+		Type:   model.TriggerTypeHTTP,
+		Config: model.TriggerConfig{
+			Pipeline: "pipeline.test_pipeline",
+		},
+	}
+	body, _ = json.Marshal(renamedTrigger)
+
+	req = httptest.NewRequest(http.MethodPut, "/api/flows/mod/triggers/"+originalID, bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.SetPathValue("moduleId", "mod")
+	req.SetPathValue("triggerId", originalID)
+	rec = httptest.NewRecorder()
+	HandleTriggerUpdate(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var updated model.TriggerEntry
+	if err := json.Unmarshal(rec.Body.Bytes(), &updated); err != nil {
+		t.Fatal(err)
+	}
+	if updated.ID != newID {
+		t.Fatalf("expected renamed id %q, got %q", newID, updated.ID)
+	}
+
+	getReq := httptest.NewRequest(http.MethodGet, "/api/flows/mod/triggers/"+newID, nil)
+	getReq.SetPathValue("moduleId", "mod")
+	getReq.SetPathValue("triggerId", newID)
+	getRec := httptest.NewRecorder()
+	HandleTriggerGet(getRec, getReq)
+	if getRec.Code != http.StatusOK {
+		t.Fatalf("expected renamed trigger to exist, got %d: %s", getRec.Code, getRec.Body.String())
+	}
+
+	oldReq := httptest.NewRequest(http.MethodGet, "/api/flows/mod/triggers/"+originalID, nil)
+	oldReq.SetPathValue("moduleId", "mod")
+	oldReq.SetPathValue("triggerId", originalID)
+	oldRec := httptest.NewRecorder()
+	HandleTriggerGet(oldRec, oldReq)
+	if oldRec.Code != http.StatusNotFound {
+		t.Fatalf("expected old trigger id to be gone, got %d", oldRec.Code)
+	}
+}
+
 func TestHandleTriggerUpdate_404(t *testing.T) {
 	flowsDir := createTestFlowsDirWithTriggers(t)
 	writeFlowHandlerTestConfig(t, flowsDir)
@@ -509,6 +624,22 @@ func TestHandleTriggerTest_200(t *testing.T) {
 	// We expect either 502 (Flowpipe not available) or 400 (pipeline not found)
 	if rec.Code != http.StatusBadGateway && rec.Code != http.StatusBadRequest {
 		t.Logf("unexpected status: %d (Flowpipe may not be available)", rec.Code)
+	}
+}
+
+func TestHandleTriggerTest_emptyBody(t *testing.T) {
+	flowsDir := createTestFlowsDirWithTriggers(t)
+	writeFlowHandlerTestConfig(t, flowsDir)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/flows/mod/triggers/http1/test", nil)
+	req.SetPathValue("moduleId", "mod")
+	req.SetPathValue("triggerId", "http1")
+	rec := httptest.NewRecorder()
+
+	HandleTriggerTest(rec, req)
+
+	if rec.Code == http.StatusBadRequest && strings.Contains(rec.Body.String(), "EOF") {
+		t.Fatalf("empty body should be accepted, got 400: %s", rec.Body.String())
 	}
 }
 

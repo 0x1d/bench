@@ -6,7 +6,10 @@ import { Button } from '@/components/ui/button';
 import { ContextPanel } from '@/components/context-panel';
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { BENCH_CLOSE_PANEL_EVENT } from '@/lib/bench-close-panel';
+import { cn } from '@/lib/utils';
 import { TriggerForm } from '@/components/resource-config/trigger-form';
+import { formatTriggerTestToast } from '@/lib/trigger-test-toast';
+import { validateHttpTriggerDraft } from '@/lib/trigger-validation';
 import { TriggerList } from '@/components/resource-config/trigger-list';
 import {
   fetchTriggerList,
@@ -92,8 +95,15 @@ export function TriggersPage() {
 
   // Update mutation
   const updateMutation = useMutation({
-    mutationFn: async ({ entry, moduleId }: { entry: TriggerEntry; moduleId: string }) =>
-      updateTrigger(moduleId, entry.id, entry),
+    mutationFn: async ({
+      entry,
+      moduleId,
+      originalId,
+    }: {
+      entry: TriggerEntry;
+      moduleId: string;
+      originalId: string;
+    }) => updateTrigger(moduleId, originalId, entry),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['triggers'] });
       closePanel();
@@ -121,7 +131,7 @@ export function TriggersPage() {
   const testMutation = useMutation({
     mutationFn: async (trigger: TriggerState) => testTrigger(trigger.module, trigger.id),
     onSuccess: (result) => {
-      toast.success(result.status ? `Trigger test: ${result.status}` : 'Trigger test completed');
+      toast.success(formatTriggerTestToast(result));
     },
     onError: (err) => {
       toast.error(err instanceof Error ? err.message : 'Failed to test trigger');
@@ -205,10 +215,24 @@ export function TriggersPage() {
       return;
     }
 
+    if (triggerDraft.type === 'http') {
+      const pipeline = (triggerDraft.config?.pipeline as string) || '';
+      const args = (triggerDraft.config?.args as Record<string, string>) || undefined;
+      const httpErr = await validateHttpTriggerDraft(triggerDraft.module, pipeline, args);
+      if (httpErr) {
+        setPanelError(httpErr);
+        return;
+      }
+    }
+
     if (panelMode === 'add') {
       createMutation.mutate(triggerDraft);
     } else if (panelMode === 'edit' && editingTrigger) {
-      updateMutation.mutate({ entry: triggerDraft, moduleId: editingTrigger.module });
+      updateMutation.mutate({
+        entry: triggerDraft,
+        moduleId: editingTrigger.module,
+        originalId: editingTrigger.id,
+      });
     }
   };
 
@@ -261,7 +285,12 @@ export function TriggersPage() {
 
   return (
     <div className="flex w-full min-h-0 flex-1 overflow-hidden">
-      <div className="min-h-0 min-w-0 w-full flex-1 overflow-auto p-4 md:p-6">
+      <div
+        className={cn(
+          'min-h-0 min-w-0 flex-1 overflow-auto p-4 md:p-6',
+          panelOpen && 'max-lg:pointer-events-none max-lg:overflow-hidden'
+        )}
+      >
         <div className="flex w-full min-h-0 flex-1 flex-col gap-4">
           {/* Header */}
           <div className="flex items-center justify-between">

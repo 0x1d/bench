@@ -220,7 +220,7 @@ resources:
 // Trigger validation tests
 func TestValidateConfig_Triggers_DuplicateID(t *testing.T) {
 	cfg := mustUnmarshal(t, `
-flowpipe_triggers:
+flowpipe:
   triggers:
     - id: dup
       module: pipeline1
@@ -241,7 +241,7 @@ flowpipe_triggers:
 
 func TestValidateConfig_Triggers_InvalidType(t *testing.T) {
 	cfg := mustUnmarshal(t, `
-flowpipe_triggers:
+flowpipe:
   triggers:
     - id: t1
       module: pipeline1
@@ -257,7 +257,7 @@ flowpipe_triggers:
 
 func TestValidateConfig_Triggers_EmptyType(t *testing.T) {
 	cfg := mustUnmarshal(t, `
-flowpipe_triggers:
+flowpipe:
   triggers:
     - id: t1
       module: pipeline1
@@ -273,7 +273,7 @@ flowpipe_triggers:
 
 func TestValidateConfig_Triggers_EmptyFlow(t *testing.T) {
 	cfg := mustUnmarshal(t, `
-flowpipe_triggers:
+flowpipe:
   triggers:
     - id: t1
       module: ""
@@ -289,7 +289,7 @@ flowpipe_triggers:
 
 func TestValidateConfig_Triggers_EmptyID(t *testing.T) {
 	cfg := mustUnmarshal(t, `
-flowpipe_triggers:
+flowpipe:
   triggers:
     - id: ""
       module: pipeline1
@@ -305,7 +305,7 @@ flowpipe_triggers:
 
 func TestValidateConfig_Triggers_LegacyWebhookType(t *testing.T) {
 	cfg := mustUnmarshal(t, `
-flowpipe_triggers:
+flowpipe:
   triggers:
     - id: legacy-webhook
       module: daily_report
@@ -317,14 +317,14 @@ flowpipe_triggers:
 	if err := validateConfig(cfg); err != nil {
 		t.Fatalf("expected legacy webhook type to migrate to http, got %v", err)
 	}
-	if cfg.FlowpipeTriggers.Triggers[0].Type != TriggerTypeHTTP {
-		t.Fatalf("expected migrated type http, got %q", cfg.FlowpipeTriggers.Triggers[0].Type)
+	if cfg.Flowpipe.Triggers[0].Type != TriggerTypeHTTP {
+		t.Fatalf("expected migrated type http, got %q", cfg.Flowpipe.Triggers[0].Type)
 	}
 }
 
 func TestValidateConfig_Triggers_LegacyFlowField(t *testing.T) {
 	cfg := mustUnmarshal(t, `
-flowpipe_triggers:
+flowpipe:
   triggers:
     - id: legacy-flow
       flow: daily_report
@@ -336,14 +336,37 @@ flowpipe_triggers:
 	if err := validateConfig(cfg); err != nil {
 		t.Fatalf("expected legacy flow field to migrate to module, got %v", err)
 	}
-	if cfg.FlowpipeTriggers.Triggers[0].Module != "daily_report" {
-		t.Fatalf("expected module daily_report, got %q", cfg.FlowpipeTriggers.Triggers[0].Module)
+	if cfg.Flowpipe.Triggers[0].Module != "daily_report" {
+		t.Fatalf("expected module daily_report, got %q", cfg.Flowpipe.Triggers[0].Module)
+	}
+}
+
+func TestValidateConfig_Triggers_LegacyFlowpipeTriggersKey(t *testing.T) {
+	yamlStr := `
+flowpipe_triggers:
+  triggers:
+    - id: legacy-trigger
+      module: daily_report
+      type: http
+      config:
+        description: Legacy key
+        pipeline: pipeline.daily_report
+`
+	cfg, err := parseConfig([]byte(yamlStr))
+	if err != nil {
+		t.Fatalf("parseConfig: %v", err)
+	}
+	if cfg.Flowpipe == nil || len(cfg.Flowpipe.Triggers) != 1 {
+		t.Fatalf("expected legacy flowpipe_triggers to migrate to flowpipe, got %#v", cfg.Flowpipe)
+	}
+	if cfg.Flowpipe.Triggers[0].ID != "legacy-trigger" {
+		t.Fatalf("expected legacy trigger id, got %q", cfg.Flowpipe.Triggers[0].ID)
 	}
 }
 
 func TestValidateConfig_Triggers_Complete(t *testing.T) {
 	cfg := mustUnmarshal(t, `
-flowpipe_triggers:
+flowpipe:
   triggers:
     - id: http-trigger
       module: daily_report

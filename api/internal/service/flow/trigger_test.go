@@ -2,6 +2,7 @@ package flow
 
 import (
 	"encoding/json"
+	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -444,7 +445,7 @@ func TestUpdateTrigger(t *testing.T) {
 
 	// Test error cases
 	t.Run("nil trigger", func(t *testing.T) {
-		err := s.UpdateTrigger(nil)
+		err := s.UpdateTrigger("", nil)
 		if err == nil || !strings.Contains(err.Error(), "trigger is nil") {
 			t.Errorf("Expected 'trigger is nil' error, got: %v", err)
 		}
@@ -453,7 +454,7 @@ func TestUpdateTrigger(t *testing.T) {
 	t.Run("empty id", func(t *testing.T) {
 		trig := *newTrigger
 		trig.ID = ""
-		err := s.UpdateTrigger(&trig)
+		err := s.UpdateTrigger("", &trig)
 		if err == nil || !strings.Contains(err.Error(), "trigger id is required") {
 			t.Errorf("Expected 'trigger id is required' error, got: %v", err)
 		}
@@ -462,7 +463,7 @@ func TestUpdateTrigger(t *testing.T) {
 	t.Run("empty flow", func(t *testing.T) {
 		trig := *newTrigger
 		trig.Module = ""
-		err := s.UpdateTrigger(&trig)
+		err := s.UpdateTrigger("", &trig)
 		if err == nil || !strings.Contains(err.Error(), "trigger flow is required") {
 			t.Errorf("Expected 'trigger flow is required' error, got: %v", err)
 		}
@@ -1050,5 +1051,40 @@ func TestTriggerTypesEdgeCases(t *testing.T) {
 			state := ParseTriggerBlock(tt.typeStr, "edge_case", tt.block)
 			tt.check(t, state)
 		})
+	}
+}
+
+func TestParseTriggerTestResponse_includesExecutionIDs(t *testing.T) {
+	body := []byte(`{"flowpipe":{"status":"pending","execution_id":"exec_abc","pipeline_execution_id":"pexec_xyz"}}`)
+	resp, err := parseTriggerTestResponse(body, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.ExecutionID != "exec_abc" {
+		t.Fatalf("execution id: got %q", resp.ExecutionID)
+	}
+	if resp.PipelineExecutionID != "pexec_xyz" {
+		t.Fatalf("pipeline execution id: got %q", resp.PipelineExecutionID)
+	}
+	if resp.Status != "pending" {
+		t.Fatalf("status: got %q", resp.Status)
+	}
+}
+
+func TestParseTriggerTestResponse_headersFallback(t *testing.T) {
+	body := []byte(`{"flowpipe":{"status":"finished"}}`)
+	headers := make(http.Header)
+	headers.Set("Flowpipe-Execution-Id", "exec_hdr")
+	headers.Set("Flowpipe-Pipeline-Execution-Id", "pexec_hdr")
+
+	resp, err := parseTriggerTestResponse(body, headers)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.ExecutionID != "exec_hdr" {
+		t.Fatalf("execution id from header: got %q", resp.ExecutionID)
+	}
+	if resp.PipelineExecutionID != "pexec_hdr" {
+		t.Fatalf("pipeline execution id from header: got %q", resp.PipelineExecutionID)
 	}
 }

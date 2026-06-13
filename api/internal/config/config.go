@@ -151,7 +151,7 @@ type TriggerConfig struct {
 	Notification *NotificationConfig `yaml:"notification,omitempty" json:"notification,omitempty"`
 }
 
-// TriggerEntry represents a configured trigger in config.yaml (flowpipe_triggers[]).
+// TriggerEntry represents a configured trigger in config.yaml (flowpipe.triggers[]).
 type TriggerEntry struct {
 	ID        string        `yaml:"id" json:"id"`
 	Label     string        `yaml:"label,omitempty" json:"label,omitempty"`
@@ -210,18 +210,18 @@ type AgentConfig struct {
 	Model            string `yaml:"model,omitempty"`
 }
 
-// FlowpipeTriggersConfig holds Flowpipe trigger configurations.
-type FlowpipeTriggersConfig struct {
+// FlowpipeConfig holds Flowpipe-related configuration (trigger metadata).
+type FlowpipeConfig struct {
 	Triggers []TriggerEntry `yaml:"triggers,omitempty"`
 }
 
 // Config is the top-level config structure.
 type Config struct {
-	Resources        ResourcesConfig         `yaml:"resources"`
-	Flows            *FlowsConfig            `yaml:"flows,omitempty"`
-	Infrastructure   *InfrastructureConfig   `yaml:"infrastructure,omitempty"`
-	Agent            *AgentConfig            `yaml:"agent,omitempty"`
-	FlowpipeTriggers *FlowpipeTriggersConfig `yaml:"flowpipe_triggers,omitempty"`
+	Resources        ResourcesConfig       `yaml:"resources"`
+	Flows            *FlowsConfig          `yaml:"flows,omitempty"`
+	Infrastructure   *InfrastructureConfig `yaml:"infrastructure,omitempty"`
+	Agent            *AgentConfig          `yaml:"agent,omitempty"`
+	Flowpipe         *FlowpipeConfig       `yaml:"flowpipe,omitempty"`
 }
 
 // FindConfigPath returns the path to config.yaml, or empty if none exists.
@@ -298,6 +298,14 @@ func parseConfig(data []byte) (Config, error) {
 	var cfg Config
 	if err := yaml.Unmarshal(expanded, &cfg); err != nil {
 		return Config{}, err
+	}
+	if cfg.Flowpipe == nil {
+		var legacy struct {
+			Flowpipe *FlowpipeConfig `yaml:"flowpipe_triggers"`
+		}
+		if err := yaml.Unmarshal(expanded, &legacy); err == nil && legacy.Flowpipe != nil {
+			cfg.Flowpipe = legacy.Flowpipe
+		}
 	}
 	if err := validateConfig(cfg); err != nil {
 		return Config{}, err
@@ -436,21 +444,21 @@ func validateConfig(cfg Config) error {
 	}
 
 	// Validate flowpipe triggers if configured
-	if cfg.FlowpipeTriggers != nil {
+	if cfg.Flowpipe != nil {
 		seenTrigger := map[string]struct{}{}
-		for i, t := range cfg.FlowpipeTriggers.Triggers {
+		for i, t := range cfg.Flowpipe.Triggers {
 			if t.ID == "" {
-				return fmt.Errorf("flowpipe_triggers.triggers[%d].id is required", i)
+				return fmt.Errorf("flowpipe.triggers[%d].id is required", i)
 			}
 			if _, ok := seenTrigger[t.ID]; ok {
-				return fmt.Errorf("flowpipe_triggers.triggers contains duplicate id %q", t.ID)
+				return fmt.Errorf("flowpipe.triggers contains duplicate id %q", t.ID)
 			}
 			seenTrigger[t.ID] = struct{}{}
 			if t.Module == "" {
-				return fmt.Errorf("flowpipe_triggers.triggers[%d].module is required", i)
+				return fmt.Errorf("flowpipe.triggers[%d].module is required", i)
 			}
 			if t.Type == "" {
-				return fmt.Errorf("flowpipe_triggers.triggers[%d].type is required", i)
+				return fmt.Errorf("flowpipe.triggers[%d].type is required", i)
 			}
 			// Validate trigger type
 			validTriggerTypes := map[TriggerType]bool{
@@ -460,7 +468,7 @@ func validateConfig(cfg Config) error {
 				TriggerTypeNotification: true,
 			}
 			if !validTriggerTypes[t.Type] {
-				return fmt.Errorf("flowpipe_triggers.triggers[%d].type must be one of: schedule, alert, http, notification", i)
+				return fmt.Errorf("flowpipe.triggers[%d].type must be one of: schedule, alert, http, notification", i)
 			}
 		}
 	}
@@ -696,11 +704,11 @@ func TriggerEntriesWithError() ([]TriggerEntry, error) {
 	if err != nil {
 		return nil, err
 	}
-	if cfg.FlowpipeTriggers == nil {
+	if cfg.Flowpipe == nil {
 		return []TriggerEntry{}, nil
 	}
-	out := make([]TriggerEntry, 0, len(cfg.FlowpipeTriggers.Triggers))
-	for _, e := range cfg.FlowpipeTriggers.Triggers {
+	out := make([]TriggerEntry, 0, len(cfg.Flowpipe.Triggers))
+	for _, e := range cfg.Flowpipe.Triggers {
 		if e.ID == "" || e.Module == "" {
 			continue
 		}

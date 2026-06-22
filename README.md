@@ -9,7 +9,7 @@ bench/
 ├── api/             # Go backend API
 ├── ui/              # React/TypeScript frontend (Vite)
 ├── flows/           # Flow definitions (Flowpipe HCL and JSON)
-├── docs/            # Documentation (database, filesystem, flows, infrastructure, rest, schema-registry, security)
+├── docs/            # Documentation (configuration, database, filesystem, flows, infrastructure, rest, schema-registry, security)
 ├── config.yaml      # Resource roots and flows config (see config.example.yaml)
 ├── dev.sh           # Run API and UI together for local development
 ├── example.env
@@ -131,6 +131,7 @@ See [docs/schema-registry.md](docs/schema-registry.md) for configuration, REST i
 ## Documentation
 
 - [docs/database.md](docs/database.md) — Database integration API reference, query endpoint, and features
+- [docs/configuration.md](docs/configuration.md) — Configuration and Status workflow (`config.yaml`, `/api/config*`, `/api/status`, runtime reload behavior)
 - [docs/flows.md](docs/flows.md) — Flows (Flowpipe) configuration, step types, and execution
 - [docs/filesystem.md](docs/filesystem.md) — File system resource manager API reference
 - [docs/infrastructure.md](docs/infrastructure.md) — Terraform workflow, command runbook, and API reference
@@ -153,6 +154,8 @@ Configuration is in `config.yaml` (see `config.example.yaml`):
 - **resources.rest** — REST API resources for the REST page and flow HTTP steps (optional `schemaId` pointing at a registered OpenAPI schema)
 - **resources.schemas** — Registered schema files (OpenAPI, AsyncAPI, JSON Schema) for the registry API and UI
 - **flows** — Flow storage path and Flowpipe workspace URLs for the Flows page
+
+See [docs/configuration.md](docs/configuration.md) for configuration editing workflow, `/api/config*` endpoints, status signals, and runtime reload behavior.
 
 ## Development
 
